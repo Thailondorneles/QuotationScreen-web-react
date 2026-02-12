@@ -1,0 +1,39 @@
+
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+}
+
+.modal-erp {
+    background: #fff;
+    width: 420px;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.modal-titulo {
+    padding: 12px;
+    font-weight: bold;
+    border-bottom: 1px solid #ddd;
+}
+
+.modal-conteudo {
+    padding: 16px;
+    font-size: 14px;
+}
+
+.modal-acoes {
+    padding: 12px;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.modal-acoes button {
+    padding: 6px 18px;
+    cursor: pointer;
+}

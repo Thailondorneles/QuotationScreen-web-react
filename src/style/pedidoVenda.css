@@ -1,0 +1,184 @@
+.pedido-venda-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    padding-top: 2%;
+    background-color: #ffffff;
+}
+.pedido-card {
+    width: 80%;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding-left: 2%;
+    margin-bottom: 1%;
+    font-family: Arial, sans-serif;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.pedido-title {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: #333;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    row-gap: 12px;
+    column-gap: 12px;
+    align-items: center;
+}
+
+label {
+  font-size: 13px;
+  color: #555;
+}
+
+.input-cod {
+  height: 32px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  padding: 0 8px;
+  font-size: 13px;
+  width: 10%;
+}
+
+.input-desc {
+  height: 32px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  padding: 0 8px;
+  font-size: 13px;
+  width: 80%;
+}
+
+.field-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.icon {
+  color: #2e7d32;
+  cursor: pointer;
+}
+
+.item-card {
+    width: 80%;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding-left: 2%;
+    font-family: Arial, sans-serif;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.item-card-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding-bottom: 2%;
+}
+
+.btn-adicionar-item {
+    height: 32px;
+    width: 30%;
+    background: #2e8b1c;
+    color: #fff;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-weight: bold;
+    margin-right: 2px;
+}
+
+.btn-cotar-simfrete {
+    height: 32px;
+    width: 30%;
+    background: #2e8b1c;
+    color: #fff;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.info-cell {
+  position: relative;
+  text-align: center;
+}
+
+.info-icon {
+  cursor: pointer;
+  color: #2e8b1c;
+}
+
+.tooltip-info {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  width: 220px;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 12px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.info-cell:hover .tooltip-info {
+  opacity: 1;
+  visibility: visible;
+}
+
+
+/* =========================
+   TABELA
+========================= */
+.itens-grid {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 6px;
+}
+
+.itens-grid thead th {
+    background: #2e8b1c;
+    color: #fff;
+    padding: 5px 4px;
+    font-size: 12px;
+    border: 1px solid #cfd8dc;
+    text-align: center;
+}
+
+.itens-grid tbody td {
+    padding: 4px;
+    border: 1px solid #cfd8dc;
+    font-size: 12px;
+    text-align: center;
+}
+
+.itens-grid tbody tr:nth-child(even) {
+    background: #f5f7f8;
+}
+
+.itens-grid input,
+.itens-grid select {
+    table-layout: fixed;
+    width: 90%;
+    height: 22px;
+    font-size: 12px;
+    border: 1px solid #b0bec5;
+    border-radius: 3px;
+    padding: 0 4px;
+}

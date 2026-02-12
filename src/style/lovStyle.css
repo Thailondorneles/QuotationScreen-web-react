@@ -1,0 +1,115 @@
+.lov-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.lov-modal {
+    background: #fff;
+    width: 850px;
+    height: 550px;
+    display: flex;
+    flex-direction: column;
+    border-radius: 4px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+}
+
+/* HEADER */
+.lov-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    font-weight: 600;
+    border-bottom: 1px solid #ddd;
+}
+
+.lov-close {
+    cursor: pointer;
+}
+
+/* SEARCH */
+.lov-search {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+}
+
+.lov-search input {
+    flex: 1;
+    height: 30px;
+    padding: 4px 8px;
+}
+
+.lov-search button {
+    background: #2e7d32;
+    color: #fff;
+    border: none;
+    padding: 6px 16px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+/* LIST */
+.lov-list {
+    flex: 1;
+    overflow: auto;
+    border-top: 1px solid #ddd;
+    border-bottom: 1px solid #ddd;
+}
+
+.lov-list table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.lov-list th {
+    text-align: left;
+    padding: 10px;
+    background: #f5f5f5;
+    border-bottom: 1px solid #ddd;
+}
+
+.lov-list td {
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+}
+
+.lov-list tr:hover td {
+    background: #f0f0f0;
+}
+
+/* FOOTER */
+.lov-footer {
+    padding: 10px 16px;
+    font-size: 13px;
+    text-align: right;
+}
+
+.lov-list table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.lov-list td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #eee;
+    font-size: 14px;
+}
+
+.lov-cod {
+    width: 80px;
+    color: #555;
+    text-align: right;
+    font-weight: 500;
+}
+
+.lov-desc {
+    padding-left: 12px;
+}

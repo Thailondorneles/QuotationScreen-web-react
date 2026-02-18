@@ -17,6 +17,30 @@ export function LovItens({ isOpen, setLovOpen, onSelect }) {
         }
     });
 
+    const itensAgrupados = Object.values(
+        lov.data.reduce((acc, item) => {
+            if (!acc[item.cod_item]) {
+                acc[item.cod_item] = {
+                    cod_item: item.cod_item,
+                    des_item: item.des_item,
+                    estoque_matriz: 0,
+                    estoque_filial: 0
+                };
+            }
+
+            if (item.cod_unidade === 201) {
+                acc[item.cod_item].estoque_matriz = item.qtd_disponivel;
+            }
+
+            if (item.cod_unidade === 203) {
+                acc[item.cod_item].estoque_filial = item.qtd_disponivel;
+            }
+
+            return acc;
+        }, {})
+    );
+
+
     useEffect(() => {
         if (isOpen) {
             lov.buscar({ filtro: '', novoOffset: 0 });
@@ -51,11 +75,21 @@ export function LovItens({ isOpen, setLovOpen, onSelect }) {
 
                 <div className="lov-list">
                     <table>
+                        <thead>
+                            <tr>
+                                <th>Código</th>
+                                <th>Descrição</th>
+                                <th>Estoque Matriz</th>
+                                <th>Estoque Filial</th>
+                            </tr>
+                        </thead>
                         <tbody>
-                            {lov.data.map(item => (
-                                <tr key={item.cod_item} onClick={() => {onSelect(item);setLovOpen(false);}}>         
+                            {itensAgrupados.map(item => (
+                                <tr key={item.cod_item} onClick={() => {onSelect(item);setLovOpen(false); setFiltro('');}}>         
                                     <td>{item.cod_item}</td>
                                     <td>{item.des_item}</td>
+                                    <td>{item.estoque_matriz}</td>
+                                    <td>{item.estoque_filial}</td>
                                 </tr>
                             ))}
                         </tbody>

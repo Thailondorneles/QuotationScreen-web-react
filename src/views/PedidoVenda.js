@@ -69,19 +69,26 @@ export function PedidoVenda() {
             vlrMedio: 0,
             valorLista: 0,
             cmv: 0,
-            impostos: null
+            impostos: null,
+            unidades: {
+                201: null,
+                203: null
+            }
         };
 
         nextId.current += 1;
         setItensPedido(prev => [...prev, novoItem]);
         setOpenLovItens(false);
+
+        carregarDadosUnidade(novoItem, 201);
+        carregarDadosUnidade(novoItem, 203);
     }
 
     const removerItem = (seq) => {
         setItensPedido(prev =>
             prev.filter(item => item.seq !== seq)
         );
-    };
+    }
 
     async function buscarClientePorCodigo() {
     if (!codClienteDigitado) return;
@@ -799,7 +806,7 @@ export function PedidoVenda() {
                 <strong>Unidade {u}</strong> — {f.nome} — R$ {f.valor} — {f.prazo} dias
                 </div>
             ) : null
-            )}
+            )}+
         </div>
         )}
     </div>

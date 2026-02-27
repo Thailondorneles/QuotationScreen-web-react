@@ -89,7 +89,7 @@ label {
 .btn-adicionar-item {
     height: 32px;
     width: 30%;
-    background: #2e8b1c;
+    background: #2f8c1d;
     color: #fff;
     border: none;
     border-radius: 3px;
@@ -135,6 +135,23 @@ label {
   visibility: hidden;
   transition: all 0.2s ease;
   text-align: left;
+}
+
+.tip-linha {
+    display: flex;
+    align-items: center;
+}
+
+.tip-nome {
+    width: 80px; /* largura fixa pro nome */
+}
+
+.tip-valor {
+    margin-left: 8px;
+}
+
+.tip-percent {
+    margin-left: auto; /* 🔥 joga totalmente pra direita */
 }
 
 .info-cell:hover .tooltip-info {

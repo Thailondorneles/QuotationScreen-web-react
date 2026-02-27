@@ -23,6 +23,14 @@ export function LovItens({ isOpen, setLovOpen, onSelect }) {
                 acc[item.cod_item] = {
                     cod_item: item.cod_item,
                     des_item: item.des_item,
+                    // Inclui os campos de peso/volume
+                    qtd_multiplo: item.qtd_multiplo,
+                    qtd_altura: item.qtd_altura,
+                    qtd_largura: item.qtd_largura,
+                    qtd_comprimento: item.qtd_comprimento,
+                    qtd_m3: item.qtd_m3,
+                    qtd_m2: item.qtd_m2,
+                    qtd_peso_bruto: item.qtd_peso_bruto,
                     estoque_matriz: 0,
                     estoque_filial: 0
                 };
@@ -40,7 +48,6 @@ export function LovItens({ isOpen, setLovOpen, onSelect }) {
         }, {})
     );
 
-
     useEffect(() => {
         if (isOpen) {
             lov.buscar({ filtro: '', novoOffset: 0 });
@@ -52,12 +59,10 @@ export function LovItens({ isOpen, setLovOpen, onSelect }) {
     return (
         <div className="lov-overlay">
             <div className="lov-modal">
-
                 <div className="lov-header">
                     <span>Seleção de itens</span>
                     <FaX className="lov-close" onClick={() => setLovOpen(false)} />
                 </div>
-
                 <div className="lov-search">
                     <label>Localizar:</label>
                     <input
@@ -72,7 +77,6 @@ export function LovItens({ isOpen, setLovOpen, onSelect }) {
                         BUSCAR
                     </button>
                 </div>
-
                 <div className="lov-list">
                     <table>
                         <thead>
@@ -85,7 +89,12 @@ export function LovItens({ isOpen, setLovOpen, onSelect }) {
                         </thead>
                         <tbody>
                             {itensAgrupados.map(item => (
-                                <tr key={item.cod_item} onClick={() => {onSelect(item);setLovOpen(false); setFiltro('');}}>         
+                                <tr key={item.cod_item} onClick={() => {
+                                    onSelect(item);
+                                    console.log(item);
+                                    setLovOpen(false);
+                                    setFiltro('');
+                                }}>         
                                     <td>{item.cod_item}</td>
                                     <td>{item.des_item}</td>
                                     <td>{item.estoque_matriz}</td>
@@ -95,7 +104,6 @@ export function LovItens({ isOpen, setLovOpen, onSelect }) {
                         </tbody>
                     </table>
                 </div>
-
                 <div className="lov-footer">
                     <button disabled={!lov.podeVoltar} onClick={() => lov.buscar({ filtro, novoOffset: lov.offset - 25 })}>
                         <FaChevronLeft />

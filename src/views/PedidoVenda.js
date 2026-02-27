@@ -126,7 +126,7 @@ export function PedidoVenda() {
             return;
         }
         if (!CondPgto.cod_cond_pgto) {
-            alert('Selecione uma condição de pagamento antes de adicionar itens.');
+            alert('Selecione uma condição de pagamento, antes de adicionar itens.');
             return;
         }
 

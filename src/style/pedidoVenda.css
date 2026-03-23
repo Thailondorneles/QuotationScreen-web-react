@@ -12,6 +12,7 @@
     border: 1px solid #ddd;
     border-radius: 4px;
     padding-left: 2%;
+    padding-right: 2%;
     margin-bottom: 1%;
     font-family: Arial, sans-serif;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -75,6 +76,7 @@ label {
     border: 1px solid #ddd;
     border-radius: 4px;
     padding-left: 2%;
+    padding-right: 2%;
     font-family: Arial, sans-serif;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
@@ -83,30 +85,24 @@ label {
     display: flex;
     justify-content: center;
     align-items: center;
+    gap: 16px;           
     padding-bottom: 2%;
+    flex-wrap: wrap;     
 }
 
-.btn-adicionar-item {
+.btn-adicionar-item,
+.btn-cotar-simfrete {
     height: 32px;
-    width: 30%;
+    min-width: 140px;     
+    padding: 0 16px;      
     background: #2f8c1d;
     color: #fff;
     border: none;
     border-radius: 3px;
     cursor: pointer;
     font-weight: bold;
-    margin-right: 2px;
-}
-
-.btn-cotar-simfrete {
-    height: 32px;
-    width: 30%;
-    background: #2e8b1c;
-    color: #fff;
-    border: none;
-    border-radius: 3px;
-    cursor: pointer;
-    font-weight: bold;
+    width: auto;
+    flex: 0 1 auto;       
 }
 
 .info-cell {
@@ -143,7 +139,7 @@ label {
 }
 
 .tip-nome {
-    width: 80px; /* largura fixa pro nome */
+    width: 80px; 
 }
 
 .tip-valor {
@@ -151,7 +147,7 @@ label {
 }
 
 .tip-percent {
-    margin-left: auto; /* 🔥 joga totalmente pra direita */
+    margin-left: auto; 
 }
 
 .info-cell:hover .tooltip-info {
@@ -198,4 +194,58 @@ label {
     border: 1px solid #b0bec5;
     border-radius: 3px;
     padding: 0 4px;
+}
+
+
+.tabelas-container {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+.tabela-unidade {
+    flex: 1 1 400px;  
+    min-width: 300px;  
+}
+
+.btn-adicionar-item,
+.btn-cotar-simfrete {
+    margin-top: 1%;
+    min-width: 120px;   
+    width: auto;        
+    max-width: 200px;   
+}
+
+@media (max-width: 768px) {
+    .pedido-card,
+    .item-card {
+        width: 95%;         
+        padding-left: 3%;
+        padding-right: 3%;
+    }
+
+    .form-grid {
+        grid-template-columns: 1fr; 
+    }
+
+    .input-cod {
+        width: 100px;        
+    }
+
+    .input-desc {
+        width: 100%;         
+    }
+
+    .tabelas-container {
+        flex-direction: column; 
+        gap: 30px;
+    }
+
+    .btn-adicionar-item,
+    .btn-cotar-simfrete {
+        width: 100%;          
+        max-width: 300px;    
+        margin-right: 0;     
+    }
 }

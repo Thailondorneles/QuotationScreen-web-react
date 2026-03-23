@@ -116,21 +116,8 @@ export function PedidoVenda() {
     }
 
     async function adicionarItem(itemLov) {
-        // Validações básicas
-        if (!cliente) {
-            alert('Selecione um cliente antes de adicionar itens.');
-            return;
-        }
-        if (!operacao.cod_oper) {
-            alert('Selecione uma operação antes de adicionar itens.');
-            return;
-        }
-        if (!CondPgto.cod_cond_pgto) {
-            alert('Selecione uma condição de pagamento, antes de adicionar itens.');
-            return;
-        }
 
-        const grupoId = nextId.current; // mesmo grupo para as duas unidades
+        const grupoId = nextId.current; 
         const itemBase = {
             grupoId,
             cod_item: itemLov.cod_item,
@@ -321,7 +308,10 @@ export function PedidoVenda() {
             });
             const cli = response.data.items[0];
             if (!cli) {
-                alert('Cliente não encontrado');
+                setModalErro({
+                    aberto: true,
+                    mensagem: 'Cliente não encontrato com o código digitado!'
+                });
                 setCliente(null);
                 return;
             }
@@ -343,10 +333,14 @@ export function PedidoVenda() {
             });
             const rep = response.data.items[0];
             if (!rep) {
-                alert('Representante não encontrado');
-                setRepresentante(null);
-                return;
+                setModalErro({
+                    aberto: true,
+                    mensagem: 'Representante não encontrado!'
+                });
+                setRepresentante(null)
+                return ;
             }
+             
             setRepresentante(rep);
         } catch (error) {
             console.error(error);
@@ -364,7 +358,10 @@ export function PedidoVenda() {
             });
             const oper = response.data.items[0];
             if (!oper) {
-                alert('Operação não encontrada');
+                setModalErro({
+                    aberto: true,
+                    mensagem: 'Operação não encontrada!'
+                });
                 setOperacao({ cod_oper: null, des_oper: null });
                 return;
             }
@@ -385,7 +382,10 @@ export function PedidoVenda() {
             });
             const cond = response.data.items[0];
             if (!cond) {
-                alert('Condição de pagamento não encontrada');
+                setModalErro({
+                    aberto: true,
+                    mensagem: 'Condição de Pagamento não encontrado!'
+                });
                 setCondPgto({ cod_cond_pgto: null, des_cond_pgto: null });
                 return;
             }
@@ -405,12 +405,10 @@ export function PedidoVenda() {
             setItensPedido(prev => prev.map(item => ({ ...item, valorFrete: 0 })));
 
             if (itensSelecionados.length === 0) {
-                alert('Selecione pelo menos um item para cotar o frete.');
-                return;
-            }
-
-            if (!cliente) {
-                alert('Selecione um cliente antes de cotar');
+                setModalErro({
+                    aberto: true,
+                    mensagem: 'Selecione pelo menos um item para cotar o frete.'
+                });
                 return;
             }
 
@@ -419,7 +417,10 @@ export function PedidoVenda() {
             );
 
             if (itensInvalidos) {
-                alert('Todos os itens selecionados devem possuir quantidade válida');
+                setModalErro({
+                    aberto: true,
+                    mensagem: 'Todos os itens selecionados devem possuir quantidade válida'
+                });
                 return;
             }
 
@@ -581,7 +582,7 @@ export function PedidoVenda() {
                         <LovClientes
                             isOpen={openLovPessoas}
                             setLovOpen={() => setOpenLovPessoas(!openLovPessoas)}
-                            onSelect={(cli) => { setCliente(cli); setRepresentante(null); setCodClienteDigitado(cli.cod_pessoa); }}
+                            onSelect={(cli) => { console.log(cli); setCliente(cli); setRepresentante(null); setCodClienteDigitado(cli.cod_pessoa); }}
                         />
                         <FaEraser className="icon"
                             onClick={() => {
@@ -658,10 +659,9 @@ export function PedidoVenda() {
             {/* Itens do Pedido - Duas tabelas lado a lado */}
             <div className="item-card">
                 <h2 className="pedido-title">Itens do Pedido</h2>
-
-                <div style={{ display: 'flex', gap: '20px' }}>
+                <div className="tabelas-container">
                     {/* Tabela Unidade 201 */}
-                    <div style={{ flex: 1 }}>
+                    <div className="tabela-unidade">
                         <h3>Unidade 201 (Matriz)</h3>
                         <table className="itens-grid">
                             <thead>
@@ -778,7 +778,7 @@ export function PedidoVenda() {
                     </div>
 
                     {/* Tabela Unidade 203 */}
-                    <div style={{ flex: 1 }}>
+                    <div className="tabela-unidade">
                         <h3>Unidade 203 (Filial)</h3>
                         <table className="itens-grid">
                             <thead>
@@ -896,7 +896,31 @@ export function PedidoVenda() {
                 </div>
 
                 <div className="item-card-container">
-                    <button className="btn-adicionar-item" onClick={() => setOpenLovItens(true)}>+ Item</button>
+                    <button className="btn-adicionar-item" onClick={() => 
+                        {
+                            if(!cliente){
+                                setModalErro({
+                                    aberto: true,
+                                    mensagem: `Selecione um cliente antes de adicionar item!`
+                                });
+                                return;
+                            }
+                            if(!operacao.cod_oper){
+                                setModalErro({
+                                    aberto: true,
+                                    mensagem: `Selecione uma operação antes de adicionar item!`
+                                });
+                                return;
+                            }
+                            if(!CondPgto.cod_cond_pgto){
+                                setModalErro({
+                                    aberto: true,
+                                    mensagem: `Selecione uma condição de pagamento antes de adicionar item!`
+                                });
+                                return;
+                            }
+                            setOpenLovItens(true)}   
+                        }>+ Item</button>
                     <button className="btn-cotar-simfrete" onClick={cotar}>Cotar SimFrete</button>
                 </div>
 
@@ -933,7 +957,6 @@ export function PedidoVenda() {
                 mensagem={modalErro.mensagem}
                 onClose={() => {
                     setModalErro({ aberto: false, mensagem: '', seqItem: null });
-                    // Devolve foco ao input do item com erro
                     setTimeout(() => {
                         if (modalErro.seqItem) {
                             const input = document.querySelector(`input[data-seq="${modalErro.seqItem}"]`);

@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const simFreteApi = axios.create({
-    baseURL: 'https://centralunimed.simfrete.com/CotacaoService', // ajustar
+    baseURL: 'http://localhost:3001',
     timeout: 20000
 });
 
@@ -38,10 +38,6 @@ function montarPayload({ unidade, cliente, itens }) {
         acc + Number(item.quantidade || 0), 0);
 
     return {
-        wsEmp: 'central unimed',
-        wsUsr: 'webcentralunimed',
-        wsPwd: '8Z8VXizfpJoSvvi',
-
         remetenteCnpj: config.cnpj,
         destinatarioCnpj: cliente.cnpj,
 
@@ -80,7 +76,8 @@ function montarPayloadsPorUnidade(itensPedido = [], cliente) {
 
 
 async function postSimFrete(payload) {
-    return simFreteApi.post('/consultar', payload);
+    console.log(payload)
+    return simFreteApi.post('/api/cotacao', payload);
 }
 
 

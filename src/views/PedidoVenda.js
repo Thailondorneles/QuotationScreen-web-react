@@ -18,10 +18,11 @@ import { getImpostos } from '../services/impostos.js';
 import { ModalErro } from '../components/ModalErro.js';
 import { getListaPreco } from '../services/listaPreco.js';
 import { useRef } from 'react';
-import { cotarSimFrete } from '../config/simFreteService.js'
-import { format } from '../utils/format.js'
-import { maskMoneyBR } from '../utils/maskMoney.js'
-import LoadingOverlay from '../components/LoadingOverlay.js'
+import { cotarSimFrete } from '../config/simFreteService.js';
+import { format } from '../utils/format.js';
+import { maskMoneyBR } from '../utils/maskMoney.js';
+import LoadingOverlay from '../components/LoadingOverlay.js';
+import { LovObservacao } from '../components/LovObservacao';
 
 export function PedidoVenda() {
     const [openLovItens, setOpenLovItens] = useState(false);
@@ -51,6 +52,9 @@ export function PedidoVenda() {
         203: null
     });
     const [loading, setLoading] = useState(false);
+    const [observacoes, setObservacoes] = useState([]);
+    const [openObsModal, setOpenObsModal] = useState(false);
+    const [obsEditando, setObsEditando] = useState(null);
 
     async function buscarDadosItem(item) {
         // Busca estoque disponível
@@ -515,6 +519,40 @@ export function PedidoVenda() {
         setItensPedido(novosItens);
     }
 
+    function abrirNovaObs() {
+        setObsEditando(null);
+        setOpenObsModal(true);
+    }
+
+    function editarObs(obs) {
+        setObsEditando(obs);
+        setOpenObsModal(true);
+    }
+
+    function salvarObs(obs) {
+        if (obsEditando) {
+            setObservacoes(prev =>
+                prev.map(o => o.num_seq === obs.num_seq ? obs : o)
+            );
+        } else {
+            setObservacoes(prev => [
+                ...prev,
+                { ...obs, num_seq: prev.length + 1 }
+            ]);
+        }
+
+        setOpenObsModal(false);
+    }
+
+    function removerObs(seq) {
+        const lista = observacoes
+            .filter(o => o.num_seq !== seq)
+            .map((o, i) => ({ ...o, num_seq: i + 1 }));
+
+        setObservacoes(lista);
+    }
+
+
     useEffect(() => {
         if (!cliente) {
             setRepresentante(null);
@@ -651,12 +689,10 @@ export function PedidoVenda() {
                         />
                         <FaEraser className="icon" onClick={() => { setCondPgto({ cod_cond_pgto: null, des_cond_pgto: null }); setCodCondPgtoDigitado(''); }} />
                     </div>
-
-                    <div></div> {/* Espaço vazio para alinhamento */}
+                <div></div>
                 </div>
             </div>
 
-            {/* Itens do Pedido - Duas tabelas lado a lado */}
             <div className="item-card">
                 <h2 className="pedido-title">Itens do Pedido</h2>
                 <div className="tabelas-container">
@@ -950,8 +986,6 @@ export function PedidoVenda() {
                     </div>
                 )}
             </div>
-
-            {/* Modal de erro (agora usando seqItem) */}
             <ModalErro
                 aberto={modalErro.aberto}
                 mensagem={modalErro.mensagem}
@@ -965,6 +999,76 @@ export function PedidoVenda() {
                     }, 0);
                 }}
             />
+            <div className="obs-card">
+               <h2 className="pedido-title">Observações</h2>
+
+                <table className="obs-grid">
+                    <thead>
+                        <tr>
+                            <th>Observação</th>
+                            <th>Pedido</th>
+                            <th>Nota fiscal</th>
+                            <th>Registro de saídas</th>
+                            <th>Contas a receber</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {observacoes.map(obs => (
+                            <tr key={obs.num_seq} onClick={() => editarObs(obs)}>
+
+                                <td className='obs-grid-desc'>{obs.descricao}</td>
+
+                                <td><input type="checkbox"checked={obs.pedido} disabled/></td>
+                                <td><input type="checkbox"checked={obs.nota} disabled/></td>
+                                <td><input type="checkbox"checked={obs.registro} disabled/></td>
+                                <td><input type="checkbox"checked={obs.financeiro} disabled/></td>
+
+                                <td onClick={(e) => e.stopPropagation()}>
+                                    <FaTrash onClick={() => removerObs(obs.num_seq)} />
+                                </td>
+
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+                <LovObservacao
+                    isOpen={openObsModal}
+                    onClose={() => setOpenObsModal(false)}
+                    onSave={salvarObs}
+                    obs={obsEditando}
+                />
+
+                <div className="obs-footer">
+                    <button className="btn-adicionar" onClick={() => 
+                        {
+                            if(!cliente){
+                                setModalErro({
+                                    aberto: true,
+                                    mensagem: `Selecione um cliente antes de adicionar item!`
+                                });
+                                return;
+                            }
+                            if(!operacao.cod_oper){
+                                setModalErro({
+                                    aberto: true,
+                                    mensagem: `Selecione uma operação antes de adicionar item!`
+                                });
+                                return;
+                            }
+                            if(!CondPgto.cod_cond_pgto){
+                                setModalErro({
+                                    aberto: true,
+                                    mensagem: `Selecione uma condição de pagamento antes de adicionar item!`
+                                });
+                                return;
+                            }
+                        abrirNovaObs()}   
+                        }>+ Adicionar</button>
+                </div>
+
+            </div>
         </div>
     );
 }

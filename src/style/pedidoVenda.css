@@ -217,6 +217,79 @@ label {
     max-width: 200px;   
 }
 
+.obs-card {
+    width: 80%;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding-left: 2%;
+    padding-right: 2%;
+    margin-bottom: 1%;
+    margin-top: 1%;
+    font-family: Arial, sans-serif;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.obs-grid {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+
+.obs-grid th, .obs-grid td {
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+    padding: 8px;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    white-space: normal;       
+}
+
+.obs-grid tr:hover {
+    background: #f5f5f5;
+    cursor: pointer;
+}
+
+.obs-footer {
+    text-align: center;
+    padding: 10px;
+}
+.btn-adicionar {
+    height: 32px;
+    min-width: 140px;     
+    padding: 0 16px;      
+    background: #2f8c1d;
+    color: #fff;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-weight: bold;
+    width: auto;
+    flex: 0 1 auto;  
+}
+
+.obs-grid th:nth-child(1),
+.obs-grid td:nth-child(1) {
+    width: 50%; /* descrição maior */
+}
+
+.obs-grid th:nth-child(2),
+.obs-grid td:nth-child(2),
+.obs-grid th:nth-child(3),
+.obs-grid td:nth-child(3),
+.obs-grid th:nth-child(4),
+.obs-grid td:nth-child(4),
+.obs-grid th:nth-child(5),
+.obs-grid td:nth-child(5) {
+    width: 10%;
+}
+
+.obs-grid th:nth-child(6),
+.obs-grid td:nth-child(6) {
+    width: 10%; /* coluna do delete */
+}
+
 @media (max-width: 768px) {
     .pedido-card,
     .item-card {

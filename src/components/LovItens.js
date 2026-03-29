@@ -23,7 +23,6 @@ export function LovItens({ isOpen, setLovOpen, onSelect }) {
                 acc[item.cod_item] = {
                     cod_item: item.cod_item,
                     des_item: item.des_item,
-                    // Inclui os campos de peso/volume
                     qtd_multiplo: item.qtd_multiplo,
                     qtd_altura: item.qtd_altura,
                     qtd_largura: item.qtd_largura,
@@ -68,10 +67,12 @@ export function LovItens({ isOpen, setLovOpen, onSelect }) {
                     <input
                         value={filtro}
                         onChange={e => setFiltro(e.target.value)}
-                        onKeyDown={e =>
-                            e.key === 'Enter' &&
-                            lov.buscar({ filtro, novoOffset: 0 })
-                        }
+                        onKeyDown={e =>{
+                            if (e.key === 'Enter' || e.key === 'Tab') {
+                                e.preventDefault();
+                                lov.buscar({ filtro, novoOffset: 0 });
+                            }
+                        }}
                     />
                     <button onClick={() => lov.buscar({ filtro, novoOffset: 0 })}>
                         BUSCAR

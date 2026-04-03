@@ -22,20 +22,24 @@ import { cotarSimFrete } from '../config/simFreteService.js';
 import { format } from '../utils/format.js';
 import { maskMoneyBR } from '../utils/maskMoney.js';
 import LoadingOverlay from '../components/LoadingOverlay.js';
-import { LovObservacao } from '../components/LovObservacao';
+import { LovObservacao } from '../components/LovObservacao.js';
+import { getClientesComentarios } from '../services/clientes.js';
 
 export function PedidoVenda() {
     const [openLovItens, setOpenLovItens] = useState(false);
     const [openLovPessoas, setOpenLovPessoas] = useState(false);
+    const [openLovTriangulacao, setOpenLovTriangulacao] = useState(false);
     const [openLovRepresentantes, setOpenLovRepresentantes] = useState(false);
     const [openLovOperacoes, setOpenLovOperacoes] = useState(false);
     const [openLovCondPgto, setOpenLovCondPgto] = useState(false);
     const [openLovTransportadoras, setOpenLovTransportadoras] = useState(false);
     const [cliente, setCliente] = useState(null);
+    const [clienteTriangulacao, setClienteTriangulacao] = useState(null);
     const [representante, setRepresentante] = useState(null);
     const [operacao, setOperacao] = useState({ cod_oper: null, des_oper: null });
     const [CondPgto, setCondPgto] = useState({ cod_cond_pgto: null, des_cond_pgto: null });
     const [codClienteDigitado, setCodClienteDigitado] = useState('');
+    const [codClienteTriangulacaoDigitado, setCodClienteTriangulacaoDigitado] = useState('');
     const [codRepresentanteDigitado, setCodRepresentanteDigitado] = useState('');
     const [codOperacaoDigitado, setCodOperacaoDigitado] = useState('');
     const [codCondPgtoDigitado, setCodCondPgtoDigitado] = useState('');
@@ -43,7 +47,8 @@ export function PedidoVenda() {
     const [modalErro, setModalErro] = useState({
         aberto: false,
         mensagem: '',
-        seqItem: null 
+        seqItem: null,
+        focusSelector: null
     });
     const nextId = useRef(1);
     const [cotacoesSimFrete, setCotacoesSimFrete] = useState([]);
@@ -55,6 +60,20 @@ export function PedidoVenda() {
     const [observacoes, setObservacoes] = useState([]);
     const [openObsModal, setOpenObsModal] = useState(false);
     const [obsEditando, setObsEditando] = useState(null);
+    const [ordemCompra, setOrdemCompra] = useState('');
+
+    function validarOrdemCompra() {
+        const possuiCaracterEspecial = /[\|/]/.test(ordemCompra);
+
+        if (!possuiCaracterEspecial) return;
+
+        setModalErro({
+            aberto: true,
+            mensagem: 'A ordem de compra nao pode conter caracteres especiais como | ou /',
+            seqItem: null,
+            focusSelector: 'input[data-field="ordem-compra"]'
+        });
+    }
 
     async function buscarDadosItem(item) {
         // Busca estoque disponível
@@ -326,6 +345,30 @@ export function PedidoVenda() {
         }
     }
 
+    async function buscarClienteTriangulacaoPorCodigo() {
+        if (!codClienteTriangulacaoDigitado) return;
+        try {
+            const response = await getClienteByFilter({
+                filtro: codClienteTriangulacaoDigitado,
+                offset: 0,
+                limit: 1
+            });
+            const cli = response.data.items[0];
+            if (!cli) {
+                setModalErro({
+                    aberto: true,
+                    mensagem: 'Cliente de triangulacao nao encontrado!'
+                });
+                setClienteTriangulacao(null);
+                return;
+            }
+            setClienteTriangulacao(cli);
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao buscar cliente de triangulacao');
+        }
+    }
+
     async function buscarRepresentantePorCodigo() {
         if (!codRepresentanteDigitado) return;
         try {
@@ -552,12 +595,44 @@ export function PedidoVenda() {
         setObservacoes(lista);
     }
 
+    async function carregarObservacoesCliente(codCliente) {
+        try {
+            const response = await getClientesComentarios({
+                filtro: codCliente,
+                offset: 0,
+                limit: 50
+            });
+
+            const lista = response.data.items || [];
+
+            const observacoesFormatadas = lista
+                
+                .sort((a, b) => (a.seq_exibicao || 0) - (b.seq_exibicao || 0))
+                .map((obs, index) => ({
+                    num_seq: index + 1,
+                    seq_comentario: obs.seq_comentario,
+                    descricao: obs.des_comentario,
+                    pedido: false,
+                    nota: false,
+                    registro: false,
+                    financeiro: false
+                }));
+
+            setObservacoes(observacoesFormatadas);
+
+        } catch (error) {
+            console.error('Erro ao buscar observações do cliente:', error);
+        }
+    }
 
     useEffect(() => {
         if (!cliente) {
             setRepresentante(null);
             setOperacao({ cod_oper: null, des_oper: null });
             setCondPgto({ cod_cond_pgto: null, des_cond_pgto: null });
+            setObservacoes([]);
+            setObsEditando(null);
+            setOpenObsModal(false);
             return;
         }
 
@@ -592,6 +667,8 @@ export function PedidoVenda() {
                 des_cond_pgto: responseCondPgto.data.items[0]?.des_cond_pgto || null
             });
             setCodCondPgtoDigitado(responseCondPgto.data.items[0]?.cod_cond_pgto || '');
+
+            await carregarObservacoesCliente(cliente.cod_pessoa);
         }
 
         carregarDados();
@@ -631,6 +708,9 @@ export function PedidoVenda() {
                                 setCodRepresentanteDigitado('');
                                 setCodCondPgtoDigitado('');
                                 setCodOperacaoDigitado('');
+                                setObservacoes([]);
+                                setObsEditando(null);
+                                setOpenObsModal(false);
                             }}
                         />
                     </div>
@@ -992,6 +1072,11 @@ export function PedidoVenda() {
                 onClose={() => {
                     setModalErro({ aberto: false, mensagem: '', seqItem: null });
                     setTimeout(() => {
+                        if (modalErro.focusSelector) {
+                            const input = document.querySelector(modalErro.focusSelector);
+                            input?.focus();
+                            return;
+                        }
                         if (modalErro.seqItem) {
                             const input = document.querySelector(`input[data-seq="${modalErro.seqItem}"]`);
                             input?.focus();
@@ -1046,21 +1131,21 @@ export function PedidoVenda() {
                             if(!cliente){
                                 setModalErro({
                                     aberto: true,
-                                    mensagem: `Selecione um cliente antes de adicionar item!`
+                                    mensagem: `Selecione um cliente antes de adicionar uma observação!`
                                 });
                                 return;
                             }
                             if(!operacao.cod_oper){
                                 setModalErro({
                                     aberto: true,
-                                    mensagem: `Selecione uma operação antes de adicionar item!`
+                                    mensagem: `Selecione uma operação antes de adicionar uma observação!`
                                 });
                                 return;
                             }
                             if(!CondPgto.cod_cond_pgto){
                                 setModalErro({
                                     aberto: true,
-                                    mensagem: `Selecione uma condição de pagamento antes de adicionar item!`
+                                    mensagem: `Selecione uma condição de pagamento antes de adicionar uma observação!`
                                 });
                                 return;
                             }
@@ -1069,6 +1154,47 @@ export function PedidoVenda() {
                 </div>
 
             </div>
+            <div className="oc-card">
+                <h2 className="pedido-title">Ordem de Compra</h2>
+                <label>Ordem de Compra: </label>
+                <input
+                    type="text"
+                    className='input-desc'
+                    value={ordemCompra}
+                    maxLength={20}
+                    data-field="ordem-compra"
+                    onChange={(e) => setOrdemCompra(e.target.value)}
+                    onBlur={validarOrdemCompra}
+                />
+            </div>
+            <div className="triang-card">
+                <h2 className="pedido-title">Triangulação</h2>
+                <label>Cliente:</label>
+                <div className="field-group full">
+                    <input type="text" className='input-cod'
+                        value={codClienteTriangulacaoDigitado}
+                        onChange={(e) => { setCodClienteTriangulacaoDigitado(e.target.value); }}
+                        onBlur={buscarClienteTriangulacaoPorCodigo}
+                    />
+                    <input type="text" className='input-desc' value={clienteTriangulacao?.des_pessoa || ''} readOnly />
+                    <FaSearch className="icon" onClick={() => setOpenLovTriangulacao(true)} />
+                    <LovClientes
+                        isOpen={openLovTriangulacao}
+                        setLovOpen={() => setOpenLovTriangulacao(!openLovTriangulacao)}
+                        onSelect={(cli) => {
+                            setClienteTriangulacao(cli);
+                            setCodClienteTriangulacaoDigitado(cli.cod_pessoa);
+                        }}
+                    />
+                    <FaEraser className="icon"
+                        onClick={() => {
+                            setClienteTriangulacao(null);
+                            setCodClienteTriangulacaoDigitado('');
+                        }}
+                        />
+                </div>
+            </div>
+    
         </div>
     );
 }

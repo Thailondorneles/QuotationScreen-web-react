@@ -6,26 +6,35 @@
     padding-top: 2%;
     background-color: #ffffff;
 }
-.pedido-card {
+.pedido-card,
+.item-card,
+.obs-card,
+.oc-card,
+.triang-card {
     width: 80%;
     background: #fff;
     border: 1px solid #ddd;
     border-radius: 4px;
     padding-left: 2%;
     padding-right: 2%;
+    padding-bottom: 2%;
     margin-bottom: 1%;
+    margin-top: 1%;
     font-family: Arial, sans-serif;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .pedido-title {
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    display: block;
+    text-align: left;
     font-size: 18px;
     font-weight: 600;
-    margin-bottom: 16px;
+    margin: 0 -2% 16px;
+    padding: 16px 0 12px;
+    padding-left: 2%;
+    padding-right: 2%;
     color: #333;
+    border-bottom: 1px solid #e3e3e3;
 }
 
 .form-grid {
@@ -68,17 +77,6 @@ label {
 .icon {
   color: #2e7d32;
   cursor: pointer;
-}
-
-.item-card {
-    width: 80%;
-    background: #fff;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    padding-left: 2%;
-    padding-right: 2%;
-    font-family: Arial, sans-serif;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .item-card-container {
@@ -292,7 +290,10 @@ label {
 
 @media (max-width: 768px) {
     .pedido-card,
-    .item-card {
+    .item-card,
+    .obs-card,
+    .oc-card,
+    .triang-card {
         width: 95%;         
         padding-left: 3%;
         padding-right: 3%;
@@ -308,6 +309,13 @@ label {
 
     .input-desc {
         width: 100%;         
+    }
+
+    .pedido-title {
+        margin-left: -3%;
+        margin-right: -3%;
+        padding-left: 3%;
+        padding-right: 3%;
     }
 
     .tabelas-container {

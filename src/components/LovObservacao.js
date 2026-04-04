@@ -34,25 +34,26 @@ export function LovObservacao({ isOpen, onClose, onSave, obs }) {
     if (!isOpen) return null;
 
     return (
-        <div className="lov-overlay">
-            <div className="lov-modal">
-                <div className="lov-header">    
+        <div className="lov-overlay lov-obs-overlay">
+            <div className="lov-modal lov-obs-modal">
+                <div className="lov-header lov-obs-header">    
                     <span>Observação</span>
                 </div>
                 <textarea
+                    className="lov-obs-textarea"
                     value={descricao}
                     onChange={(e) => setDescricao(e.target.value)}
                     maxLength={4000}
                 />
 
-                <div className="flags">
+                <div className="lov-obs-flags">
                     <label><input type="checkbox" checked={flags.pedido} onChange={() => setFlags(f => ({ ...f, pedido: !f.pedido }))}/> Pedido</label>
                     <label><input type="checkbox" checked={flags.nota} onChange={() => setFlags(f => ({ ...f, nota: !f.nota }))}/> Nota fiscal</label>
                     <label><input type="checkbox" checked={flags.registro} onChange={() => setFlags(f => ({ ...f, registro: !f.registro }))}/> Registro de saídas</label>
                     <label><input type="checkbox" checked={flags.financeiro} onChange={() => setFlags(f => ({ ...f, financeiro: !f.financeiro }))}/> Contas a receber</label>
                 </div>
 
-                <div className="acoes">
+                <div className="lov-obs-acoes">
                     <button onClick={() => onSave({num_seq: obs?.num_seq,descricao,...flags})}>✔ Aplicar</button>
                     <button onClick={onClose}>✖ Fechar</button>
                 </div>

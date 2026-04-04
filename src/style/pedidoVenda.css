@@ -10,7 +10,8 @@
 .item-card,
 .obs-card,
 .oc-card,
-.triang-card {
+.triang-card,
+.endereco-card {
     width: 80%;
     background: #fff;
     border: 1px solid #ddd;
@@ -50,10 +51,25 @@ label {
   color: #555;
 }
 
+.pedido-venda-container input:not([type="checkbox"]),
+.pedido-venda-container textarea,
+.pedido-venda-container select {
+  background: #f3f5f7;
+  border: none;
+  border-bottom: 1px solid #b8c2cc;
+  border-radius: 0;
+  outline: none;
+  box-shadow: none;
+}
+
+.pedido-venda-container input:not([type="checkbox"]):focus,
+.pedido-venda-container textarea:focus,
+.pedido-venda-container select:focus {
+  border-bottom-color: #2e7d32;
+}
+
 .input-cod {
   height: 32px;
-  border: 1px solid #ccc;
-  border-radius: 3px;
   padding: 0 8px;
   font-size: 13px;
   width: 10%;
@@ -61,8 +77,6 @@ label {
 
 .input-desc {
   height: 32px;
-  border: 1px solid #ccc;
-  border-radius: 3px;
   padding: 0 8px;
   font-size: 13px;
   width: 80%;
@@ -189,8 +203,6 @@ label {
     width: 90%;
     height: 22px;
     font-size: 12px;
-    border: 1px solid #b0bec5;
-    border-radius: 3px;
     padding: 0 4px;
 }
 
@@ -288,12 +300,110 @@ label {
     width: 10%; /* coluna do delete */
 }
 
+.endereco-actions {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin: 10px 0 28px;
+}
+
+.endereco-tab {
+    min-width: 78px;
+    padding: 8px 14px;
+    background: #2f8c1d;
+    color: #fff;
+    border: none;
+    border-radius: 2px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.endereco-tab.active {
+    background: #2f8c1d;
+}
+
+.endereco-grid {
+    display: grid;
+    grid-template-columns: 180px minmax(0, 1fr);
+    row-gap: 10px;
+    column-gap: 14px;
+    align-items: center;
+    max-width: 720px;
+    margin: 0 auto;
+}
+
+.endereco-grid > label {
+    text-align: right;
+    color: #7a6f63;
+}
+
+.endereco-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.endereco-row-duplo {
+    gap: 10px;
+}
+
+.endereco-row-icons {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-left: 2px;
+}
+
+.endereco-inline-icon {
+    color: #2f2f2f;
+    font-size: 14px;
+}
+
+.endereco-input {
+    height: 28px;
+    padding: 0 6px;
+}
+
+.endereco-input-small {
+    width: 92px;
+}
+
+.endereco-input-uf {
+    width: 92px;
+}
+
+.endereco-input-city-code {
+    width: 92px;
+}
+
+.endereco-input-wide {
+    width: 360px;
+}
+
+.endereco-input-logradouro {
+    width: 350px;
+}
+
+.endereco-input-bairro {
+    width: 155px;
+}
+
+.endereco-input-date {
+    width: 100px;
+}
+
+.endereco-select {
+    width: 104px;
+}
+
 @media (max-width: 768px) {
     .pedido-card,
     .item-card,
     .obs-card,
     .oc-card,
-    .triang-card {
+    .triang-card,
+    .endereco-card {
         width: 95%;         
         padding-left: 3%;
         padding-right: 3%;
@@ -309,6 +419,31 @@ label {
 
     .input-desc {
         width: 100%;         
+    }
+
+    .endereco-grid {
+        grid-template-columns: 1fr;
+        max-width: none;
+    }
+
+    .endereco-grid > label {
+        text-align: left;
+    }
+
+    .endereco-row,
+    .endereco-row-duplo {
+        flex-wrap: wrap;
+    }
+
+    .endereco-input-small,
+    .endereco-input-uf,
+    .endereco-input-city-code,
+    .endereco-input-wide,
+    .endereco-input-logradouro,
+    .endereco-input-bairro,
+    .endereco-input-date,
+    .endereco-select {
+        width: 100%;
     }
 
     .pedido-title {

@@ -1,5 +1,5 @@
 import '../style/pedidoVenda.css';
-import { FaEraser, FaSearch, FaTrash } from "react-icons/fa";
+import { FaCalendarAlt, FaEdit, FaEraser, FaSearch, FaTrash } from "react-icons/fa";
 import { useState } from 'react';
 import { useEffect } from 'react';
 import { LovItens } from '../components/LovItens.js';
@@ -31,17 +31,20 @@ export function PedidoVenda() {
     const [openLovTriangulacao, setOpenLovTriangulacao] = useState(false);
     const [openLovRepresentantes, setOpenLovRepresentantes] = useState(false);
     const [openLovOperacoes, setOpenLovOperacoes] = useState(false);
+    const [openLovOperacoesTriangulacao, setOpenLovOperacoesTriangulacao] = useState(false);
     const [openLovCondPgto, setOpenLovCondPgto] = useState(false);
     const [openLovTransportadoras, setOpenLovTransportadoras] = useState(false);
     const [cliente, setCliente] = useState(null);
     const [clienteTriangulacao, setClienteTriangulacao] = useState(null);
     const [representante, setRepresentante] = useState(null);
     const [operacao, setOperacao] = useState({ cod_oper: null, des_oper: null });
+    const [operacaoTriangulacao, setOperacaoTriangulacao] = useState({ cod_oper: null, des_oper: null });
     const [CondPgto, setCondPgto] = useState({ cod_cond_pgto: null, des_cond_pgto: null });
     const [codClienteDigitado, setCodClienteDigitado] = useState('');
     const [codClienteTriangulacaoDigitado, setCodClienteTriangulacaoDigitado] = useState('');
     const [codRepresentanteDigitado, setCodRepresentanteDigitado] = useState('');
     const [codOperacaoDigitado, setCodOperacaoDigitado] = useState('');
+    const [codOperacaoTriangulacaoDigitado, setCodOperacaoTriangulacaoDigitado] = useState('');
     const [codCondPgtoDigitado, setCodCondPgtoDigitado] = useState('');
     const [itensPedido, setItensPedido] = useState([]);
     const [modalErro, setModalErro] = useState({
@@ -419,6 +422,33 @@ export function PedidoVenda() {
         }
     }
 
+    async function buscarOperacaoTriangulacaoPorCodigo() {
+        if (!codOperacaoTriangulacaoDigitado) return;
+        try {
+            const response = await getOperacoesByFilter({
+                filtro: codOperacaoTriangulacaoDigitado,
+                offset: 0,
+                limit: 1
+            });
+            const oper = response.data.items[0];
+            if (!oper) {
+                setModalErro({
+                    aberto: true,
+                    mensagem: 'OperaÃ§Ã£o da triangulaÃ§Ã£o nÃ£o encontrada!'
+                });
+                setOperacaoTriangulacao({ cod_oper: null, des_oper: null });
+                return;
+            }
+            setOperacaoTriangulacao({
+                cod_oper: oper.cod_oper,
+                des_oper: oper.des_oper
+            });
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao buscar operaÃ§Ã£o da triangulaÃ§Ã£o');
+        }
+    }
+
     async function buscarCondPgtoPorCodigo() {
         if (!codCondPgtoDigitado) return;
         try {
@@ -681,7 +711,6 @@ export function PedidoVenda() {
         <div className="pedido-venda-container">
             <div className="pedido-card">
                 <h2 className="pedido-title">Pedido de Venda</h2>
-
                 <div className="form-grid">
 
                     {/* Cliente */}
@@ -1169,32 +1198,128 @@ export function PedidoVenda() {
             </div>
             <div className="triang-card">
                 <h2 className="pedido-title">Triangulação</h2>
-                <label>Cliente:</label>
-                <div className="field-group full">
-                    <input type="text" className='input-cod'
-                        value={codClienteTriangulacaoDigitado}
-                        onChange={(e) => { setCodClienteTriangulacaoDigitado(e.target.value); }}
-                        onBlur={buscarClienteTriangulacaoPorCodigo}
-                    />
-                    <input type="text" className='input-desc' value={clienteTriangulacao?.des_pessoa || ''} readOnly />
-                    <FaSearch className="icon" onClick={() => setOpenLovTriangulacao(true)} />
-                    <LovClientes
-                        isOpen={openLovTriangulacao}
-                        setLovOpen={() => setOpenLovTriangulacao(!openLovTriangulacao)}
-                        onSelect={(cli) => {
-                            setClienteTriangulacao(cli);
-                            setCodClienteTriangulacaoDigitado(cli.cod_pessoa);
-                        }}
-                    />
-                    <FaEraser className="icon"
-                        onClick={() => {
-                            setClienteTriangulacao(null);
-                            setCodClienteTriangulacaoDigitado('');
-                        }}
+                <div className="form-grid">
+                    <label>Cliente:</label>
+                    <div className="field-group full">
+                        <input type="text" className='input-cod'
+                            value={codClienteTriangulacaoDigitado}
+                            onChange={(e) => { setCodClienteTriangulacaoDigitado(e.target.value); }}
+                            onBlur={buscarClienteTriangulacaoPorCodigo}
+                            />
+                        <input type="text" className='input-desc' value={clienteTriangulacao?.des_pessoa || ''} readOnly />
+                        <FaSearch className="icon" onClick={() => setOpenLovTriangulacao(true)} />
+                        <LovClientes
+                            isOpen={openLovTriangulacao}
+                            setLovOpen={() => setOpenLovTriangulacao(!openLovTriangulacao)}
+                            onSelect={(cli) => {
+                                setClienteTriangulacao(cli);
+                                setCodClienteTriangulacaoDigitado(cli.cod_pessoa);
+                            }}
+                            />
+                        <FaEraser className="icon"
+                            onClick={() => {
+                                setClienteTriangulacao(null);
+                                setCodClienteTriangulacaoDigitado('');
+                            }}
+                            />
+                    </div>
+                    <label>Operação:</label>
+                    <div className="field-group full">
+                        <input
+                            type="text"
+                            className='input-cod'
+                            value={codOperacaoTriangulacaoDigitado}
+                            onChange={(e) => setCodOperacaoTriangulacaoDigitado(e.target.value)}
+                            onBlur={buscarOperacaoTriangulacaoPorCodigo}
                         />
+                        <input
+                            type="text"
+                            className='input-desc'
+                            value={operacaoTriangulacao.des_oper || ''}
+                            readOnly
+                        />
+                        <FaSearch className="icon" onClick={() => setOpenLovOperacoesTriangulacao(true)} />
+                        <LovOperacoes
+                            isOpen={openLovOperacoesTriangulacao}
+                            setLovOpen={() => setOpenLovOperacoesTriangulacao(!openLovOperacoesTriangulacao)}
+                            onSelect={(op) => {
+                                setOperacaoTriangulacao({ cod_oper: op.cod_oper, des_oper: op.des_oper });
+                                setCodOperacaoTriangulacaoDigitado(op.cod_oper);
+                            }}
+                        />
+                        <FaEraser
+                            className="icon"
+                            onClick={() => {
+                                setOperacaoTriangulacao({ cod_oper: null, des_oper: null });
+                                setCodOperacaoTriangulacaoDigitado('');
+                            }}
+                        />
+                    </div>
                 </div>
             </div>
-    
+            <div className="endereco-card">
+                <h2 className="pedido-title">Endereço de Entrega</h2>
+                <div className="endereco-actions">
+                    <button type="button" className="endereco-tab active">PADRÃO</button>
+                    <button type="button" className="endereco-tab">ENDEREÇOS</button>
+                </div>
+                <div className="endereco-grid">
+                    <label>CEP:</label>
+                    <div className="endereco-row endereco-row-cep">
+                        <input type="text" className="endereco-input endereco-input-small" />
+                        <FaSearch className="info-icon" />
+                    </div>
+                    <label>UF:</label>
+                    <div className="endereco-row endereco-row-duplo">
+                        <input type="text" className="endereco-input endereco-input-uf" />
+                        <input type="text" className="endereco-input endereco-input-wide" />
+                        <div className="endereco-row-icons">
+                            <FaSearch className="info-icon" />
+                            <FaEraser className="info-icon" />
+                        </div>
+                    </div>
+                    <label>Cidade:</label>
+                    <div className="endereco-row endereco-row-duplo">
+                        <input type="text" className="endereco-input endereco-input-city-code" />
+                        <input type="text" className="endereco-input endereco-input-wide" />
+                        <div className="endereco-row-icons">
+                            <FaSearch className="info-icon" />
+                            <FaEraser className="info-icon" />
+                        </div>
+                    </div>
+                    <label>Tipo:</label>
+                    <div className="endereco-row">
+                        <select className="endereco-input endereco-select">
+                            <option>teste</option>
+                        </select>
+                    </div>
+                    <label>Logradouro:</label>
+                    <div className="endereco-row">
+                        <input type="text" className="endereco-input endereco-input-logradouro" />
+                    </div>
+                    <label>Número:</label>
+                    <div className="endereco-row">
+                        <input type="text" className="endereco-input endereco-input-small" />
+                    </div>
+                    <label>Complemento:</label>
+                    <div className="endereco-row">
+                        <input type="text" className="endereco-input endereco-input-logradouro" />
+                    </div>
+                    <label>Bairro:</label>
+                    <div className="endereco-row">
+                        <input type="text" className="endereco-input endereco-input-bairro" />
+                    </div>
+                    <label>Referência:</label>
+                    <div className="endereco-row">
+                        <input type="text" className="endereco-input endereco-input-logradouro" />
+                    </div>
+                    <label>Data da Carga:</label>
+                    <div className="endereco-row endereco-row-data">
+                        <input type="text" className="endereco-input endereco-input-date" />
+                        <FaCalendarAlt className="info-icon" />
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }

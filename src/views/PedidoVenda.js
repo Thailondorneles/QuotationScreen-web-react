@@ -8,8 +8,13 @@ import { LovRepresentantes } from '../components/LovRepresentantes.js';
 import { LovOperacoes } from '../components/LovOperacoes.js';
 import { LovCondPgto } from '../components/LovCondPgto.js';
 import { LovTransportadoras } from '../components/LovTransportadoras.js';
+import { LovCidades } from '../components/LovCidades.js';
+import { LovUf } from '../components/LovUf.js';
 import { getRepresentantesByCliente, getRepresentantesByIdCliente } from '../services/representantes.js';
 import { getClienteByFilter } from '../services/clientes.js';
+import { getCidadesByFilter } from '../services/cidades.js';
+import { getUfByFilter } from '../services/uf.js';
+import { getTipLogradouro } from '../services/tipLogradouro.js';
 import { getCondPgtoByFilter } from '../services/condPgto.js';
 import { getOperacoesByFilter } from '../services/operacoes.js';
 import { getEstoqueDisponivel } from '../services/estoqueDisponivel.js';
@@ -25,6 +30,7 @@ import LoadingOverlay from '../components/LoadingOverlay.js';
 import { LovObservacao } from '../components/LovObservacao.js';
 import { getClientesComentarios } from '../services/clientes.js';
 
+
 export function PedidoVenda() {
     const [openLovItens, setOpenLovItens] = useState(false);
     const [openLovPessoas, setOpenLovPessoas] = useState(false);
@@ -34,10 +40,14 @@ export function PedidoVenda() {
     const [openLovOperacoesTriangulacao, setOpenLovOperacoesTriangulacao] = useState(false);
     const [openLovCondPgto, setOpenLovCondPgto] = useState(false);
     const [openLovTransportadoras, setOpenLovTransportadoras] = useState(false);
+    const [openLovCidades, setOpenLovCidades] = useState(false);
+    const [openLovUf, setOpenLovUf] = useState(false);
     const [cliente, setCliente] = useState(null);
     const [clienteTriangulacao, setClienteTriangulacao] = useState(null);
     const [representante, setRepresentante] = useState(null);
     const [operacao, setOperacao] = useState({ cod_oper: null, des_oper: null });
+    const [uf, setUf] = useState(null);
+    const [cidade, setCidade] = useState(null);
     const [operacaoTriangulacao, setOperacaoTriangulacao] = useState({ cod_oper: null, des_oper: null });
     const [CondPgto, setCondPgto] = useState({ cod_cond_pgto: null, des_cond_pgto: null });
     const [codClienteDigitado, setCodClienteDigitado] = useState('');
@@ -46,6 +56,10 @@ export function PedidoVenda() {
     const [codOperacaoDigitado, setCodOperacaoDigitado] = useState('');
     const [codOperacaoTriangulacaoDigitado, setCodOperacaoTriangulacaoDigitado] = useState('');
     const [codCondPgtoDigitado, setCodCondPgtoDigitado] = useState('');
+    const [codUfDigitado, setCodUfDigitado] = useState('');
+    const [codCidadeDigitado, setCodCidadeDigitado] = useState('');
+    const [tiposLogradouro, setTiposLogradouro] = useState([]);
+    const [tipoLogradouroSelecionado, setTipoLogradouroSelecionado] = useState('');
     const [itensPedido, setItensPedido] = useState([]);
     const [modalErro, setModalErro] = useState({
         aberto: false,
@@ -76,6 +90,46 @@ export function PedidoVenda() {
             seqItem: null,
             focusSelector: 'input[data-field="ordem-compra"]'
         });
+    }
+
+    function getDescricaoUf(item) {
+        return item?.des_uf || '';
+    }
+
+    function limparCidadeUf() {
+        setCidade(null);
+        setCodCidadeDigitado('');
+        setUf(null);
+        setCodUfDigitado('');
+    }
+
+    async function carregarTiposLogradouro() {
+        try {
+            let offset = 0;
+            const limit = 25;
+            let hasMore = true;
+            const itens = [];
+
+            while (hasMore) {
+                const response = await getTipLogradouro({ offset, limit });
+                const data = response.data;
+
+                itens.push(...(data.items || []));
+                hasMore = Boolean(data.hasMore);
+                offset += limit;
+            }
+
+            const descricoes = [...new Set(
+                itens
+                    .map(item => item.des_tipo)
+                    .filter(descricao => descricao && descricao.trim() !== '')
+            )];
+
+            setTiposLogradouro(descricoes);
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao carregar tipos de logradouro');
+        }
     }
 
     async function buscarDadosItem(item) {
@@ -216,6 +270,10 @@ export function PedidoVenda() {
             )
         );
     }
+
+    useEffect(() => {
+        carregarTiposLogradouro();
+    }, []);
 
     function validarMultiplo(seq) {
         const item = itensPedido.find(i => i.seq === seq);
@@ -434,7 +492,7 @@ export function PedidoVenda() {
             if (!oper) {
                 setModalErro({
                     aberto: true,
-                    mensagem: 'OperaÃ§Ã£o da triangulaÃ§Ã£o nÃ£o encontrada!'
+                    mensagem: 'Operação da triangulação não encontrada!'
                 });
                 setOperacaoTriangulacao({ cod_oper: null, des_oper: null });
                 return;
@@ -445,7 +503,7 @@ export function PedidoVenda() {
             });
         } catch (error) {
             console.error(error);
-            alert('Erro ao buscar operaÃ§Ã£o da triangulaÃ§Ã£o');
+            alert('Erro ao buscar operação da triangulação');
         }
     }
 
@@ -471,6 +529,76 @@ export function PedidoVenda() {
             console.error(error);
             alert('Erro ao buscar condição de pagamento');
         }
+    }
+
+    async function buscarCidadePorCodigo() {
+        if (!codCidadeDigitado) {
+            setCidade(null);
+            setUf(null);
+            setCodUfDigitado('');
+            return;
+        }
+
+        try {
+            const response = await getCidadesByFilter({
+                filtro: codCidadeDigitado,
+                offset: 0,
+                limit: 1
+            });
+            const cid = response.data.items[0];
+
+            if (!cid) {
+                setCidade(null);
+                setUf(null);
+                setCodUfDigitado('');
+                return;
+            }
+
+            setCidade(cid);
+            setCodCidadeDigitado(cid.cod_ibge);
+            await carregarUfPorCodigo(cid.cod_uf);
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao buscar cidade');
+        }
+    }
+
+    async function carregarUfPorCodigo(codigoUf) {
+        if (!codigoUf) {
+            setUf(null);
+            setCodUfDigitado('');
+            return;
+        }
+
+        try {
+            const response = await getUfByFilter({
+                filtro: codigoUf,
+                offset: 0,
+                limit: 1
+            });
+            const ufEncontrada = response.data.items[0];
+
+            if (!ufEncontrada) {
+                setUf(null);
+                setCodUfDigitado(String(codigoUf));
+                return;
+            }
+
+            setUf(ufEncontrada);
+            setCodUfDigitado(ufEncontrada.cod_uf);
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao buscar UF');
+        }
+    }
+
+    async function buscarUfPorCodigo() {
+        if (!codUfDigitado) {
+            setUf(null);
+            return;
+        }
+
+        await carregarUfPorCodigo(codUfDigitado);
     }
 
     async function cotar() {
@@ -1271,26 +1399,60 @@ export function PedidoVenda() {
                     </div>
                     <label>UF:</label>
                     <div className="endereco-row endereco-row-duplo">
-                        <input type="text" className="endereco-input endereco-input-uf" />
-                        <input type="text" className="endereco-input endereco-input-wide" />
+                        <input
+                            type="text"
+                            className="endereco-input endereco-input-uf"
+                            value={codUfDigitado}
+                            onChange={(e) => setCodUfDigitado(e.target.value)}
+                            onBlur={buscarUfPorCodigo}
+                        />
+                        <input type="text" className="endereco-input endereco-input-wide" value={getDescricaoUf(uf)} readOnly />
                         <div className="endereco-row-icons">
-                            <FaSearch className="info-icon" />
-                            <FaEraser className="info-icon" />
+                            <FaSearch className="icon" onClick={() => setOpenLovUf(true)} />
+                            <LovUf
+                                isOpen={openLovUf}
+                                setLovOpen={() => setOpenLovUf(!openLovUf)}
+                                codUf={codUfDigitado}
+                                onSelect={(ufSelecionada) => {
+                                    setUf(ufSelecionada);
+                                    setCodUfDigitado(ufSelecionada.cod_uf);
+                                }}
+                            />
+                            <FaEraser className="info-icon" onClick={limparCidadeUf} />
                         </div>
                     </div>
                     <label>Cidade:</label>
                     <div className="endereco-row endereco-row-duplo">
-                        <input type="text" className="endereco-input endereco-input-city-code" />
-                        <input type="text" className="endereco-input endereco-input-wide" />
+                        <input type="text" className="endereco-input endereco-input-city-code" value={codCidadeDigitado} onChange={(e) => setCodCidadeDigitado(e.target.value)} onBlur={buscarCidadePorCodigo} />
+                        <input type="text" className="endereco-input endereco-input-wide" value={cidade?.des_cidade || ''} readOnly />
                         <div className="endereco-row-icons">
-                            <FaSearch className="info-icon" />
-                            <FaEraser className="info-icon" />
+                            <FaSearch className="icon" onClick={() => setOpenLovCidades(true)} />
+                            <LovCidades
+                                isOpen={openLovCidades}
+                                setLovOpen={() => setOpenLovCidades(!openLovCidades)}
+                                codIbge={codCidadeDigitado}
+                                onSelect={async (cid) => {
+                                    setCidade(cid);
+                                    setCodCidadeDigitado(cid.cod_ibge);
+                                    await carregarUfPorCodigo(cid.cod_uf);
+                                }}
+                            />
+                            <FaEraser className="info-icon" onClick={limparCidadeUf} />
                         </div>
                     </div>
                     <label>Tipo:</label>
                     <div className="endereco-row">
-                        <select className="endereco-input endereco-select">
-                            <option>teste</option>
+                        <select
+                            className="endereco-input endereco-select"
+                            value={tipoLogradouroSelecionado}
+                            onChange={(e) => setTipoLogradouroSelecionado(e.target.value)}
+                        >
+                            <option value="">Selecione</option>
+                            {tiposLogradouro.map((descricao) => (
+                                <option key={descricao} value={descricao}>
+                                    {descricao}
+                                </option>
+                            ))}
                         </select>
                     </div>
                     <label>Logradouro:</label>

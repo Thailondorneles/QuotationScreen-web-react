@@ -10,6 +10,7 @@ import { LovCondPgto } from '../components/LovCondPgto.js';
 import { LovTransportadoras } from '../components/LovTransportadoras.js';
 import { LovCidades } from '../components/LovCidades.js';
 import { LovUf } from '../components/LovUf.js';
+import { LovCep } from '../components/LovCep.js';
 import { getRepresentantesByCliente, getRepresentantesByIdCliente } from '../services/representantes.js';
 import { getClienteByFilter } from '../services/clientes.js';
 import { getCidadesByFilter } from '../services/cidades.js';
@@ -42,6 +43,7 @@ export function PedidoVenda() {
     const [openLovTransportadoras, setOpenLovTransportadoras] = useState(false);
     const [openLovCidades, setOpenLovCidades] = useState(false);
     const [openLovUf, setOpenLovUf] = useState(false);
+    const [openLovCep, setOpenLovCep] = useState(false);
     const [cliente, setCliente] = useState(null);
     const [clienteTriangulacao, setClienteTriangulacao] = useState(null);
     const [representante, setRepresentante] = useState(null);
@@ -58,6 +60,9 @@ export function PedidoVenda() {
     const [codCondPgtoDigitado, setCodCondPgtoDigitado] = useState('');
     const [codUfDigitado, setCodUfDigitado] = useState('');
     const [codCidadeDigitado, setCodCidadeDigitado] = useState('');
+    const [codCepDigitado, setCodCepDigitado] = useState('');
+    const [logradouroDigitado, setLogradouroDigitado] = useState('');
+    const [bairroDigitado, setBairroDigitado] = useState('');
     const [tiposLogradouro, setTiposLogradouro] = useState([]);
     const [tipoLogradouroSelecionado, setTipoLogradouroSelecionado] = useState('');
     const [itensPedido, setItensPedido] = useState([]);
@@ -96,11 +101,24 @@ export function PedidoVenda() {
         return item?.des_uf || '';
     }
 
+    function getDescricaoTipoLogradouro(codTipo) {
+        const tipo = tiposLogradouro.find(item => String(item.cod_tipo) === String(codTipo));
+        return tipo?.des_tipo || '';
+    }
+
     function limparCidadeUf() {
         setCidade(null);
         setCodCidadeDigitado('');
         setUf(null);
         setCodUfDigitado('');
+    }
+
+    function limparEnderecoCep() {
+        setCodCepDigitado('');
+        setLogradouroDigitado('');
+        setBairroDigitado('');
+        setTipoLogradouroSelecionado('');
+        limparCidadeUf();
     }
 
     async function carregarTiposLogradouro() {
@@ -119,13 +137,8 @@ export function PedidoVenda() {
                 offset += limit;
             }
 
-            const descricoes = [...new Set(
-                itens
-                    .map(item => item.des_tipo)
-                    .filter(descricao => descricao && descricao.trim() !== '')
-            )];
-
-            setTiposLogradouro(descricoes);
+            const tiposValidos = itens.filter(item => item.des_tipo && item.des_tipo.trim() !== '');
+            setTiposLogradouro(tiposValidos);
         } catch (error) {
             console.error(error);
             alert('Erro ao carregar tipos de logradouro');
@@ -1394,8 +1407,31 @@ export function PedidoVenda() {
                 <div className="endereco-grid">
                     <label>CEP:</label>
                     <div className="endereco-row endereco-row-cep">
-                        <input type="text" className="endereco-input endereco-input-small" />
-                        <FaSearch className="info-icon" />
+                        <input
+                            type="text"
+                            className="endereco-input endereco-input-small"
+                            value={codCepDigitado}
+                            onChange={(e) => setCodCepDigitado(e.target.value)}
+                        />
+                        <FaSearch className="info-icon" onClick={() => setOpenLovCep(true)}/>
+                        <LovCep
+                            isOpen={openLovCep}
+                            setLovOpen={() => setOpenLovCep(!openLovCep)}
+                            codCep={codCepDigitado}
+                            onSelect={async (cep) => {
+                                setCodCepDigitado(cep.num_cep || '');
+                                setLogradouroDigitado(cep.des_logradouro || '');
+                                setBairroDigitado(cep.des_bairro || '');
+                                setTipoLogradouroSelecionado(getDescricaoTipoLogradouro(cep.cod_tipo));
+                                setCodCidadeDigitado(cep.cod_ibge ? String(cep.cod_ibge) : '');
+                                setCidade({
+                                    cod_ibge: cep.cod_ibge,
+                                    des_cidade: cep.des_cidade,
+                                    cod_uf: cep.cod_uf
+                                });
+                                await carregarUfPorCodigo(cep.cod_uf);
+                            }}
+                        />
                     </div>
                     <label>UF:</label>
                     <div className="endereco-row endereco-row-duplo">
@@ -1418,7 +1454,7 @@ export function PedidoVenda() {
                                     setCodUfDigitado(ufSelecionada.cod_uf);
                                 }}
                             />
-                            <FaEraser className="info-icon" onClick={limparCidadeUf} />
+                            <FaEraser className="info-icon" onClick={limparEnderecoCep} />
                         </div>
                     </div>
                     <label>Cidade:</label>
@@ -1437,7 +1473,7 @@ export function PedidoVenda() {
                                     await carregarUfPorCodigo(cid.cod_uf);
                                 }}
                             />
-                            <FaEraser className="info-icon" onClick={limparCidadeUf} />
+                            <FaEraser className="info-icon" onClick={limparEnderecoCep} />
                         </div>
                     </div>
                     <label>Tipo:</label>
@@ -1448,16 +1484,21 @@ export function PedidoVenda() {
                             onChange={(e) => setTipoLogradouroSelecionado(e.target.value)}
                         >
                             <option value="">Selecione</option>
-                            {tiposLogradouro.map((descricao) => (
-                                <option key={descricao} value={descricao}>
-                                    {descricao}
+                            {tiposLogradouro.map((tipo) => (
+                                <option key={tipo.cod_tipo} value={tipo.des_tipo}>
+                                    {tipo.des_tipo}
                                 </option>
                             ))}
                         </select>
                     </div>
                     <label>Logradouro:</label>
                     <div className="endereco-row">
-                        <input type="text" className="endereco-input endereco-input-logradouro" />
+                        <input
+                            type="text"
+                            className="endereco-input endereco-input-logradouro"
+                            value={logradouroDigitado}
+                            onChange={(e) => setLogradouroDigitado(e.target.value)}
+                        />
                     </div>
                     <label>Número:</label>
                     <div className="endereco-row">
@@ -1469,7 +1510,12 @@ export function PedidoVenda() {
                     </div>
                     <label>Bairro:</label>
                     <div className="endereco-row">
-                        <input type="text" className="endereco-input endereco-input-bairro" />
+                        <input
+                            type="text"
+                            className="endereco-input endereco-input-bairro"
+                            value={bairroDigitado}
+                            onChange={(e) => setBairroDigitado(e.target.value)}
+                        />
                     </div>
                     <label>Referência:</label>
                     <div className="endereco-row">

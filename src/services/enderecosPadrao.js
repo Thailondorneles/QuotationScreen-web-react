@@ -1,6 +1,6 @@
 import { unimedApi } from "../config/apis.js";
 
-function normalizarRespostaCeps(data) {
+function normalizarRespostaEnderecos(data) {
     if (Array.isArray(data?.items)) {
         return data;
     }
@@ -28,20 +28,11 @@ function normalizarRespostaCeps(data) {
     };
 }
 
-export function getCeps({ offset = 0, limit = 25 }) {
-    return unimedApi.get("ceps", {
+export function getEnderecosPadraoByFilter({ filtro, offset = 0, limit = 25 }) {
+    return unimedApi.get(`psPessoasPadrao/${filtro}`, {
         params: { offset, limit }
     }).then((response) => ({
         ...response,
-        data: normalizarRespostaCeps(response.data)
-    }));
-}
-
-export function getCepsByFilter({ filtro, offset = 0, limit = 25 }) {
-    return unimedApi.get(`ceps/${filtro}`, {
-        params: { offset, limit }
-    }).then((response) => ({
-        ...response,
-        data: normalizarRespostaCeps(response.data)
+        data: normalizarRespostaEnderecos(response.data)
     }));
 }

@@ -11,8 +11,11 @@ import { LovTransportadoras } from '../components/LovTransportadoras.js';
 import { LovCidades } from '../components/LovCidades.js';
 import { LovUf } from '../components/LovUf.js';
 import { LovCep } from '../components/LovCep.js';
+import { LovEnderecos } from '../components/LovEnderecos.js';
+import { getCepsByFilter } from '../services/ceps.js';
+import { getEnderecosPadraoByFilter } from '../services/enderecosPadrao.js';
 import { getRepresentantesByCliente, getRepresentantesByIdCliente } from '../services/representantes.js';
-import { getClienteByFilter } from '../services/clientes.js';
+import { getClienteByFilter, getClientesComentarios } from '../services/clientes.js';
 import { getCidadesByFilter } from '../services/cidades.js';
 import { getUfByFilter } from '../services/uf.js';
 import { getTipLogradouro } from '../services/tipLogradouro.js';
@@ -29,7 +32,6 @@ import { format } from '../utils/format.js';
 import { maskMoneyBR } from '../utils/maskMoney.js';
 import LoadingOverlay from '../components/LoadingOverlay.js';
 import { LovObservacao } from '../components/LovObservacao.js';
-import { getClientesComentarios } from '../services/clientes.js';
 
 
 export function PedidoVenda() {
@@ -44,6 +46,7 @@ export function PedidoVenda() {
     const [openLovCidades, setOpenLovCidades] = useState(false);
     const [openLovUf, setOpenLovUf] = useState(false);
     const [openLovCep, setOpenLovCep] = useState(false);
+    const [openLovEnderecos, setOpenLovEnderecos] = useState(false);
     const [cliente, setCliente] = useState(null);
     const [clienteTriangulacao, setClienteTriangulacao] = useState(null);
     const [representante, setRepresentante] = useState(null);
@@ -63,6 +66,10 @@ export function PedidoVenda() {
     const [codCepDigitado, setCodCepDigitado] = useState('');
     const [logradouroDigitado, setLogradouroDigitado] = useState('');
     const [bairroDigitado, setBairroDigitado] = useState('');
+    const [numeroEnderecoDigitado, setNumeroEnderecoDigitado] = useState('');
+    const [complementoEnderecoDigitado, setComplementoEnderecoDigitado] = useState('');
+    const [referenciaEnderecoDigitado, setReferenciaEnderecoDigitado] = useState('');
+    const [dataCargaDigitada, setDataCargaDigitada] = useState('');
     const [tiposLogradouro, setTiposLogradouro] = useState([]);
     const [tipoLogradouroSelecionado, setTipoLogradouroSelecionado] = useState('');
     const [itensPedido, setItensPedido] = useState([]);
@@ -106,6 +113,10 @@ export function PedidoVenda() {
         return tipo?.des_tipo || '';
     }
 
+    function getCodigoPessoaCliente() {
+        return String(cliente?.cod_pessoa ?? codClienteDigitado ?? '').trim();
+    }
+
     function limparCidadeUf() {
         setCidade(null);
         setCodCidadeDigitado('');
@@ -117,8 +128,29 @@ export function PedidoVenda() {
         setCodCepDigitado('');
         setLogradouroDigitado('');
         setBairroDigitado('');
+        setNumeroEnderecoDigitado('');
+        setComplementoEnderecoDigitado('');
+        setReferenciaEnderecoDigitado('');
+        setDataCargaDigitada('');
         setTipoLogradouroSelecionado('');
+        setOpenLovEnderecos(false);
         limparCidadeUf();
+    }
+
+    async function atualizarCliente(cli) {
+        const codigoAtual = String(cliente?.cod_pessoa ?? '').trim();
+        const codigoNovo = String(cli?.cod_pessoa ?? '').trim();
+        const mudouCliente = codigoAtual !== codigoNovo;
+
+        if (mudouCliente) {
+            limparEnderecoCep();
+            setItensPedido([]);
+            nextId.current = 1;
+            setCotacoesSimFrete([]);
+            setFreteSelecionado({ 201: null, 203: null });
+        }
+
+        setCliente(cli);
     }
 
     async function carregarTiposLogradouro() {
@@ -145,7 +177,10 @@ export function PedidoVenda() {
         }
     }
 
-    async function buscarDadosItem(item) {
+    async function buscarDadosItem(item, contexto = {}) {
+        const clienteAtual = contexto.clienteAtual ?? cliente;
+        const operacaoAtual = contexto.operacaoAtual ?? operacao;
+        const condPgtoAtual = contexto.condPgtoAtual ?? CondPgto;
         // Busca estoque disponível
         const responseEstoque = await getEstoqueDisponivel({
             codItem: item.cod_item,
@@ -157,10 +192,10 @@ export function PedidoVenda() {
         const vlrMedio = responseEstoque.data.items[0]?.vlr_medio_unitario ?? 0;
         // Busca impostos
         const respImp = await getImpostos({
-            codOper: operacao.cod_oper,
+            codOper: operacaoAtual.cod_oper,
             codUnidade: item.unidade,
-            codPessoa: cliente.cod_pessoa,
-            codCondPgto: CondPgto.cod_cond_pgto,
+            codPessoa: clienteAtual.cod_pessoa,
+            codCondPgto: condPgtoAtual.cod_cond_pgto,
             codItem: item.cod_item
         });
 
@@ -409,10 +444,10 @@ export function PedidoVenda() {
                     aberto: true,
                     mensagem: 'Cliente não encontrato com o código digitado!'
                 });
-                setCliente(null);
+                atualizarCliente(null);
                 return;
             }
-            setCliente(cli);
+            atualizarCliente(cli);
         } catch (error) {
             console.error(error);
             alert('Erro ao buscar cliente');
@@ -541,6 +576,139 @@ export function PedidoVenda() {
         } catch (error) {
             console.error(error);
             alert('Erro ao buscar condição de pagamento');
+        }
+    }
+
+    async function aplicarCep(cep) {
+        if (!cep) {
+            limparEnderecoCep();
+            return;
+        }
+
+        setCodCepDigitado(cep.num_cep || '');
+        setLogradouroDigitado(cep.des_logradouro || '');
+        setBairroDigitado(cep.des_bairro || '');
+        setTipoLogradouroSelecionado(getDescricaoTipoLogradouro(cep.cod_tipo));
+        setCodCidadeDigitado(cep.cod_ibge ? String(cep.cod_ibge) : '');
+        setCidade(cep.cod_ibge ? {
+            cod_ibge: cep.cod_ibge,
+            des_cidade: cep.des_cidade,
+            cod_uf: cep.cod_uf
+        } : null);
+        await carregarUfPorCodigo(cep.cod_uf);
+    }
+
+    async function aplicarEnderecoEntrega(endereco) {
+        if (!endereco) {
+            limparEnderecoCep();
+            return;
+        }
+
+        if (endereco.num_cep) {
+            try {
+                const response = await getCepsByFilter({
+                    filtro: endereco.num_cep,
+                    offset: 0,
+                    limit: 1
+                });
+                const cepEncontrado = response.data.items?.[0];
+
+                if (cepEncontrado) {
+                    await aplicarCep(cepEncontrado);
+                    setNumeroEnderecoDigitado(endereco.num_logradouro || '');
+                    setTipoLogradouroSelecionado(getDescricaoTipoLogradouro(endereco.cod_tipo_logradouro));
+                    return;
+                }
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        setCodCepDigitado(endereco.num_cep || '');
+        setLogradouroDigitado(endereco.des_endereco || '');
+        setBairroDigitado(endereco.des_bairro || '');
+        setNumeroEnderecoDigitado(endereco.num_logradouro || '');
+        setTipoLogradouroSelecionado(getDescricaoTipoLogradouro(endereco.cod_tipo_logradouro));
+        setCodCidadeDigitado('');
+        setCidade(endereco.des_cidade ? {
+            cod_ibge: '',
+            des_cidade: endereco.des_cidade,
+            cod_uf: endereco.cod_uf
+        } : null);
+        await carregarUfPorCodigo(endereco.cod_uf);
+    }
+
+    function abrirLovEnderecos() {
+        if (!getCodigoPessoaCliente()) {
+            setModalErro({
+                aberto: true,
+                mensagem: 'Selecione um cliente antes de consultar os enderecos!'
+            });
+            return;
+        }
+
+        setOpenLovEnderecos(true);
+    }
+
+    async function carregarEnderecoPadraoCliente() {
+        const codPessoa = getCodigoPessoaCliente();
+
+        if (!codPessoa) {
+            setModalErro({
+                aberto: true,
+                mensagem: 'Selecione um cliente antes de consultar o endereco padrao!'
+            });
+            return;
+        }
+
+        try {
+            const response = await getEnderecosPadraoByFilter({
+                filtro: codPessoa,
+                offset: 0,
+                limit: 1
+            });
+
+            const enderecoPadrao = response.data.items?.[0];
+
+            if (!enderecoPadrao) {
+                limparEnderecoCep();
+                setModalErro({
+                    aberto: true,
+                    mensagem: 'Cliente nao possui endereco padrao cadastrado!'
+                });
+                return;
+            }
+
+            await aplicarEnderecoEntrega(enderecoPadrao);
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao buscar endereco padrao');
+        }
+    }
+
+    async function buscarCepPorCodigo() {
+        if (!codCepDigitado) {
+            limparEnderecoCep();
+            return;
+        }
+
+        try {
+            const response = await getCepsByFilter({
+                filtro: codCepDigitado,
+                offset: 0,
+                limit: 1
+            });
+            const cep = response.data.items?.[0];
+
+            if (!cep) {
+                limparEnderecoCep();
+                return;
+            }
+
+            await aplicarCep(cep);
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao buscar CEP');
         }
     }
 
@@ -777,7 +945,6 @@ export function PedidoVenda() {
             const lista = response.data.items || [];
 
             const observacoesFormatadas = lista
-                
                 .sort((a, b) => (a.seq_exibicao || 0) - (b.seq_exibicao || 0))
                 .map((obs, index) => ({
                     num_seq: index + 1,
@@ -790,9 +957,8 @@ export function PedidoVenda() {
                 }));
 
             setObservacoes(observacoesFormatadas);
-
         } catch (error) {
-            console.error('Erro ao buscar observações do cliente:', error);
+            console.error('Erro ao buscar observacoes do cliente:', error);
         }
     }
 
@@ -801,6 +967,9 @@ export function PedidoVenda() {
             setRepresentante(null);
             setOperacao({ cod_oper: null, des_oper: null });
             setCondPgto({ cod_cond_pgto: null, des_cond_pgto: null });
+            setCodRepresentanteDigitado('');
+            setCodOperacaoDigitado('');
+            setCodCondPgtoDigitado('');
             setObservacoes([]);
             setObsEditando(null);
             setOpenObsModal(false);
@@ -867,11 +1036,11 @@ export function PedidoVenda() {
                         <LovClientes
                             isOpen={openLovPessoas}
                             setLovOpen={() => setOpenLovPessoas(!openLovPessoas)}
-                            onSelect={(cli) => { console.log(cli); setCliente(cli); setRepresentante(null); setCodClienteDigitado(cli.cod_pessoa); }}
+                            onSelect={(cli) => { console.log(cli); atualizarCliente(cli); setRepresentante(null); setCodClienteDigitado(cli.cod_pessoa); }}
                         />
                         <FaEraser className="icon"
                             onClick={() => {
-                                setCliente(null);
+                                atualizarCliente(null);
                                 setRepresentante(null);
                                 setOperacao({ cod_oper: null, des_oper: null });
                                 setCodClienteDigitado('');
@@ -1401,8 +1570,8 @@ export function PedidoVenda() {
             <div className="endereco-card">
                 <h2 className="pedido-title">Endereço de Entrega</h2>
                 <div className="endereco-actions">
-                    <button type="button" className="endereco-tab active">PADRÃO</button>
-                    <button type="button" className="endereco-tab">ENDEREÇOS</button>
+                    <button type="button" className="endereco-tab active" onClick={carregarEnderecoPadraoCliente}>PADRÃO</button>
+                    <button type="button" className="endereco-tab" onClick={abrirLovEnderecos}>ENDEREÇOS</button>
                 </div>
                 <div className="endereco-grid">
                     <label>CEP:</label>
@@ -1412,25 +1581,20 @@ export function PedidoVenda() {
                             className="endereco-input endereco-input-small"
                             value={codCepDigitado}
                             onChange={(e) => setCodCepDigitado(e.target.value)}
+                            onBlur={buscarCepPorCodigo}
                         />
                         <FaSearch className="info-icon" onClick={() => setOpenLovCep(true)}/>
                         <LovCep
                             isOpen={openLovCep}
                             setLovOpen={() => setOpenLovCep(!openLovCep)}
                             codCep={codCepDigitado}
-                            onSelect={async (cep) => {
-                                setCodCepDigitado(cep.num_cep || '');
-                                setLogradouroDigitado(cep.des_logradouro || '');
-                                setBairroDigitado(cep.des_bairro || '');
-                                setTipoLogradouroSelecionado(getDescricaoTipoLogradouro(cep.cod_tipo));
-                                setCodCidadeDigitado(cep.cod_ibge ? String(cep.cod_ibge) : '');
-                                setCidade({
-                                    cod_ibge: cep.cod_ibge,
-                                    des_cidade: cep.des_cidade,
-                                    cod_uf: cep.cod_uf
-                                });
-                                await carregarUfPorCodigo(cep.cod_uf);
-                            }}
+                            onSelect={aplicarCep}
+                        />
+                        <LovEnderecos
+                            isOpen={openLovEnderecos}
+                            setLovOpen={setOpenLovEnderecos}
+                            codPessoa={getCodigoPessoaCliente()}
+                            onSelect={aplicarEnderecoEntrega}
                         />
                     </div>
                     <label>UF:</label>
@@ -1502,11 +1666,21 @@ export function PedidoVenda() {
                     </div>
                     <label>Número:</label>
                     <div className="endereco-row">
-                        <input type="text" className="endereco-input endereco-input-small" />
+                        <input
+                            type="text"
+                            className="endereco-input endereco-input-small"
+                            value={numeroEnderecoDigitado}
+                            onChange={(e) => setNumeroEnderecoDigitado(e.target.value)}
+                        />
                     </div>
                     <label>Complemento:</label>
                     <div className="endereco-row">
-                        <input type="text" className="endereco-input endereco-input-logradouro" />
+                        <input
+                            type="text"
+                            className="endereco-input endereco-input-logradouro"
+                            value={complementoEnderecoDigitado}
+                            onChange={(e) => setComplementoEnderecoDigitado(e.target.value)}
+                        />
                     </div>
                     <label>Bairro:</label>
                     <div className="endereco-row">
@@ -1519,11 +1693,21 @@ export function PedidoVenda() {
                     </div>
                     <label>Referência:</label>
                     <div className="endereco-row">
-                        <input type="text" className="endereco-input endereco-input-logradouro" />
+                        <input
+                            type="text"
+                            className="endereco-input endereco-input-logradouro"
+                            value={referenciaEnderecoDigitado}
+                            onChange={(e) => setReferenciaEnderecoDigitado(e.target.value)}
+                        />
                     </div>
                     <label>Data da Carga:</label>
                     <div className="endereco-row endereco-row-data">
-                        <input type="text" className="endereco-input endereco-input-date" />
+                        <input
+                            type="text"
+                            className="endereco-input endereco-input-date"
+                            value={dataCargaDigitada}
+                            onChange={(e) => setDataCargaDigitada(e.target.value)}
+                        />
                         <FaCalendarAlt className="info-icon" />
                     </div>
                 </div>

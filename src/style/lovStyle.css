@@ -109,3 +109,54 @@
 .lov-desc {
     padding-left: 12px;
 }
+
+.lov-modal-enderecos {
+    width: 860px;
+    height: auto;
+    max-height: 520px;
+}
+
+.lov-list-enderecos {
+    border-top: 1px solid #d9d9d9;
+    border-bottom: 1px solid #d9d9d9;
+}
+
+.lov-list-enderecos th {
+    background: #f4f6f4;
+    color: #3f3f3f;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.lov-list-enderecos td {
+    font-size: 13px;
+    color: #4a4a4a;
+}
+
+.lov-list-enderecos tr:hover td {
+    background: #eef7ec;
+}
+
+.lov-empty {
+    text-align: center;
+    color: #6f6f6f;
+    padding: 24px 12px !important;
+    cursor: default !important;
+}
+
+.lov-footer-center {
+    display: flex;
+    justify-content: center;
+    text-align: center;
+}
+
+.lov-close-button {
+    background: #2f8c1d;
+    color: #fff;
+    border: none;
+    padding: 8px 18px;
+    border-radius: 2px;
+    cursor: pointer;
+    font-weight: 700;
+}

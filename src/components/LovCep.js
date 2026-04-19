@@ -19,6 +19,7 @@ export function LovCep({ isOpen, setLovOpen, codCep, onSelect }) {
 
     useEffect(() => {
         if (isOpen || codCep) {
+            setFiltro(codCep || '');
             lov.buscar({ filtro: codCep, novoOffset: 0 });
         }
         // eslint-disable-next-line

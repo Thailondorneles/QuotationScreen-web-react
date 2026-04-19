@@ -1,70 +1,217 @@
-# Getting Started with Create React App
+# Projeto Tela Cotacao
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Aplicacao com:
+- frontend React
+- backend Node/Express em `backend-simfrete`
+- publicacao pronta com Docker e Docker Compose
 
-## Available Scripts
+## Desenvolvimento local
 
-In the project directory, you can run:
+### Frontend
+```bash
+npm install
+npm start
+```
 
-### `npm start`
+O frontend abre em `http://localhost:3000`.
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+### Backend
+```bash
+cd backend-simfrete
+npm install
+node server.js
+```
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+O backend sobe em `http://localhost:3001`.
 
-### `npm test`
+## Producao com Docker
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+Em producao, o fluxo fica assim:
+- o `nginx` serve o frontend React
+- o `nginx` encaminha `/api/*` para o backend
+- o backend chama o SimFrete e a API da Unimed
 
-### `npm run build`
+Arquivos usados:
+- `Dockerfile.frontend`
+- `backend-simfrete/Dockerfile`
+- `docker-compose.yml`
+- `docker/nginx/default.conf`
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## Arquivos de ambiente
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+### Frontend
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+Copie `.env.example` para `.env` se quiser sobrescrever as URLs de build:
 
-### `npm run eject`
+```bash
+cp .env.example .env
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+Valores padrao:
+```env
+REACT_APP_SIMFRETE_API_BASE_URL=/
+REACT_APP_UNIMED_API_BASE_URL=/api/unimed/
+```
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+Na configuracao atual, o frontend usa o proprio `nginx` como entrada e nao precisa conhecer o IP interno do backend.
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+### Backend
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+Copie o exemplo:
 
-## Learn More
+```bash
+cp backend-simfrete/.env.example backend-simfrete/.env
+```
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+Preencha o arquivo `backend-simfrete/.env`:
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+```env
+PORT=3001
+HOST=0.0.0.0
+SIMFRETE_USER=seu_usuario
+SIMFRETE_PASS=sua_senha
+UNIMED_API_BASE_URL=https://nl-homolog.unimedcentralrs.com.br/ords/nl/unimed/
+```
 
-### Code Splitting
+## Como subir no Linux
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+### 1. Instalar Docker
 
-### Analyzing the Bundle Size
+Exemplo em Ubuntu:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+```bash
+sudo apt update
+sudo apt install -y docker.io docker-compose-plugin
+sudo systemctl enable docker
+sudo systemctl start docker
+```
 
-### Making a Progressive Web App
+Confira:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+```bash
+docker --version
+docker compose version
+```
 
-### Advanced Configuration
+### 2. Enviar o projeto para o servidor
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+Voce pode:
+- clonar com `git clone`
+- copiar a pasta com WinSCP
+- usar `scp`
 
-### Deployment
+Depois entre na pasta do projeto:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+```bash
+cd projeto-tela-cotacao
+```
 
-### `npm run build` fails to minify
+### 3. Criar os arquivos `.env`
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+```bash
+cp .env.example .env
+cp backend-simfrete/.env.example backend-simfrete/.env
+```
+
+Edite `backend-simfrete/.env` com suas credenciais reais.
+
+### 4. Construir e subir
+
+```bash
+docker compose up -d --build
+```
+
+Esse comando:
+- builda o frontend React
+- builda o backend Node
+- sobe os dois containers
+
+### 5. Verificar se subiu
+
+```bash
+docker ps
+```
+
+Para ver logs:
+
+```bash
+docker compose logs -f
+```
+
+Logs so do backend:
+
+```bash
+docker compose logs -f backend
+```
+
+### 6. Acessar a aplicacao
+
+Abra no navegador:
+
+```text
+http://IP_DO_SERVIDOR
+```
+
+## Como atualizar depois de publicar
+
+Sempre que mudar o codigo:
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+Se nao usa Git no servidor, copie os arquivos atualizados e rode:
+
+```bash
+docker compose up -d --build
+```
+
+## Comandos uteis
+
+Parar os containers:
+
+```bash
+docker compose down
+```
+
+Reiniciar:
+
+```bash
+docker compose restart
+```
+
+Ver containers:
+
+```bash
+docker compose ps
+```
+
+## Estrategia usada aqui
+
+### Frontend
+- buildado com `npm run build`
+- servido por `nginx`
+
+### Backend
+- rodando com `node server.js`
+- exposto apenas dentro da rede do `docker compose`
+
+### Proxy
+- requisicoes `/api/cotacao` e `/api/unimed/*` passam pelo `nginx`
+- o navegador fala so com a porta `80`
+
+## Observacoes importantes
+
+- `npm start` e so para desenvolvimento
+- em producao, o React deve usar `npm run build`
+- o arquivo `backend-simfrete/.env` nao deve ir para o Git
+- a porta publicada hoje e a `80`; se ja existir outro servico nela, troque no `docker-compose.yml`
+
+## Primeira publicacao resumida
+
+1. Instale Docker no Linux.
+2. Copie o projeto para o servidor.
+3. Crie `backend-simfrete/.env`.
+4. Rode `docker compose up -d --build`.
+5. Abra `http://IP_DO_SERVIDOR`.

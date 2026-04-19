@@ -267,8 +267,6 @@ export function PedidoVenda() {
             selecionado: false,
             valorFrete: 0
         };
-        console.log(itemBase)
-
         // Cria os dois itens (201 e 203)
         const item201 = { ...itemBase, seq: nextId.current, unidade: 201 };
         const item203 = { ...itemBase, seq: nextId.current + 1, unidade: 203 };
@@ -1036,7 +1034,7 @@ export function PedidoVenda() {
                         <LovClientes
                             isOpen={openLovPessoas}
                             setLovOpen={() => setOpenLovPessoas(!openLovPessoas)}
-                            onSelect={(cli) => { console.log(cli); atualizarCliente(cli); setRepresentante(null); setCodClienteDigitado(cli.cod_pessoa); }}
+                            onSelect={(cli) => { atualizarCliente(cli); setRepresentante(null); setCodClienteDigitado(cli.cod_pessoa); }}
                         />
                         <FaEraser className="icon"
                             onClick={() => {

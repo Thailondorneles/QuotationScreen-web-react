@@ -92,7 +92,6 @@ export function LovItens({ isOpen, setLovOpen, onSelect }) {
                             {itensAgrupados.map(item => (
                                 <tr key={item.cod_item} onClick={() => {
                                     onSelect(item);
-                                    console.log(item);
                                     setLovOpen(false);
                                     setFiltro('');
                                 }}>         

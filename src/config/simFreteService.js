@@ -1,7 +1,13 @@
 import axios from 'axios';
 
+const simFreteApiBaseUrl = process.env.REACT_APP_SIMFRETE_API_BASE_URL;
+
+if (!simFreteApiBaseUrl) {
+    throw new Error('REACT_APP_SIMFRETE_API_BASE_URL nao configurada.');
+}
+
 const simFreteApi = axios.create({
-    baseURL: 'http://localhost:3001',
+    baseURL: simFreteApiBaseUrl,
     timeout: 20000
 });
 
@@ -76,7 +82,6 @@ function montarPayloadsPorUnidade(itensPedido = [], cliente) {
 
 
 async function postSimFrete(payload) {
-    console.log(payload)
     return simFreteApi.post('/api/cotacao', payload);
 }
 

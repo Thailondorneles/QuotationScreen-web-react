@@ -3,7 +3,7 @@
 Aplicacao com:
 - frontend React
 - backend Node/Express em `backend-simfrete`
-- publicacao pronta com Docker e Docker Compose
+- publicacao pronta com Podman e Podman Compose
 
 ## Desenvolvimento local
 
@@ -24,7 +24,7 @@ node server.js
 
 O backend sobe em `http://localhost:3001`.
 
-## Producao com Docker
+## Producao com Podman
 
 Em producao, o fluxo fica assim:
 - o `nginx` serve o frontend React
@@ -77,20 +77,17 @@ UNIMED_API_BASE_URL=https://nl-homolog.unimedcentralrs.com.br/ords/nl/unimed/
 
 ### 1. Instalar Docker
 
-Exemplo em Ubuntu:
-
 ```bash
-sudo apt update
-sudo apt install -y docker.io docker-compose-plugin
-sudo systemctl enable docker
-sudo systemctl start docker
+sudo dnf module install -y container-tools:ol8
+podman version
+podman info
 ```
 
 Confira:
 
 ```bash
-docker --version
-docker compose version
+podman --version
+podman compose version
 ```
 
 ### 2. Enviar o projeto para o servidor
@@ -118,7 +115,7 @@ Edite `backend-simfrete/.env` com suas credenciais reais.
 ### 4. Construir e subir
 
 ```bash
-docker compose up -d --build
+podman compose up -d --build
 ```
 
 Esse comando:
@@ -129,19 +126,19 @@ Esse comando:
 ### 5. Verificar se subiu
 
 ```bash
-docker ps
+podman ps
 ```
 
 Para ver logs:
 
 ```bash
-docker compose logs -f
+podman compose logs -f
 ```
 
 Logs so do backend:
 
 ```bash
-docker compose logs -f backend
+podman compose logs -f backend
 ```
 
 ### 6. Acessar a aplicacao
@@ -149,7 +146,7 @@ docker compose logs -f backend
 Abra no navegador:
 
 ```text
-http://IP_DO_SERVIDOR
+http://172.20.3.37
 ```
 
 ## Como atualizar depois de publicar
@@ -158,13 +155,7 @@ Sempre que mudar o codigo:
 
 ```bash
 git pull
-docker compose up -d --build
-```
-
-Se nao usa Git no servidor, copie os arquivos atualizados e rode:
-
-```bash
-docker compose up -d --build
+podman compose up -d --build
 ```
 
 ## Comandos uteis
@@ -172,19 +163,19 @@ docker compose up -d --build
 Parar os containers:
 
 ```bash
-docker compose down
+podman compose down
 ```
 
 Reiniciar:
 
 ```bash
-docker compose restart
+podman compose restart
 ```
 
 Ver containers:
 
 ```bash
-docker compose ps
+podman compose ps
 ```
 
 ## Estrategia usada aqui
@@ -195,7 +186,7 @@ docker compose ps
 
 ### Backend
 - rodando com `node server.js`
-- exposto apenas dentro da rede do `docker compose`
+- exposto apenas dentro da rede do `podman compose`
 
 ### Proxy
 - requisicoes `/api/cotacao` e `/api/unimed/*` passam pelo `nginx`
@@ -210,8 +201,8 @@ docker compose ps
 
 ## Primeira publicacao resumida
 
-1. Instale Docker no Linux.
+1. Instale Podman no Linux.
 2. Copie o projeto para o servidor.
 3. Crie `backend-simfrete/.env`.
-4. Rode `docker compose up -d --build`.
-5. Abra `http://IP_DO_SERVIDOR`.
+4. Rode `podman compose up -d --build`.
+5. Abra `http://172.20.3.37`.

@@ -173,7 +173,6 @@ export function PedidoVenda() {
             setTiposLogradouro(tiposValidos);
         } catch (error) {
             console.error(error);
-            alert('Erro ao carregar tipos de logradouro');
         }
     }
 

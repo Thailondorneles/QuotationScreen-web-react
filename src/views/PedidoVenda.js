@@ -1,13 +1,11 @@
 import '../style/pedidoVenda.css';
 import { FaCalendarAlt, FaEdit, FaEraser, FaSearch, FaTrash } from "react-icons/fa";
-import { useState } from 'react';
-import { useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { LovItens } from '../components/LovItens.js';
 import { LovClientes } from '../components/LovClientes.js';
 import { LovRepresentantes } from '../components/LovRepresentantes.js';
 import { LovOperacoes } from '../components/LovOperacoes.js';
 import { LovCondPgto } from '../components/LovCondPgto.js';
-import { LovTransportadoras } from '../components/LovTransportadoras.js';
 import { LovCidades } from '../components/LovCidades.js';
 import { LovUf } from '../components/LovUf.js';
 import { LovCep } from '../components/LovCep.js';
@@ -26,7 +24,6 @@ import { IoInformationOutline } from "react-icons/io5";
 import { getImpostos } from '../services/impostos.js';
 import { ModalErro } from '../components/ModalErro.js';
 import { getListaPreco } from '../services/listaPreco.js';
-import { useRef } from 'react';
 import { cotarSimFrete } from '../config/simFreteService.js';
 import { format } from '../utils/format.js';
 import { maskMoneyBR } from '../utils/maskMoney.js';
@@ -42,7 +39,6 @@ export function PedidoVenda() {
     const [openLovOperacoes, setOpenLovOperacoes] = useState(false);
     const [openLovOperacoesTriangulacao, setOpenLovOperacoesTriangulacao] = useState(false);
     const [openLovCondPgto, setOpenLovCondPgto] = useState(false);
-    const [openLovTransportadoras, setOpenLovTransportadoras] = useState(false);
     const [openLovCidades, setOpenLovCidades] = useState(false);
     const [openLovUf, setOpenLovUf] = useState(false);
     const [openLovCep, setOpenLovCep] = useState(false);
@@ -80,7 +76,6 @@ export function PedidoVenda() {
         focusSelector: null
     });
     const nextId = useRef(1);
-    const [cotacoesSimFrete, setCotacoesSimFrete] = useState([]);
     const [freteSelecionado, setFreteSelecionado] = useState({
         201: null,
         203: null
@@ -90,6 +85,7 @@ export function PedidoVenda() {
     const [openObsModal, setOpenObsModal] = useState(false);
     const [obsEditando, setObsEditando] = useState(null);
     const [ordemCompra, setOrdemCompra] = useState('');
+    const [menuSelecaoItensOpen, setMenuSelecaoItensOpen] = useState(null);
 
     function validarOrdemCompra() {
         const possuiCaracterEspecial = /[\|/]/.test(ordemCompra);
@@ -146,7 +142,6 @@ export function PedidoVenda() {
             limparEnderecoCep();
             setItensPedido([]);
             nextId.current = 1;
-            setCotacoesSimFrete([]);
             setFreteSelecionado({ 201: null, 203: null });
         }
 
@@ -181,23 +176,24 @@ export function PedidoVenda() {
         const operacaoAtual = contexto.operacaoAtual ?? operacao;
         const condPgtoAtual = contexto.condPgtoAtual ?? CondPgto;
         // Busca estoque disponível
-        const responseEstoque = await getEstoqueDisponivel({
-            codItem: item.cod_item,
-            codUnidade: item.unidade,
-            offset: 0,
-            limit: 1
-        });
+        const [responseEstoque, respImp] = await Promise.all([
+            getEstoqueDisponivel({
+                codItem: item.cod_item,
+                codUnidade: item.unidade,
+                offset: 0,
+                limit: 1
+            }),
+            getImpostos({
+                codOper: operacaoAtual.cod_oper,
+                codUnidade: item.unidade,
+                codPessoa: clienteAtual.cod_pessoa,
+                codCondPgto: condPgtoAtual.cod_cond_pgto,
+                codItem: item.cod_item
+            })
+        ]);
         const estoque = responseEstoque.data.items[0]?.qtd_disponivel ?? 0;
         const vlrMedio = responseEstoque.data.items[0]?.vlr_medio_unitario ?? 0;
         // Busca impostos
-        const respImp = await getImpostos({
-            codOper: operacaoAtual.cod_oper,
-            codUnidade: item.unidade,
-            codPessoa: clienteAtual.cod_pessoa,
-            codCondPgto: condPgtoAtual.cod_cond_pgto,
-            codItem: item.cod_item
-        });
-
         const imp = respImp.data || {};
         const indSubsMercadoria = Number(imp.ind_subs_mercadoria || 0);
         const valorLista = Number(imp.vlr_item || 0);
@@ -219,6 +215,8 @@ export function PedidoVenda() {
             difal: indSubsMercadoria === 1 ? imp.txt_refaz_bc_st : null,
             idxSubsTrib: indSubsMercadoria === 1 ? imp.idx_subs_trib : null,
             listaST: indSubsMercadoria === 1 ? imp.cod_lista_st : null,
+            // percentual de ICMS desonerado / Funrural — NÃO deve reduzir a sobra
+            perFunrural: Number(imp.per_funrural || 0),
             indSubsMercadoria
         };
 
@@ -242,8 +240,7 @@ export function PedidoVenda() {
         };
     }
 
-    async function adicionarItem(itemLov) {
-
+    function criarItensPedido(itemLov) {
         const grupoId = nextId.current; 
         const itemBase = {
             grupoId,
@@ -260,7 +257,6 @@ export function PedidoVenda() {
             estoque: 0,
             vlrMedio: 0,
             valorLista: 0,
-            cmv: 0,
             impostos: null,
             baseST: null,
             selecionado: false,
@@ -271,33 +267,73 @@ export function PedidoVenda() {
         const item203 = { ...itemBase, seq: nextId.current + 1, unidade: 203 };
         nextId.current += 2; // avança o contador
 
-        // Adiciona os itens ao estado (com dados vazios)
-        setItensPedido(prev => [...prev, item201, item203]);
+        return [item201, item203];
+    }
+
+    async function adicionarItem(itemLov) {
+        const itensLov = Array.isArray(itemLov) ? itemLov : [itemLov];
+        const novosItens = itensLov.flatMap(criarItensPedido);
+        const multiplosItens = itensLov.length > 1;
+
+        setItensPedido(prev => [...prev, ...novosItens]);
+        setOpenLovItens(false);
+
+        if (multiplosItens) {
+            setLoading(true);
+        }
 
         // Busca dados completos para cada item e atualiza
         try {
-            const [dados201, dados203] = await Promise.all([
-                buscarDadosItem(item201),
-                buscarDadosItem(item203)
-            ]);
+            const resultados = await Promise.allSettled(
+                novosItens.map(async item => ({
+                    seq: item.seq,
+                    dados: await buscarDadosItem(item)
+                }))
+            );
+            const dadosPorSeq = new Map();
+            const erros = [];
+
+            resultados.forEach(resultado => {
+                if (resultado.status === 'fulfilled') {
+                    dadosPorSeq.set(resultado.value.seq, resultado.value.dados);
+                    return;
+                }
+
+                erros.push(resultado.reason);
+            });
 
             setItensPedido(prev =>
-                prev.map(item => {
-                    if (item.seq === item201.seq) return { ...item, ...dados201 };
-                    if (item.seq === item203.seq) return { ...item, ...dados203 };
-                    return item;
-                })
+                prev.map(item =>
+                    dadosPorSeq.has(item.seq)
+                        ? { ...item, ...dadosPorSeq.get(item.seq) }
+                        : item
+                )
             );
+
+            if (erros.length) {
+                console.error('Erro ao carregar dados de alguns itens:', erros);
+                alert('Erro ao carregar informaÃ§Ãµes de estoque ou impostos para alguns itens adicionados.');
+            }
         } catch (error) {
             console.error('Erro ao carregar dados dos itens:', error);
             alert('Erro ao carregar informações de estoque ou impostos para o item adicionado.');
+        } finally {
+            if (multiplosItens) {
+                setLoading(false);
+            }
         }
-
-        setOpenLovItens(false);
     }
 
     function removerItem(seq) {
         setItensPedido(prev => prev.filter(item => item.seq !== seq));
+    }
+
+    function removerItensPorUnidade(unidade) {
+        setItensPedido(prev => prev.filter(item => item.unidade !== unidade));
+        setFreteSelecionado(prev => ({
+            ...prev,
+            [unidade]: null
+        }));
     }
 
     function handleQuantidadeChange(seq, valor) {
@@ -348,6 +384,17 @@ export function PedidoVenda() {
         );
     }
 
+    function selecionarItensPorUnidade(unidade, selecionado) {
+        setItensPedido(prev =>
+            prev.map(item =>
+                Number(item.unidade) === Number(unidade)
+                    ? { ...item, selecionado }
+                    : item
+            )
+        );
+        setMenuSelecaoItensOpen(null);
+    }
+
     function calcularValoresItem(item) {
         const qtd = Number(item.quantidade || 0);
         const vlrLista = Number(item.valorLista || 0);
@@ -356,8 +403,8 @@ export function PedidoVenda() {
         if (!qtd || !vlrLista) {
             return {
                 valorVendaTotal: 0,
-                valorCustoTotal: 0,
                 sobraReal: 0,
+                sobraPercentual: 0,
                 icms: 0,
                 pis: 0,
                 cofins: 0,
@@ -406,14 +453,17 @@ export function PedidoVenda() {
 
         const totalImpostos = icms + pis + cofins + ipi + difal + st + fcp;
 
+        // Funrural (ICMS desonerado) — não reduz a sobra, mas precisa ser mostrado e acumulado separadamente
+        const perFunrural = Number(imp.perFunrural || imp.per_funrural || 0);
+        const valorFunrural = valorVendaTotal * (perFunrural / 100);
+
         const sobraBruta = valorVendaTotal - valorCustoTotal;
         const frete = Number(item.valorFrete || 0);
-        const sobraReal = sobraBruta - totalImpostos - frete;
-        const cmv = valorVendaTotal > 0 ? (valorCustoTotal / valorVendaTotal) * 100 : 0;
+        const sobraReal = sobraBruta - totalImpostos - frete; // nota: não subtrai Funrural
+        const sobraPercentual = valorVendaTotal > 0 ? (sobraReal / valorVendaTotal) * 100 : 0;
         return {
             valorVendaTotal,
             valorCustoTotal,
-            cmv,
             icms,
             pis,
             cofins,
@@ -421,9 +471,11 @@ export function PedidoVenda() {
             difal,
             st,
             fcp,
+            valorFunrural,
             totalImpostos,
             sobraBruta,
-            sobraReal
+            sobraReal,
+            sobraPercentual
         };
     }
 
@@ -807,28 +859,31 @@ export function PedidoVenda() {
                 return;
             }
 
-            try {
-                const retorno = await cotarSimFrete(itensSelecionados, cliente);
+            const retorno = await cotarSimFrete(itensSelecionados, cliente);
+            const selecaoAuto = {};
+            const unidadesSemCotacao = [];
 
-                const selecaoAuto = {};
-                retorno.forEach(r => {
-                    if (r.transportadoras.length === 1) {
-                        selecaoAuto[r.unidade] = r.transportadoras[0];
-                    }
-                });
+            retorno.forEach(r => {
+                const primeiraTransportadora = r.transportadoras?.[0];
 
-                if (Object.keys(selecaoAuto).length === retorno.length) {
-                    confirmarSelecaoFrete(selecaoAuto);
+                if (primeiraTransportadora) {
+                    selecaoAuto[r.unidade] = primeiraTransportadora;
                     return;
                 }
 
-                setCotacoesSimFrete(retorno);
-                setOpenLovTransportadoras(true);
+                unidadesSemCotacao.push(r.unidade);
+            });
 
-            } catch (err) {
-                console.error(err);
-                alert(err.message || 'Erro ao cotar frete');
+            if (unidadesSemCotacao.length) {
+                setModalErro({
+                    aberto: true,
+                    mensagem: `Nenhuma transportadora retornada para a(s) unidade(s): ${unidadesSemCotacao.join(', ')}.`
+                });
+                return;
             }
+
+            setFreteSelecionado(selecaoAuto);
+            aplicarRateioFrete(selecaoAuto);
         }catch (err){
             console.error(err);
             alert(err.message || 'Erro ao cotar frete');
@@ -837,15 +892,10 @@ export function PedidoVenda() {
         }
     }
 
-    function confirmarSelecaoFrete(selecionados) {
-        setFreteSelecionado(selecionados);
-        setOpenLovTransportadoras(false);
-        aplicarRateioFrete(selecionados);
-    }
-
     function aplicarRateioFrete(selecionados) {
         const FATOR_CUBAGEM = 300; // 1 m³ = 300 kg
-        let novosItens = [...itensPedido];
+        setItensPedido(prev => {
+            let novosItens = prev.map(item => ({ ...item, valorFrete: 0 }));
 
         Object.entries(selecionados).forEach(([unidade, frete]) => {
 
@@ -895,7 +945,8 @@ export function PedidoVenda() {
             }
         });
 
-        setItensPedido(novosItens);
+            return novosItens;
+        });
     }
 
     function abrirNovaObs() {
@@ -1115,27 +1166,54 @@ export function PedidoVenda() {
                     {/* Tabela Unidade 201 */}
                     <div className="tabela-unidade">
                         <h3>Unidade 201 (Matriz)</h3>
+                        <div className="item-selection-actions">
+                            <div className="item-selection-menu">
+                                <button
+                                    type="button"
+                                    className="item-selection-trigger"
+                                    onClick={() => setMenuSelecaoItensOpen(prev => prev === 201 ? null : 201)}
+                                >
+                                    Selecionar
+                                </button>
+                                {menuSelecaoItensOpen === 201 && (
+                                    <div className="item-selection-dropdown">
+                                        <button type="button" onClick={() => selecionarItensPorUnidade(201, true)}>Marcar todos</button>
+                                        <button type="button" onClick={() => selecionarItensPorUnidade(201, false)}>Desmarcar todos</button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                         <table className="itens-grid">
                             <thead>
                                 <tr>
                                     <th>Sel.</th>
                                     <th>Seq</th>
-                                    <th>Código</th>
+                                    <th>Cód.</th>
                                     <th>Item</th>
                                     <th>Estoque</th>
-                                    <th>Quantidade</th>
-                                    <th>Valor Lista</th>
-                                    <th>Valor Total</th>
-                                    <th>Custo Médio</th>
-                                    <th>CMV</th>
-                                    <th>Sobra</th>
+                                    <th>Qtd.</th>
+                                    <th>Vlr Lista</th>
+                                    <th>Vlr Total</th>
+                                    <th>Custo Méd.</th>
+                                    <th>Sobra %</th>
                                     <th>Info</th>
-                                    <th></th>
+                                    <th>
+                                        <button
+                                            type="button"
+                                            className="btn-limpar-itens"
+                                            onClick={() => removerItensPorUnidade(201)}
+                                            title="Remover itens da unidade 201"
+                                            disabled={!itens201.length}
+                                        >
+                                            <FaTrash />
+                                        </button>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {itens201.map(item => {
                                     const valores = calcularValoresItem(item);
+                                    const freteItem = freteSelecionado[item.unidade];
                                     return (
                                         <tr key={item.seq}>
                                             <td>
@@ -1151,6 +1229,7 @@ export function PedidoVenda() {
                                             <td>{item.estoque}</td>
                                             <td>
                                                 <input
+                                                    className="item-table-input"
                                                     value={item.quantidade}
                                                     onChange={(e) => handleQuantidadeChange(item.seq, e.target.value)}
                                                     onBlur={() => validarMultiplo(item.seq)}
@@ -1163,6 +1242,7 @@ export function PedidoVenda() {
                                             </td>
                                             <td>
                                                 <input
+                                                    className="item-table-input item-table-money"
                                                     value={item.valorLista}
                                                     onChange={(e) => {
                                                         const v = maskMoneyBR(e.target.value);
@@ -1172,9 +1252,8 @@ export function PedidoVenda() {
                                             </td>
                                             <td>{format.moeda(valores.valorVendaTotal ?? 0)}</td>
                                             <td>{format.moeda(item.vlrMedio ?? 0)}</td>
-                                            <td>{format.percentual(valores.cmv ?? 0)}</td>
                                             <td style={{ color: valores.sobraReal >= 0 ? 'green' : 'red', fontWeight: 'bold' }}>
-                                                {format.moeda(valores.sobraReal ?? 0)}
+                                                {format.percentual(valores.sobraPercentual ?? 0)}
                                             </td>
                                             <td className="info-cell">
                                                 <IoInformationOutline className="icon info-icon" />
@@ -1216,12 +1295,38 @@ export function PedidoVenda() {
                                                         <span className='tip-percent'>{format.percentual(item.impostos?.perFcp)}</span> 
                                                     </div>
                                                     <div className='tip-linha'>
+                                                        <span className='tip-nome'>ICMS deson (Funrural):</span>
+                                                        <span className='tip-valor'>{format.moeda(valores.valorFunrural ?? 0)}</span>
+                                                        <span className='tip-percent'>{format.percentual(item.impostos?.perFunrural)}</span>
+                                                    </div>
+                                                    <div className='tip-linha'>
                                                         <span className='tip-nome'>Frete rateado:</span> 
                                                         <span className='tip-valor'>{format.moeda(item.valorFrete ?? 0)}</span>
                                                     </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>Sobra:</span>
+                                                        <span className='tip-valor'>{format.moeda(valores.sobraReal ?? 0)}</span>
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>Transportadora:</span>
+                                                        <span className='tip-valor'>{freteItem?.nome || '-'}</span>
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>Prazo:</span>
+                                                        <span className='tip-valor'>{freteItem ? `${freteItem.prazo} dias` : '-'}</span>
+                                                    </div>
                                                 </div>
                                             </td>
-                                            <td><FaTrash className="icon" onClick={() => removerItem(item.seq)} /></td>
+                                            <td>
+                                                <button
+                                                    type="button"
+                                                    className="btn-remover-item"
+                                                    onClick={() => removerItem(item.seq)}
+                                                    title="Remover item"
+                                                >
+                                                    <FaTrash />
+                                                </button>
+                                            </td>
                                         </tr>
                                     );
                                 })}
@@ -1232,27 +1337,54 @@ export function PedidoVenda() {
                     {/* Tabela Unidade 203 */}
                     <div className="tabela-unidade">
                         <h3>Unidade 203 (Filial)</h3>
+                        <div className="item-selection-actions">
+                            <div className="item-selection-menu">
+                                <button
+                                    type="button"
+                                    className="item-selection-trigger"
+                                    onClick={() => setMenuSelecaoItensOpen(prev => prev === 203 ? null : 203)}
+                                >
+                                    Selecionar
+                                </button>
+                                {menuSelecaoItensOpen === 203 && (
+                                    <div className="item-selection-dropdown">
+                                        <button type="button" onClick={() => selecionarItensPorUnidade(203, true)}>Marcar todos</button>
+                                        <button type="button" onClick={() => selecionarItensPorUnidade(203, false)}>Desmarcar todos</button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                         <table className="itens-grid">
                             <thead>
                                 <tr>
                                     <th>Sel.</th>
                                     <th>Seq</th>
-                                    <th>Código</th>
+                                    <th>Cód.</th>
                                     <th>Item</th>
                                     <th>Estoque</th>
-                                    <th>Quantidade</th>
-                                    <th>Valor Lista</th>
-                                    <th>Valor Total</th>
-                                    <th>Custo Médio</th>
-                                    <th>CMV</th>
-                                    <th>Sobra</th>
+                                    <th>Qtd.</th>
+                                    <th>Vlr Lista</th>
+                                    <th>Vlr Total</th>
+                                    <th>Custo Méd.</th>
+                                    <th>Sobra %</th>
                                     <th>Info</th>
-                                    <th></th>
+                                    <th>
+                                        <button
+                                            type="button"
+                                            className="btn-limpar-itens"
+                                            onClick={() => removerItensPorUnidade(203)}
+                                            title="Remover itens da unidade 203"
+                                            disabled={!itens203.length}
+                                        >
+                                            <FaTrash />
+                                        </button>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {itens203.map(item => {
                                     const valores = calcularValoresItem(item);
+                                    const freteItem = freteSelecionado[item.unidade];
                                     return (
                                         <tr key={item.seq}>
                                             <td>
@@ -1268,6 +1400,7 @@ export function PedidoVenda() {
                                             <td>{item.estoque}</td>
                                             <td>
                                                 <input
+                                                    className="item-table-input"
                                                     value={item.quantidade}
                                                     onChange={(e) => handleQuantidadeChange(item.seq, e.target.value)}
                                                     onBlur={() => validarMultiplo(item.seq)}
@@ -1280,6 +1413,7 @@ export function PedidoVenda() {
                                             </td>
                                             <td>
                                                 <input
+                                                    className="item-table-input item-table-money"
                                                     value={item.valorLista}
                                                     onChange={(e) => {
                                                         const v = maskMoneyBR(e.target.value);
@@ -1289,9 +1423,8 @@ export function PedidoVenda() {
                                             </td>
                                             <td>{format.moeda(valores.valorVendaTotal ?? 0)}</td>
                                             <td>{format.moeda(item.vlrMedio ?? 0)}</td>
-                                            <td>{format.percentual(valores.cmv ?? 0)}</td>
                                             <td style={{ color: valores.sobraReal >= 0 ? 'green' : 'red', fontWeight: 'bold' }}>
-                                                {format.moeda(valores.sobraReal ?? 0)}
+                                                {format.percentual(valores.sobraPercentual ?? 0)}
                                             </td>
                                             <td className="info-cell">
                                                 <IoInformationOutline className="icon info-icon" />
@@ -1333,12 +1466,38 @@ export function PedidoVenda() {
                                                         <span className='tip-percent'>{format.percentual(item.impostos?.perFcp)}</span> 
                                                     </div>
                                                     <div className='tip-linha'>
+                                                        <span className='tip-nome'>ICMS deson (Funrural):</span>
+                                                        <span className='tip-valor'>{format.moeda(valores.valorFunrural ?? 0)}</span>
+                                                        <span className='tip-percent'>{format.percentual(item.impostos?.perFunrural)}</span>
+                                                    </div>
+                                                    <div className='tip-linha'>
                                                         <span className='tip-nome'>Frete rateado:</span> 
                                                         <span className='tip-valor'>{format.moeda(item.valorFrete ?? 0)}</span>
                                                     </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>Sobra:</span>
+                                                        <span className='tip-valor'>{format.moeda(valores.sobraReal ?? 0)}</span>
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>Transportadora:</span>
+                                                        <span className='tip-valor'>{freteItem?.nome || '-'}</span>
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>Prazo:</span>
+                                                        <span className='tip-valor'>{freteItem ? `${freteItem.prazo} dias` : '-'}</span>
+                                                    </div>
                                                 </div>
                                             </td>
-                                            <td><FaTrash className="icon" onClick={() => removerItem(item.seq)} /></td>
+                                            <td>
+                                                <button
+                                                    type="button"
+                                                    className="btn-remover-item"
+                                                    onClick={() => removerItem(item.seq)}
+                                                    title="Remover item"
+                                                >
+                                                    <FaTrash />
+                                                </button>
+                                            </td>
                                         </tr>
                                     );
                                 })}
@@ -1379,28 +1538,11 @@ export function PedidoVenda() {
                 <LovItens
                     isOpen={openLovItens}
                     setLovOpen={() => setOpenLovItens(!openLovItens)}
+                    itensExistentes={itensPedido}
                     onSelect={(item) => adicionarItem(item)}
                 />
                 <LoadingOverlay isOpen={loading} />
-                <LovTransportadoras
-                    isOpen={openLovTransportadoras}
-                    cotacoes={cotacoesSimFrete}
-                    selecionados={freteSelecionado}
-                    onConfirm={confirmarSelecaoFrete}
-                    onClose={() => setOpenLovTransportadoras(false)}
-                />
 
-                {Object.values(freteSelecionado).some(v => v) && (
-                    <div className="frete-resumo">
-                        {Object.entries(freteSelecionado).map(([u, f]) =>
-                            f ? (
-                                <div key={u}>
-                                    <strong>Unidade {u}</strong> — {f.nome} — R$ {f.valor} — {f.prazo} dias
-                                </div>
-                            ) : null
-                        )}
-                    </div>
-                )}
             </div>
             <ModalErro
                 aberto={modalErro.aberto}

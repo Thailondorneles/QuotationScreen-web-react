@@ -1,11 +1,19 @@
 import '../style/lovStyle.css';
 import { FaX, FaChevronLeft, FaChevronRight } from "react-icons/fa6";
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLovPagination } from '../hooks/useLovPagination';
 import { getItens, getItemByFilter } from '../services/itens';
 
-export function LovItens({ isOpen, setLovOpen, onSelect }) {
+export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] }) {
     const [filtro, setFiltro] = useState('');
+    const [itensSelecionados, setItensSelecionados] = useState({});
+    const [menuSelecionarOpen, setMenuSelecionarOpen] = useState(false);
+    const [ordenacao, setOrdenacao] = useState({ coluna: null, direcao: null });
+
+    const itensExistentesCodigos = useMemo(
+        () => new Set(itensExistentes.map(item => item.cod_item)),
+        [itensExistentes]
+    );
 
     const lov = useLovPagination({
         limit: 25,
@@ -22,6 +30,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect }) {
             if (!acc[item.cod_item]) {
                 acc[item.cod_item] = {
                     cod_item: item.cod_item,
+                    cod_completo: item.cod_completo,
                     des_item: item.des_item,
                     qtd_multiplo: item.qtd_multiplo,
                     qtd_altura: item.qtd_altura,
@@ -33,6 +42,10 @@ export function LovItens({ isOpen, setLovOpen, onSelect }) {
                     estoque_matriz: 0,
                     estoque_filial: 0
                 };
+            }
+
+            if (!acc[item.cod_item].cod_completo && item.cod_completo) {
+                acc[item.cod_item].cod_completo = item.cod_completo;
             }
 
             if (item.cod_unidade === 201) {
@@ -47,13 +60,127 @@ export function LovItens({ isOpen, setLovOpen, onSelect }) {
         }, {})
     );
 
+    const itensOrdenados = useMemo(() => {
+        if (!ordenacao.coluna || !ordenacao.direcao) {
+            return itensAgrupados;
+        }
+
+        return [...itensAgrupados].sort((a, b) => {
+            const valorA = a[ordenacao.coluna];
+            const valorB = b[ordenacao.coluna];
+            const numeroA = Number(valorA);
+            const numeroB = Number(valorB);
+            const ambosNumericos = valorA !== null && valorA !== undefined
+                && valorB !== null && valorB !== undefined
+                && !Number.isNaN(numeroA)
+                && !Number.isNaN(numeroB);
+            const resultado = ambosNumericos
+                ? numeroA - numeroB
+                : String(valorA ?? '').localeCompare(String(valorB ?? ''), 'pt-BR', { numeric: true, sensitivity: 'base' });
+
+            return ordenacao.direcao === 'asc' ? resultado : -resultado;
+        });
+    }, [itensAgrupados, ordenacao]);
+
     useEffect(() => {
         if (isOpen) {
+            setItensSelecionados({});
+            setMenuSelecionarOpen(false);
+            setOrdenacao({ coluna: null, direcao: null });
             lov.buscar({ filtro: '', novoOffset: 0 });
         }
     }, [isOpen]);
 
     if (!isOpen) return null;
+
+    function itemEstaSelecionado(codItem) {
+        return Boolean(itensSelecionados[codItem]);
+    }
+
+    function itemJaExiste(codItem) {
+        return itensExistentesCodigos.has(codItem);
+    }
+
+    function alternarItem(codItem, item) {
+        if (itemJaExiste(codItem)) return;
+
+        setItensSelecionados(prev => {
+            if (prev[codItem]) {
+                const next = { ...prev };
+                delete next[codItem];
+                return next;
+            }
+
+            return {
+                ...prev,
+                [codItem]: item
+            };
+        });
+    }
+
+    function marcarTodos() {
+        setItensSelecionados(prev => {
+            const next = { ...prev };
+            itensOrdenados.forEach(item => {
+                if (!itemJaExiste(item.cod_item)) {
+                    next[item.cod_item] = item;
+                }
+            });
+            return next;
+        });
+        setMenuSelecionarOpen(false);
+    }
+
+    function desmarcarTodos() {
+        setItensSelecionados({});
+        setMenuSelecionarOpen(false);
+    }
+
+    function adicionarSelecionados() {
+        const selecionados = Object.values(itensSelecionados).filter(
+            item => !itemJaExiste(item.cod_item)
+        );
+
+        if (!selecionados.length) return;
+
+        onSelect(selecionados);
+        setLovOpen(false);
+        setFiltro('');
+        setItensSelecionados({});
+        setMenuSelecionarOpen(false);
+    }
+
+    function alternarOrdenacao(coluna) {
+        setOrdenacao(prev => {
+            if (prev.coluna !== coluna) {
+                return { coluna, direcao: 'desc' };
+            }
+
+            if (prev.direcao === 'desc') {
+                return { coluna, direcao: 'asc' };
+            }
+
+            return { coluna: null, direcao: null };
+        });
+    }
+
+    function indicadorOrdenacao(coluna) {
+        if (ordenacao.coluna !== coluna) return '';
+        return ordenacao.direcao === 'desc' ? '↓' : '↑';
+    }
+
+    function cabecalhoOrdenavel(coluna, texto) {
+        return (
+            <button
+                type="button"
+                className="lov-sort-button"
+                onClick={() => alternarOrdenacao(coluna)}
+            >
+                <span>{texto}</span>
+                <span className="lov-sort-indicator">{indicadorOrdenacao(coluna)}</span>
+            </button>
+        );
+    }
 
     return (
         <div className="lov-overlay">
@@ -74,33 +201,86 @@ export function LovItens({ isOpen, setLovOpen, onSelect }) {
                             }
                         }}
                     />
-                    <button onClick={() => lov.buscar({ filtro, novoOffset: 0 })}>
+                    <button
+                        onClick={() => lov.buscar({ filtro, novoOffset: 0 })}
+                        disabled={lov.loading}
+                    >
+                        {lov.loading && <span className="lov-spinner lov-spinner-button"></span>}
                         BUSCAR
                     </button>
                 </div>
+                <div className="lov-actions">
+                    <div className="lov-select-menu">
+                        <button
+                            type="button"
+                            className="lov-select-trigger"
+                            onClick={() => setMenuSelecionarOpen(prev => !prev)}
+                        >
+                            Selecionar
+                        </button>
+                        {menuSelecionarOpen && (
+                            <div className="lov-select-dropdown">
+                                <button type="button" onClick={marcarTodos}>Marcar todos</button>
+                                <button type="button" onClick={desmarcarTodos}>Desmarcar todos</button>
+                            </div>
+                        )}
+                    </div>
+                    <span className="lov-selected-count">
+                        {Object.keys(itensSelecionados).length} selecionado(s)
+                    </span>
+                    <button
+                        type="button"
+                        className="lov-primary-button"
+                        disabled={!Object.keys(itensSelecionados).length}
+                        onClick={adicionarSelecionados}
+                    >
+                        Adicionar selecionados
+                    </button>
+                </div>
                 <div className="lov-list">
+                    {lov.loading && (
+                        <div className="lov-loading">
+                            <span className="lov-spinner"></span>
+                        </div>
+                    )}
                     <table>
                         <thead>
                             <tr>
-                                <th>Código</th>
-                                <th>Descrição</th>
-                                <th>Estoque Matriz</th>
-                                <th>Estoque Filial</th>
+                                <th className="lov-check-col"></th>
+                                <th>{cabecalhoOrdenavel('cod_item', 'Código')}</th>
+                                <th>{cabecalhoOrdenavel('des_item', 'Descrição')}</th>
+                                <th>{cabecalhoOrdenavel('cod_completo', 'Marca')}</th>
+                                <th>{cabecalhoOrdenavel('estoque_matriz', 'Estoque Matriz')}</th>
+                                <th>{cabecalhoOrdenavel('estoque_filial', 'Estoque Filial')}</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {itensAgrupados.map(item => (
-                                <tr key={item.cod_item} onClick={() => {
-                                    onSelect(item);
-                                    setLovOpen(false);
-                                    setFiltro('');
-                                }}>         
+                            {itensOrdenados.map(item => {
+                                const existe = itemJaExiste(item.cod_item);
+                                const selecionado = itemEstaSelecionado(item.cod_item);
+
+                                return (
+                                    <tr
+                                        key={item.cod_item}
+                                        className={existe ? 'lov-row-disabled' : selecionado ? 'lov-row-selected' : ''}
+                                        onClick={() => !existe && alternarItem(item.cod_item, item)}
+                                    >
+                                        <td className="lov-check-col">
+                                            <input
+                                                type="checkbox"
+                                                checked={selecionado}
+                                                disabled={existe}
+                                                onChange={() => !existe && alternarItem(item.cod_item, item)}
+                                                onClick={e => e.stopPropagation()}
+                                            />
+                                        </td>
                                     <td>{item.cod_item}</td>
                                     <td>{item.des_item}</td>
+                                    <td>{item.cod_completo || '-'}</td>
                                     <td>{item.estoque_matriz}</td>
                                     <td>{item.estoque_filial}</td>
                                 </tr>
-                            ))}
+                            )})}
                         </tbody>
                     </table>
                 </div>

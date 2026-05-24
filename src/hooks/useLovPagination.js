@@ -10,25 +10,27 @@ export function useLovPagination({ fetchFn, limit = 25 }) {
     async function buscar({ filtro = '', novoOffset = 0 }) {
         setLoading(true);
 
-        const response = await fetchFn({
-            filtro,
-            offset: novoOffset,
-            limit
-        });
+        try {
+            const response = await fetchFn({
+                filtro,
+                offset: novoOffset,
+                limit
+            });
 
-        const { items, hasMore, count } = response.data;
+            const { items, hasMore, count } = response.data;
 
-        setData(items);
-        setOffset(novoOffset);
-        setHasMore(hasMore);
+            setData(items);
+            setOffset(novoOffset);
+            setHasMore(hasMore);
 
-        if (typeof count === 'number') {
-            setTotal(count);
-        } else {
-            setTotal(novoOffset + items.length);
+            if (typeof count === 'number') {
+                setTotal(count);
+            } else {
+                setTotal(novoOffset + items.length);
+            }
+        } finally {
+            setLoading(false);
         }
-
-        setLoading(false);
     }
 
     return {

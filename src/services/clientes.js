@@ -11,3 +11,9 @@ export function getClienteByFilter({ filtro, offset = 0, limit = 25 }) {
         params: { offset, limit }
     });
 }
+
+export function getClientesComentarios({ filtro, offset = 0, limit = 25 }) {
+    return unimedApi.get(`clientesComentarios/${filtro}`, {
+        params: { offset, limit }
+    });
+}

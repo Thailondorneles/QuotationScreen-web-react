@@ -1,15 +1,22 @@
 import '../style/pedidoVenda.css';
-import { FaEraser, FaSearch, FaTrash } from "react-icons/fa";
-import { useState } from 'react';
-import { useEffect } from 'react';
+import { FaCalendarAlt, FaEdit, FaEraser, FaSearch, FaTrash } from "react-icons/fa";
+import { useState, useEffect, useRef } from 'react';
 import { LovItens } from '../components/LovItens.js';
 import { LovClientes } from '../components/LovClientes.js';
 import { LovRepresentantes } from '../components/LovRepresentantes.js';
 import { LovOperacoes } from '../components/LovOperacoes.js';
 import { LovCondPgto } from '../components/LovCondPgto.js';
-import { LovTransportadoras } from '../components/LovTransportadoras.js';
-import { getRepresentantesByCliente, getRepresentantesByIdCliente } from '../services/representantes.js'; 
-import { getClienteByFilter } from '../services/clientes.js';
+import { LovCidades } from '../components/LovCidades.js';
+import { LovUf } from '../components/LovUf.js';
+import { LovCep } from '../components/LovCep.js';
+import { LovEnderecos } from '../components/LovEnderecos.js';
+import { getCepsByFilter } from '../services/ceps.js';
+import { getEnderecosPadraoByFilter } from '../services/enderecosPadrao.js';
+import { getRepresentantesByCliente, getRepresentantesByIdCliente } from '../services/representantes.js';
+import { getClienteByFilter, getClientesComentarios } from '../services/clientes.js';
+import { getCidadesByFilter } from '../services/cidades.js';
+import { getUfByFilter } from '../services/uf.js';
+import { getTipLogradouro } from '../services/tipLogradouro.js';
 import { getCondPgtoByFilter } from '../services/condPgto.js';
 import { getOperacoesByFilter } from '../services/operacoes.js';
 import { getEstoqueDisponivel } from '../services/estoqueDisponivel.js';
@@ -17,46 +24,228 @@ import { IoInformationOutline } from "react-icons/io5";
 import { getImpostos } from '../services/impostos.js';
 import { ModalErro } from '../components/ModalErro.js';
 import { getListaPreco } from '../services/listaPreco.js';
-import { useRef } from 'react';
-import { cotarSimFrete } from '../config/simFreteService.js'
-import { format } from '../utils/format.js'
-import { maskMoneyBR } from '../utils/maskMoney.js'
+import { cotarSimFrete } from '../config/simFreteService.js';
+import { format } from '../utils/format.js';
+import { maskMoneyBR } from '../utils/maskMoney.js';
+import LoadingOverlay from '../components/LoadingOverlay.js';
+import { LovObservacao } from '../components/LovObservacao.js';
 
 
 export function PedidoVenda() {
     const [openLovItens, setOpenLovItens] = useState(false);
     const [openLovPessoas, setOpenLovPessoas] = useState(false);
+    const [openLovTriangulacao, setOpenLovTriangulacao] = useState(false);
     const [openLovRepresentantes, setOpenLovRepresentantes] = useState(false);
     const [openLovOperacoes, setOpenLovOperacoes] = useState(false);
+    const [openLovOperacoesTriangulacao, setOpenLovOperacoesTriangulacao] = useState(false);
     const [openLovCondPgto, setOpenLovCondPgto] = useState(false);
-    const [openLovTransportadoras, setOpenLovTransportadoras] = useState(false);
+    const [openLovCidades, setOpenLovCidades] = useState(false);
+    const [openLovUf, setOpenLovUf] = useState(false);
+    const [openLovCep, setOpenLovCep] = useState(false);
+    const [openLovEnderecos, setOpenLovEnderecos] = useState(false);
     const [cliente, setCliente] = useState(null);
+    const [clienteTriangulacao, setClienteTriangulacao] = useState(null);
     const [representante, setRepresentante] = useState(null);
     const [operacao, setOperacao] = useState({ cod_oper: null, des_oper: null });
+    const [uf, setUf] = useState(null);
+    const [cidade, setCidade] = useState(null);
+    const [operacaoTriangulacao, setOperacaoTriangulacao] = useState({ cod_oper: null, des_oper: null });
     const [CondPgto, setCondPgto] = useState({ cod_cond_pgto: null, des_cond_pgto: null });
     const [codClienteDigitado, setCodClienteDigitado] = useState('');
+    const [codClienteTriangulacaoDigitado, setCodClienteTriangulacaoDigitado] = useState('');
     const [codRepresentanteDigitado, setCodRepresentanteDigitado] = useState('');
     const [codOperacaoDigitado, setCodOperacaoDigitado] = useState('');
+    const [codOperacaoTriangulacaoDigitado, setCodOperacaoTriangulacaoDigitado] = useState('');
     const [codCondPgtoDigitado, setCodCondPgtoDigitado] = useState('');
+    const [codUfDigitado, setCodUfDigitado] = useState('');
+    const [codCidadeDigitado, setCodCidadeDigitado] = useState('');
+    const [codCepDigitado, setCodCepDigitado] = useState('');
+    const [logradouroDigitado, setLogradouroDigitado] = useState('');
+    const [bairroDigitado, setBairroDigitado] = useState('');
+    const [numeroEnderecoDigitado, setNumeroEnderecoDigitado] = useState('');
+    const [complementoEnderecoDigitado, setComplementoEnderecoDigitado] = useState('');
+    const [referenciaEnderecoDigitado, setReferenciaEnderecoDigitado] = useState('');
+    const [dataCargaDigitada, setDataCargaDigitada] = useState('');
+    const [tiposLogradouro, setTiposLogradouro] = useState([]);
+    const [tipoLogradouroSelecionado, setTipoLogradouroSelecionado] = useState('');
     const [itensPedido, setItensPedido] = useState([]);
     const [modalErro, setModalErro] = useState({
         aberto: false,
         mensagem: '',
-        indexItem: null
+        seqItem: null,
+        focusSelector: null
     });
     const nextId = useRef(1);
-    const [cotacoesSimFrete, setCotacoesSimFrete] = useState([]);
     const [freteSelecionado, setFreteSelecionado] = useState({
         201: null,
         203: null
     });
+    const [loading, setLoading] = useState(false);
+    const [observacoes, setObservacoes] = useState([]);
+    const [openObsModal, setOpenObsModal] = useState(false);
+    const [obsEditando, setObsEditando] = useState(null);
+    const [ordemCompra, setOrdemCompra] = useState('');
+    const [menuSelecaoItensOpen, setMenuSelecaoItensOpen] = useState(null);
 
-    function adicionarItem(itemLov) {
-        const novoItem = {
-            seq: nextId.current,            
+    function validarOrdemCompra() {
+        const possuiCaracterEspecial = /[\|/]/.test(ordemCompra);
+
+        if (!possuiCaracterEspecial) return;
+
+        setModalErro({
+            aberto: true,
+            mensagem: 'A ordem de compra nao pode conter caracteres especiais como | ou /',
+            seqItem: null,
+            focusSelector: 'input[data-field="ordem-compra"]'
+        });
+    }
+
+    function getDescricaoUf(item) {
+        return item?.des_uf || '';
+    }
+
+    function getDescricaoTipoLogradouro(codTipo) {
+        const tipo = tiposLogradouro.find(item => String(item.cod_tipo) === String(codTipo));
+        return tipo?.des_tipo || '';
+    }
+
+    function getCodigoPessoaCliente() {
+        return String(cliente?.cod_pessoa ?? codClienteDigitado ?? '').trim();
+    }
+
+    function limparCidadeUf() {
+        setCidade(null);
+        setCodCidadeDigitado('');
+        setUf(null);
+        setCodUfDigitado('');
+    }
+
+    function limparEnderecoCep() {
+        setCodCepDigitado('');
+        setLogradouroDigitado('');
+        setBairroDigitado('');
+        setNumeroEnderecoDigitado('');
+        setComplementoEnderecoDigitado('');
+        setReferenciaEnderecoDigitado('');
+        setDataCargaDigitada('');
+        setTipoLogradouroSelecionado('');
+        setOpenLovEnderecos(false);
+        limparCidadeUf();
+    }
+
+    async function atualizarCliente(cli) {
+        const codigoAtual = String(cliente?.cod_pessoa ?? '').trim();
+        const codigoNovo = String(cli?.cod_pessoa ?? '').trim();
+        const mudouCliente = codigoAtual !== codigoNovo;
+
+        if (mudouCliente) {
+            limparEnderecoCep();
+            setItensPedido([]);
+            nextId.current = 1;
+            setFreteSelecionado({ 201: null, 203: null });
+        }
+
+        setCliente(cli);
+    }
+
+    async function carregarTiposLogradouro() {
+        try {
+            let offset = 0;
+            const limit = 25;
+            let hasMore = true;
+            const itens = [];
+
+            while (hasMore) {
+                const response = await getTipLogradouro({ offset, limit });
+                const data = response.data;
+
+                itens.push(...(data.items || []));
+                hasMore = Boolean(data.hasMore);
+                offset += limit;
+            }
+
+            const tiposValidos = itens.filter(item => item.des_tipo && item.des_tipo.trim() !== '');
+            setTiposLogradouro(tiposValidos);
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    async function buscarDadosItem(item, contexto = {}) {
+        const clienteAtual = contexto.clienteAtual ?? cliente;
+        const operacaoAtual = contexto.operacaoAtual ?? operacao;
+        const condPgtoAtual = contexto.condPgtoAtual ?? CondPgto;
+        // Busca estoque disponível
+        const [responseEstoque, respImp] = await Promise.all([
+            getEstoqueDisponivel({
+                codItem: item.cod_item,
+                codUnidade: item.unidade,
+                offset: 0,
+                limit: 1
+            }),
+            getImpostos({
+                codOper: operacaoAtual.cod_oper,
+                codUnidade: item.unidade,
+                codPessoa: clienteAtual.cod_pessoa,
+                codCondPgto: condPgtoAtual.cod_cond_pgto,
+                codItem: item.cod_item
+            })
+        ]);
+        const estoque = responseEstoque.data.items[0]?.qtd_disponivel ?? 0;
+        const vlrMedio = responseEstoque.data.items[0]?.vlr_medio_unitario ?? 0;
+        // Busca impostos
+        const imp = respImp.data || {};
+        const indSubsMercadoria = Number(imp.ind_subs_mercadoria || 0);
+        const valorLista = Number(imp.vlr_item || 0);
+
+        let perDifal = 0;
+        if (indSubsMercadoria === 1 && imp.txt_refaz_bc_st && imp.txt_refaz_bc_st.toUpperCase().includes('DIF')) {
+            perDifal = Number(imp.per_subst_trib || 0) - Number(imp.per_icms || 0);
+            imp.per_subst_trib = 0;
+        }
+
+        const impostos = {
+            perIcms: imp.per_icms,
+            perPis: imp.per_aliq_pis,
+            perCofins: imp.per_aliq_cofins,
+            perIpi: imp.per_ipi,
+            perFcp: imp.per_fcp,
+            perSubstTrib: indSubsMercadoria === 1 ? imp.per_subst_trib : 0,
+            perDifal: indSubsMercadoria === 1 ? perDifal : 0,
+            difal: indSubsMercadoria === 1 ? imp.txt_refaz_bc_st : null,
+            idxSubsTrib: indSubsMercadoria === 1 ? imp.idx_subs_trib : null,
+            listaST: indSubsMercadoria === 1 ? imp.cod_lista_st : null,
+            // percentual de ICMS desonerado / Funrural — NÃO deve reduzir a sobra
+            perFunrural: Number(imp.per_funrural || 0),
+            indSubsMercadoria
+        };
+
+        // Base de ST se houver lista
+        let baseST = null;
+        if (impostos.indSubsMercadoria === 1 && impostos.listaST) {
+            const respLista = await getListaPreco({
+                lista: impostos.listaST,
+                item: item.cod_item
+            });
+            const vlrListaST = respLista?.data?.items?.[0]?.vlr_item;
+            baseST = Number(vlrListaST ?? valorLista ?? 0);
+        }
+
+        return {
+            estoque,
+            vlrMedio,
+            valorLista,
+            impostos,
+            baseST
+        };
+    }
+
+    function criarItensPedido(itemLov) {
+        const grupoId = nextId.current; 
+        const itemBase = {
+            grupoId,
             cod_item: itemLov.cod_item,
             descricao: itemLov.des_item,
-            unidade: null,
             qtdMultiplo: itemLov.qtd_multiplo,
             qtdAltura: itemLov.qtd_altura,
             qtdLargura: itemLov.qtd_largura,
@@ -68,145 +257,142 @@ export function PedidoVenda() {
             estoque: 0,
             vlrMedio: 0,
             valorLista: 0,
-            cmv: 0,
             impostos: null,
-            unidades: {
-                201: null,
-                203: null
-            }
+            baseST: null,
+            selecionado: false,
+            valorFrete: 0
         };
+        // Cria os dois itens (201 e 203)
+        const item201 = { ...itemBase, seq: nextId.current, unidade: 201 };
+        const item203 = { ...itemBase, seq: nextId.current + 1, unidade: 203 };
+        nextId.current += 2; // avança o contador
 
-        nextId.current += 1;
-        setItensPedido(prev => [...prev, novoItem]);
-        setOpenLovItens(false);
-
-        carregarDadosUnidade(novoItem, 201);
-        carregarDadosUnidade(novoItem, 203);
+        return [item201, item203];
     }
 
-    const removerItem = (seq) => {
+    async function adicionarItem(itemLov) {
+        const itensLov = Array.isArray(itemLov) ? itemLov : [itemLov];
+        const novosItens = itensLov.flatMap(criarItensPedido);
+        const multiplosItens = itensLov.length > 1;
+
+        setItensPedido(prev => [...prev, ...novosItens]);
+        setOpenLovItens(false);
+
+        if (multiplosItens) {
+            setLoading(true);
+        }
+
+        // Busca dados completos para cada item e atualiza
+        try {
+            const resultados = await Promise.allSettled(
+                novosItens.map(async item => ({
+                    seq: item.seq,
+                    dados: await buscarDadosItem(item)
+                }))
+            );
+            const dadosPorSeq = new Map();
+            const erros = [];
+
+            resultados.forEach(resultado => {
+                if (resultado.status === 'fulfilled') {
+                    dadosPorSeq.set(resultado.value.seq, resultado.value.dados);
+                    return;
+                }
+
+                erros.push(resultado.reason);
+            });
+
+            setItensPedido(prev =>
+                prev.map(item =>
+                    dadosPorSeq.has(item.seq)
+                        ? { ...item, ...dadosPorSeq.get(item.seq) }
+                        : item
+                )
+            );
+
+            if (erros.length) {
+                console.error('Erro ao carregar dados de alguns itens:', erros);
+                alert('Erro ao carregar informaÃ§Ãµes de estoque ou impostos para alguns itens adicionados.');
+            }
+        } catch (error) {
+            console.error('Erro ao carregar dados dos itens:', error);
+            alert('Erro ao carregar informações de estoque ou impostos para o item adicionado.');
+        } finally {
+            if (multiplosItens) {
+                setLoading(false);
+            }
+        }
+    }
+
+    function removerItem(seq) {
+        setItensPedido(prev => prev.filter(item => item.seq !== seq));
+    }
+
+    function removerItensPorUnidade(unidade) {
+        setItensPedido(prev => prev.filter(item => item.unidade !== unidade));
+        setFreteSelecionado(prev => ({
+            ...prev,
+            [unidade]: null
+        }));
+    }
+
+    function handleQuantidadeChange(seq, valor) {
         setItensPedido(prev =>
-            prev.filter(item => item.seq !== seq)
+            prev.map(item =>
+                item.seq === seq ? { ...item, quantidade: valor } : item
+            )
         );
     }
 
-    async function buscarClientePorCodigo() {
-    if (!codClienteDigitado) return;
-
-    try {
-        const response = await getClienteByFilter({
-        filtro: codClienteDigitado,
-        offset: 0,
-        limit: 1
-        });
-
-        const cli = response.data.items[0];
-
-        if (!cli) {
-        alert('Cliente não encontrado');
-        setCliente(null);
-        return;
-        }
-
-        setCliente(cli);
-    } catch (error) {
-        console.error(error);
-        alert('Erro ao buscar cliente');
-    }
+    function handleValorListaChange(seq, valor) {
+        setItensPedido(prev =>
+            prev.map(item =>
+                item.seq === seq ? { ...item, valorLista: valor } : item
+            )
+        );
     }
 
-    async function buscarRepresentantePorCodigo() {
-    if (!codRepresentanteDigitado) return;
+    useEffect(() => {
+        carregarTiposLogradouro();
+    }, []);
 
-    try {
-        const response = await getRepresentantesByIdCliente({
-        representante: codRepresentanteDigitado,
-        cliente: codClienteDigitado,
-        offset: 0,
-        limit: 1
-        });
+    function validarMultiplo(seq) {
+        const item = itensPedido.find(i => i.seq === seq);
+        if (!item) return;
 
-        const rep = response.data.items[0];
+        const qtd = Number(item.quantidade);
+        const multiplo = Number(item.qtdMultiplo);
 
-        if (!rep) {
-        alert('Representante não encontrado');
-        setRepresentante(null);
-        return;
-        }
+        if (!qtd || !multiplo) return;
 
-        setRepresentante(rep);
-    } catch (error) {
-        console.error(error);
-        alert('Erro ao buscar representante');
-    }
-    }
-
-    async function buscarEstoqueDisponivel(item) {
-
-        const response = await getEstoqueDisponivel({
-            codItem: item.cod_item,
-            codUnidade: item.unidade,
-            offset: 0,
-            limit: 1
-        });
-
-        return {
-            estoque: response.data.items[0]?.qtd_disponivel ?? 0,
-            vlrMedio: response.data.items[0]?.vlr_medio_unitario ?? 0
-        };
-
-
-
-    }
-
-    async function buscarOperacaoPorCodigo() {
-    if (!codOperacaoDigitado) return;
-
-    try {
-        const response = await getOperacoesByFilter({
-        filtro: codOperacaoDigitado,
-        offset: 0,
-        limit: 1
-        });
-
-        const oper = response.data.items[0];
-
-        if (!oper) {
-        alert('Operação não encontrada');
-        setOperacao({ cod_oper: null, des_oper: null });
-        return;
-        }
-
-        setOperacao(oper);
-    } catch (error) {
-        console.error(error);
-        alert('Erro ao buscar operação');
-    }
-    }
-
-    async function buscarCondPgtoPorCodigo() {
-        if (!codCondPgtoDigitado) return;
-
-        try {
-            const response = await getCondPgtoByFilter({
-            filtro: codCondPgtoDigitado,
-            offset: 0,
-            limit: 1
+        if (qtd % multiplo !== 0) {
+            setModalErro({
+                aberto: true,
+                mensagem: `Quantidade informada não está de acordo com a quantidade múltipla do item: ${multiplo}.`,
+                seqItem: seq
             });
-
-            const cond = response.data.items[0];
-
-            if (!cond) {
-            alert('Condição de pagamento não encontrada');
-            setCondPgto({ cod_cond_pgto: null, des_cond_pgto: null });
-            return;
-            }
-
-            setCondPgto(cond);
-        } catch (error) {
-            console.error(error);
-            alert('Erro ao buscar condição de pagamento');
+            // Limpa a quantidade do item com erro
+            handleQuantidadeChange(seq, '');
         }
+    }
+
+    function handleCheckboxChange(seq, checked) {
+        setItensPedido(prev =>
+            prev.map(item =>
+                item.seq === seq ? { ...item, selecionado: checked } : item
+            )
+        );
+    }
+
+    function selecionarItensPorUnidade(unidade, selecionado) {
+        setItensPedido(prev =>
+            prev.map(item =>
+                Number(item.unidade) === Number(unidade)
+                    ? { ...item, selecionado }
+                    : item
+            )
+        );
+        setMenuSelecaoItensOpen(null);
     }
 
     function calcularValoresItem(item) {
@@ -217,8 +403,8 @@ export function PedidoVenda() {
         if (!qtd || !vlrLista) {
             return {
                 valorVendaTotal: 0,
-                valorCustoTotal: 0,
                 sobraReal: 0,
+                sobraPercentual: 0,
                 icms: 0,
                 pis: 0,
                 cofins: 0,
@@ -231,58 +417,53 @@ export function PedidoVenda() {
 
         const valorVendaTotal = qtd * vlrLista;
         const valorCustoTotal = qtd * vlrMedio;
-        
+
         const imp = item.impostos || {};
         const indSubsMercadoria = Number(imp.indSubsMercadoria || 0)
         // ===== IMPOSTOS BÁSICOS =====
-        const icms   = valorVendaTotal * (Number(imp.perIcms || 0) / 100);
-        const pis    = valorVendaTotal * (Number(imp.perPis || 0) / 100);
+        const icms = valorVendaTotal * (Number(imp.perIcms || 0) / 100);
+        const pis = valorVendaTotal * (Number(imp.perPis || 0) / 100);
         const cofins = valorVendaTotal * (Number(imp.perCofins || 0) / 100);
-        const ipi    = valorVendaTotal * (Number(imp.perIpi || 0) / 100);
-        const fcp    = valorVendaTotal * (Number(imp.perFcp || 0) / 100);
+        const ipi = valorVendaTotal * (Number(imp.perIpi || 0) / 100);
+        const fcp = valorVendaTotal * (Number(imp.perFcp || 0) / 100);
 
         let difal = 0;
         let st = 0;
 
-        if( indSubsMercadoria === 1){
+        if (indSubsMercadoria === 1) {
             if (imp.difal && imp.difal.toUpperCase().includes('DIF')) {
-
                 const perDifal = Number(imp.perDifal || 0);
                 difal = valorVendaTotal * (perDifal / 100);
-
-            }
-        
-            else {
-
+            } else {
                 // 2.1 — ST por LISTA (prioridade maior que índice)
                 if (item.baseST) {
                     const baseTotal = item.baseST * qtd;
                     st = baseTotal * (Number(imp.perSubstTrib || 0) / 100);
-                    
                 }
                 // 2.2 — ST por ÍNDICE
                 else if (imp.idxSubsTrib) {
-
                     const baseTotal = (vlrLista * imp.idxSubsTrib) * qtd;
                     st = baseTotal * (Number(imp.perSubstTrib || 0) / 100);
-
-                }else {
+                } else {
                     const baseTotal = vlrLista * qtd;
-                    st = baseTotal * (Number(imp.perSubstTrib || 0) / 100)
+                    st = baseTotal * (Number(imp.perSubstTrib || 0) / 100);
                 }
             }
         }
 
         const totalImpostos = icms + pis + cofins + ipi + difal + st + fcp;
 
+        // Funrural (ICMS desonerado) — não reduz a sobra, mas precisa ser mostrado e acumulado separadamente
+        const perFunrural = Number(imp.perFunrural || imp.per_funrural || 0);
+        const valorFunrural = valorVendaTotal * (perFunrural / 100);
+
         const sobraBruta = valorVendaTotal - valorCustoTotal;
         const frete = Number(item.valorFrete || 0);
-        const sobraReal = sobraBruta - totalImpostos - frete;
-        const cmv = valorVendaTotal > 0 ? (valorCustoTotal / valorVendaTotal) * 100 : 0;
+        const sobraReal = sobraBruta - totalImpostos - frete; // nota: não subtrai Funrural
+        const sobraPercentual = valorVendaTotal > 0 ? (sobraReal / valorVendaTotal) * 100 : 0;
         return {
             valorVendaTotal,
             valorCustoTotal,
-            cmv,
             icms,
             pis,
             cofins,
@@ -290,525 +471,1386 @@ export function PedidoVenda() {
             difal,
             st,
             fcp,
+            valorFunrural,
             totalImpostos,
             sobraBruta,
-            sobraReal
+            sobraReal,
+            sobraPercentual
         };
     }
 
-    async function atualizarItemPorUnidade(index, codUnidade) {
-        const novosItens = [...itensPedido];
-        const item = { ...novosItens[index] };
-
-        item.unidade = codUnidade;
-
-        // ===== ESTOQUE =====
-        const dadosEstoque = await buscarEstoqueDisponivel(item);
-        item.estoque = dadosEstoque.estoque;
-        item.vlrMedio = dadosEstoque.vlrMedio;
-
-        // ===== IMPOSTOS =====
-        const respImp = await getImpostos({
-            codOper: operacao.cod_oper,
-            codUnidade,
-            codPessoa: cliente.cod_pessoa,
-            codCondPgto: CondPgto.cod_cond_pgto,
-            codItem: item.cod_item
-        });
-
-        const imp = respImp.data || {};
-        const indSubsMercadoria = Number(imp.ind_subs_mercadoria || 0);
-
-        item.valorLista = Number(imp.vlr_item || 0);
-        
-        let perDifal = 0
-        if (indSubsMercadoria === 1 && imp.txt_refaz_bc_st && imp.txt_refaz_bc_st.toUpperCase().includes('DIF')){
-            perDifal =Number(imp.per_subst_trib || 0) - Number(imp.per_icms || 0);
-            imp.per_subst_trib = 0
-        }
-
-        item.impostos = {
-            perIcms: imp.per_icms,
-            perPis: imp.per_aliq_pis,
-            perCofins: imp.per_aliq_cofins,
-            perIpi: imp.per_ipi,
-            perFcp: imp.per_fcp,
-            perSubstTrib: indSubsMercadoria === 1 ? imp.per_subst_trib : 0,
-            perDifal: indSubsMercadoria === 1 ? perDifal : 0,
-            difal: indSubsMercadoria === 1 ? imp.txt_refaz_bc_st : null,
-            idxSubsTrib: indSubsMercadoria === 1 ? imp.idx_subs_trib : null,
-            listaST: indSubsMercadoria === 1 ? imp.cod_lista_st : null,
-            indSubsMercadoria
-        };
-
-        // ===== BASE ST =====
-        item.baseST = null;
-
-        // REGRA 1 – ST POR LISTA
-        if (item.impostos.indSubsMercadoria === 1 && item.impostos.listaST) {
-            const respLista = await getListaPreco({
-                lista: item.impostos.listaST,
-                item: item.cod_item
+    async function buscarClientePorCodigo() {
+        if (!codClienteDigitado) return;
+        try {
+            const response = await getClienteByFilter({
+                filtro: codClienteDigitado,
+                offset: 0,
+                limit: 1
             });
-            const vlrListaST = respLista?.data?.items?.[0]?.vlr_item;
-            item.baseST = Number(vlrListaST ?? item.valorLista ?? 0);
+            const cli = response.data.items[0];
+            if (!cli) {
+                setModalErro({
+                    aberto: true,
+                    mensagem: 'Cliente não encontrato com o código digitado!'
+                });
+                atualizarCliente(null);
+                return;
+            }
+            atualizarCliente(cli);
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao buscar cliente');
         }
-        
-
-        novosItens[index] = item;
-        setItensPedido(novosItens);
     }
 
-    function validarMultiplo(index) {
-        const item = itensPedido[index];
-        const client = cliente;
-        const qtd = Number(item.quantidade);
-        const multiplo = Number(item.qtdMultiplo);
-
-        if (!qtd || !multiplo) return;
-
-        if (qtd % multiplo !== 0) {
-            setModalErro({
-                aberto: true,
-                mensagem: `Quantidade informada não está de acordo com a quantidade múltipla do item: ${multiplo}.`,
-                indexItem: index
-                
+    async function buscarClienteTriangulacaoPorCodigo() {
+        if (!codClienteTriangulacaoDigitado) return;
+        try {
+            const response = await getClienteByFilter({
+                filtro: codClienteTriangulacaoDigitado,
+                offset: 0,
+                limit: 1
             });
-            const novosItens = [...itensPedido];
-            novosItens[index] = { ...item, quantidade: '' };
-            setItensPedido(novosItens);
+            const cli = response.data.items[0];
+            if (!cli) {
+                setModalErro({
+                    aberto: true,
+                    mensagem: 'Cliente de triangulacao nao encontrado!'
+                });
+                setClienteTriangulacao(null);
+                return;
+            }
+            setClienteTriangulacao(cli);
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao buscar cliente de triangulacao');
         }
-
-        if (!client) {
-            setModalErro({
-                aberto: true,
-                mensagem: `Cliente não selecionado.`,
-                indexItem: index
-            });
-        }
-
     }
 
-    async function cotar(itensPedido = [], cliente) {
+    async function buscarRepresentantePorCodigo() {
+        if (!codRepresentanteDigitado) return;
+        try {
+            const response = await getRepresentantesByIdCliente({
+                representante: codRepresentanteDigitado,
+                cliente: codClienteDigitado,
+                offset: 0,
+                limit: 1
+            });
+            const rep = response.data.items[0];
+            if (!rep) {
+                setModalErro({
+                    aberto: true,
+                    mensagem: 'Representante não encontrado!'
+                });
+                setRepresentante(null)
+                return ;
+            }
+             
+            setRepresentante(rep);
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao buscar representante');
+        }
+    }
 
-        if (!cliente) {
-            alert('Selecione um cliente antes de cotar');
+    async function buscarOperacaoPorCodigo() {
+        if (!codOperacaoDigitado) return;
+        try {
+            const response = await getOperacoesByFilter({
+                filtro: codOperacaoDigitado,
+                offset: 0,
+                limit: 1
+            });
+            const oper = response.data.items[0];
+            if (!oper) {
+                setModalErro({
+                    aberto: true,
+                    mensagem: 'Operação não encontrada!'
+                });
+                setOperacao({ cod_oper: null, des_oper: null });
+                return;
+            }
+            setOperacao(oper);
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao buscar operação');
+        }
+    }
+
+    async function buscarOperacaoTriangulacaoPorCodigo() {
+        if (!codOperacaoTriangulacaoDigitado) return;
+        try {
+            const response = await getOperacoesByFilter({
+                filtro: codOperacaoTriangulacaoDigitado,
+                offset: 0,
+                limit: 1
+            });
+            const oper = response.data.items[0];
+            if (!oper) {
+                setModalErro({
+                    aberto: true,
+                    mensagem: 'Operação da triangulação não encontrada!'
+                });
+                setOperacaoTriangulacao({ cod_oper: null, des_oper: null });
+                return;
+            }
+            setOperacaoTriangulacao({
+                cod_oper: oper.cod_oper,
+                des_oper: oper.des_oper
+            });
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao buscar operação da triangulação');
+        }
+    }
+
+    async function buscarCondPgtoPorCodigo() {
+        if (!codCondPgtoDigitado) return;
+        try {
+            const response = await getCondPgtoByFilter({
+                filtro: codCondPgtoDigitado,
+                offset: 0,
+                limit: 1
+            });
+            const cond = response.data.items[0];
+            if (!cond) {
+                setModalErro({
+                    aberto: true,
+                    mensagem: 'Condição de Pagamento não encontrado!'
+                });
+                setCondPgto({ cod_cond_pgto: null, des_cond_pgto: null });
+                return;
+            }
+            setCondPgto(cond);
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao buscar condição de pagamento');
+        }
+    }
+
+    async function aplicarCep(cep) {
+        if (!cep) {
+            limparEnderecoCep();
             return;
         }
 
-        if (!itensPedido.length) {
-            alert('Inclua ao menos um item');
+        setCodCepDigitado(cep.num_cep || '');
+        setLogradouroDigitado(cep.des_logradouro || '');
+        setBairroDigitado(cep.des_bairro || '');
+        setTipoLogradouroSelecionado(getDescricaoTipoLogradouro(cep.cod_tipo));
+        setCodCidadeDigitado(cep.cod_ibge ? String(cep.cod_ibge) : '');
+        setCidade(cep.cod_ibge ? {
+            cod_ibge: cep.cod_ibge,
+            des_cidade: cep.des_cidade,
+            cod_uf: cep.cod_uf
+        } : null);
+        await carregarUfPorCodigo(cep.cod_uf);
+    }
+
+    async function aplicarEnderecoEntrega(endereco) {
+        if (!endereco) {
+            limparEnderecoCep();
             return;
         }
 
-        const itensInvalidos = itensPedido.some(i =>
-            !i.unidade || !i.quantidade || Number(i.quantidade) <= 0
-        );
+        if (endereco.num_cep) {
+            try {
+                const response = await getCepsByFilter({
+                    filtro: endereco.num_cep,
+                    offset: 0,
+                    limit: 1
+                });
+                const cepEncontrado = response.data.items?.[0];
 
-        if (itensInvalidos) {
-            alert('Todos os itens devem possuir unidade e quantidade válida');
+                if (cepEncontrado) {
+                    await aplicarCep(cepEncontrado);
+                    setNumeroEnderecoDigitado(endereco.num_logradouro || '');
+                    setTipoLogradouroSelecionado(getDescricaoTipoLogradouro(endereco.cod_tipo_logradouro));
+                    return;
+                }
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        setCodCepDigitado(endereco.num_cep || '');
+        setLogradouroDigitado(endereco.des_endereco || '');
+        setBairroDigitado(endereco.des_bairro || '');
+        setNumeroEnderecoDigitado(endereco.num_logradouro || '');
+        setTipoLogradouroSelecionado(getDescricaoTipoLogradouro(endereco.cod_tipo_logradouro));
+        setCodCidadeDigitado('');
+        setCidade(endereco.des_cidade ? {
+            cod_ibge: '',
+            des_cidade: endereco.des_cidade,
+            cod_uf: endereco.cod_uf
+        } : null);
+        await carregarUfPorCodigo(endereco.cod_uf);
+    }
+
+    function abrirLovEnderecos() {
+        if (!getCodigoPessoaCliente()) {
+            setModalErro({
+                aberto: true,
+                mensagem: 'Selecione um cliente antes de consultar os enderecos!'
+            });
+            return;
+        }
+
+        setOpenLovEnderecos(true);
+    }
+
+    async function carregarEnderecoPadraoCliente() {
+        const codPessoa = getCodigoPessoaCliente();
+
+        if (!codPessoa) {
+            setModalErro({
+                aberto: true,
+                mensagem: 'Selecione um cliente antes de consultar o endereco padrao!'
+            });
             return;
         }
 
         try {
-            const retorno = await cotarSimFrete(itensPedido, cliente);
-
-            const selecaoAuto = {};
-            console.log(retorno)
-            retorno.forEach(r => {
-            if (r.transportadoras.length === 1) {
-                selecaoAuto[r.unidade] = r.transportadoras[0];
-            }
+            const response = await getEnderecosPadraoByFilter({
+                filtro: codPessoa,
+                offset: 0,
+                limit: 1
             });
 
-            if (Object.keys(selecaoAuto).length === retorno.length) {
-            confirmarSelecaoFrete(selecaoAuto);
-            return;
+            const enderecoPadrao = response.data.items?.[0];
+
+            if (!enderecoPadrao) {
+                limparEnderecoCep();
+                setModalErro({
+                    aberto: true,
+                    mensagem: 'Cliente nao possui endereco padrao cadastrado!'
+                });
+                return;
             }
 
-            setCotacoesSimFrete(retorno);
-            setOpenLovTransportadoras(true);
-
-        } catch (err) {
-            console.error(err);
-            alert(err.message || 'Erro ao cotar frete');
+            await aplicarEnderecoEntrega(enderecoPadrao);
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao buscar endereco padrao');
         }
     }
 
-    function confirmarSelecaoFrete(selecionados) {
-        setFreteSelecionado(selecionados);
-        setOpenLovTransportadoras(false);
+    async function buscarCepPorCodigo() {
+        if (!codCepDigitado) {
+            limparEnderecoCep();
+            return;
+        }
 
-        aplicarRateioFrete(selecionados);
+        try {
+            const response = await getCepsByFilter({
+                filtro: codCepDigitado,
+                offset: 0,
+                limit: 1
+            });
+            const cep = response.data.items?.[0];
+
+            if (!cep) {
+                limparEnderecoCep();
+                return;
+            }
+
+            await aplicarCep(cep);
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao buscar CEP');
+        }
+    }
+
+    async function buscarCidadePorCodigo() {
+        if (!codCidadeDigitado) {
+            setCidade(null);
+            setUf(null);
+            setCodUfDigitado('');
+            return;
+        }
+
+        try {
+            const response = await getCidadesByFilter({
+                filtro: codCidadeDigitado,
+                offset: 0,
+                limit: 1
+            });
+            const cid = response.data.items[0];
+
+            if (!cid) {
+                setCidade(null);
+                setUf(null);
+                setCodUfDigitado('');
+                return;
+            }
+
+            setCidade(cid);
+            setCodCidadeDigitado(cid.cod_ibge);
+            await carregarUfPorCodigo(cid.cod_uf);
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao buscar cidade');
+        }
+    }
+
+    async function carregarUfPorCodigo(codigoUf) {
+        if (!codigoUf) {
+            setUf(null);
+            setCodUfDigitado('');
+            return;
+        }
+
+        try {
+            const response = await getUfByFilter({
+                filtro: codigoUf,
+                offset: 0,
+                limit: 1
+            });
+            const ufEncontrada = response.data.items[0];
+
+            if (!ufEncontrada) {
+                setUf(null);
+                setCodUfDigitado(String(codigoUf));
+                return;
+            }
+
+            setUf(ufEncontrada);
+            setCodUfDigitado(ufEncontrada.cod_uf);
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao buscar UF');
+        }
+    }
+
+    async function buscarUfPorCodigo() {
+        if (!codUfDigitado) {
+            setUf(null);
+            return;
+        }
+
+        await carregarUfPorCodigo(codUfDigitado);
+    }
+
+    async function cotar() {
+        setLoading(true); 
+        try{
+            const itensSelecionados = itensPedido.filter(item => item.selecionado);
+
+            setFreteSelecionado({ 201: null, 203: null });
+            setItensPedido(prev => prev.map(item => ({ ...item, valorFrete: 0 })));
+
+            if (itensSelecionados.length === 0) {
+                setModalErro({
+                    aberto: true,
+                    mensagem: 'Selecione pelo menos um item para cotar o frete.'
+                });
+                return;
+            }
+
+            const itensInvalidos = itensSelecionados.some(i =>
+                !i.unidade || !i.quantidade || Number(i.quantidade) <= 0
+            );
+
+            if (itensInvalidos) {
+                setModalErro({
+                    aberto: true,
+                    mensagem: 'Todos os itens selecionados devem possuir quantidade válida'
+                });
+                return;
+            }
+
+            const retorno = await cotarSimFrete(itensSelecionados, cliente);
+            const selecaoAuto = {};
+            const unidadesSemCotacao = [];
+
+            retorno.forEach(r => {
+                const primeiraTransportadora = r.transportadoras?.[0];
+
+                if (primeiraTransportadora) {
+                    selecaoAuto[r.unidade] = primeiraTransportadora;
+                    return;
+                }
+
+                unidadesSemCotacao.push(r.unidade);
+            });
+
+            if (unidadesSemCotacao.length) {
+                setModalErro({
+                    aberto: true,
+                    mensagem: `Nenhuma transportadora retornada para a(s) unidade(s): ${unidadesSemCotacao.join(', ')}.`
+                });
+                return;
+            }
+
+            setFreteSelecionado(selecaoAuto);
+            aplicarRateioFrete(selecaoAuto);
+        }catch (err){
+            console.error(err);
+            alert(err.message || 'Erro ao cotar frete');
+        }finally{
+            setLoading(false);
+        }
     }
 
     function aplicarRateioFrete(selecionados) {
         const FATOR_CUBAGEM = 300; // 1 m³ = 300 kg
-        let novosItens = [...itensPedido];
+        setItensPedido(prev => {
+            let novosItens = prev.map(item => ({ ...item, valorFrete: 0 }));
 
         Object.entries(selecionados).forEach(([unidade, frete]) => {
-            // Encontrar itens da unidade
+
+            const valorFrete = Number(frete.valor);
+            if (isNaN(valorFrete) || valorFrete <= 0) {
+                return;
+            }
+
             const indicesItensUnidade = [];
             novosItens.forEach((item, index) => {
-                if (Number(item.unidade) === Number(unidade)) {
+                if (Number(item.unidade) === Number(unidade) && item.selecionado) {
                     indicesItensUnidade.push(index);
                 }
             });
 
-            if (indicesItensUnidade.length === 0) return;
+            if (indicesItensUnidade.length === 0) {
+                return;
+            }
 
-            // PASSO 1: Calcular peso de cobrança para cada item
             const pesosCobranca = indicesItensUnidade.map(index => {
                 const item = novosItens[index];
-                const pesoReal = Number(item.pesoBruto || 0) * Number(item.quantidade || 0);
-                const volumeTotal = Number(item.qtdM3 || 0) * Number(item.quantidade || 0);
+                const qtd = Number(item.quantidade) || 0;
+                const pesoReal = (Number(item.pesoBruto) || 0) * qtd;
+                const volumeTotal = (Number(item.qtdM3) || 0) * qtd;
                 const pesoCubado = volumeTotal * FATOR_CUBAGEM;
-                
-                // O transporte cobra pelo MAIOR entre peso real e peso cubado
-                return Math.max(pesoReal, pesoCubado);
+                const peso = Math.max(pesoReal, pesoCubado);
+                return peso;
             });
 
-            // PASSO 2: Calcular total de peso de cobrança
-            const totalPesoCobranca = pesosCobranca.reduce((s, peso) => s + peso, 0);
+            const totalPesoCobranca = pesosCobranca.reduce((soma, peso) => soma + peso, 0);
 
-            // PASSO 3: Ratear proporcionalmente ao peso de cobrança
-            indicesItensUnidade.forEach((itemIndex, i) => {
-                if (totalPesoCobranca > 0) {
-                    const proporcao = pesosCobranca[i] / totalPesoCobranca;
-                    const valorRateado = proporcao * Number(frete.valor);
-                    novosItens[itemIndex].valorFrete = Number(valorRateado.toFixed(2));
-                } else {
-                    novosItens[itemIndex].valorFrete = 0;
+            if (totalPesoCobranca === 0) {
+                const quantidades = indicesItensUnidade.map(index => Number(novosItens[index].quantidade) || 0);
+                const totalQuantidade = quantidades.reduce((soma, q) => soma + q, 0);
+                if (totalQuantidade === 0) {
+                    return;
                 }
-            });
+                indicesItensUnidade.forEach((itemIndex, i) => {
+                    const proporcao = quantidades[i] / totalQuantidade;
+                    novosItens[itemIndex].valorFrete = Number((proporcao * valorFrete).toFixed(2));
+                });
+            } else {
+                indicesItensUnidade.forEach((itemIndex, i) => {
+                    const proporcao = pesosCobranca[i] / totalPesoCobranca;
+                    novosItens[itemIndex].valorFrete = Number((proporcao * valorFrete).toFixed(2));
+                });
+            }
         });
 
-        setItensPedido(novosItens);
+            return novosItens;
+        });
+    }
+
+    function abrirNovaObs() {
+        setObsEditando(null);
+        setOpenObsModal(true);
+    }
+
+    function editarObs(obs) {
+        setObsEditando(obs);
+        setOpenObsModal(true);
+    }
+
+    function salvarObs(obs) {
+        if (obsEditando) {
+            setObservacoes(prev =>
+                prev.map(o => o.num_seq === obs.num_seq ? obs : o)
+            );
+        } else {
+            setObservacoes(prev => [
+                ...prev,
+                { ...obs, num_seq: prev.length + 1 }
+            ]);
+        }
+
+        setOpenObsModal(false);
+    }
+
+    function removerObs(seq) {
+        const lista = observacoes
+            .filter(o => o.num_seq !== seq)
+            .map((o, i) => ({ ...o, num_seq: i + 1 }));
+
+        setObservacoes(lista);
+    }
+
+    async function carregarObservacoesCliente(codCliente) {
+        try {
+            const response = await getClientesComentarios({
+                filtro: codCliente,
+                offset: 0,
+                limit: 50
+            });
+
+            const lista = response.data.items || [];
+
+            const observacoesFormatadas = lista
+                .sort((a, b) => (a.seq_exibicao || 0) - (b.seq_exibicao || 0))
+                .map((obs, index) => ({
+                    num_seq: index + 1,
+                    seq_comentario: obs.seq_comentario,
+                    descricao: obs.des_comentario,
+                    pedido: false,
+                    nota: false,
+                    registro: false,
+                    financeiro: false
+                }));
+
+            setObservacoes(observacoesFormatadas);
+        } catch (error) {
+            console.error('Erro ao buscar observacoes do cliente:', error);
+        }
     }
 
     useEffect(() => {
-    if (!cliente) {
-        setRepresentante(null);
-        setOperacao({ cod_oper: null, des_oper: null });
-        setCondPgto({ cod_cond_pgto: null, des_cond_pgto: null });
-        return;
-    }
+        if (!cliente) {
+            setRepresentante(null);
+            setOperacao({ cod_oper: null, des_oper: null });
+            setCondPgto({ cod_cond_pgto: null, des_cond_pgto: null });
+            setCodRepresentanteDigitado('');
+            setCodOperacaoDigitado('');
+            setCodCondPgtoDigitado('');
+            setObservacoes([]);
+            setObsEditando(null);
+            setOpenObsModal(false);
+            return;
+        }
 
+        async function carregarDados() {
+            const response = await getRepresentantesByCliente({
+                filtro: cliente.cod_pessoa,
+                offset: 0,
+                limit: 25
+            });
 
-    async function carregarDados() {
-        const response = await getRepresentantesByCliente({
-            filtro: cliente.cod_pessoa,
-            offset: 0,
-            limit: 25
-        });
-        
-        const responseOper = await getClienteByFilter({ 
-            filtro: cliente.cod_pessoa, 
-            offset: 0, 
-            limit: 25 
-        });
+            const responseOper = await getClienteByFilter({
+                filtro: cliente.cod_pessoa,
+                offset: 0,
+                limit: 25
+            });
 
-        const responseCondPgto = await getClienteByFilter({ 
-            filtro: cliente.cod_pessoa, 
-            offset: 0, 
-            limit: 25 
-        });
+            const responseCondPgto = await getClienteByFilter({
+                filtro: cliente.cod_pessoa,
+                offset: 0,
+                limit: 25
+            });
 
-        setRepresentante(response.data.items[0] || null);
-        setCodRepresentanteDigitado(response.data.items[0]?.cod_pessoa_rep || '');
-        setOperacao({ 
-            cod_oper: responseOper.data.items[0]?.cod_oper || null, 
-            des_oper: responseOper.data.items[0]?.des_oper || null 
-        });
-        setCodOperacaoDigitado(responseOper.data.items[0]?.cod_oper || '');
-        setCondPgto({ 
-            cod_cond_pgto: responseCondPgto.data.items[0]?.cod_cond_pgto || null, 
-            des_cond_pgto: responseCondPgto.data.items[0]?.des_cond_pgto || null 
-        });
-        setCodCondPgtoDigitado(responseCondPgto.data.items[0]?.cod_cond_pgto || '');
-    }
+            setRepresentante(response.data.items[0] || null);
+            setCodRepresentanteDigitado(response.data.items[0]?.cod_pessoa_rep || '');
+            setOperacao({
+                cod_oper: responseOper.data.items[0]?.cod_oper || null,
+                des_oper: responseOper.data.items[0]?.des_oper || null
+            });
+            setCodOperacaoDigitado(responseOper.data.items[0]?.cod_oper || '');
+            setCondPgto({
+                cod_cond_pgto: responseCondPgto.data.items[0]?.cod_cond_pgto || null,
+                des_cond_pgto: responseCondPgto.data.items[0]?.des_cond_pgto || null
+            });
+            setCodCondPgtoDigitado(responseCondPgto.data.items[0]?.cod_cond_pgto || '');
 
-    carregarDados();
+            await carregarObservacoesCliente(cliente.cod_pessoa);
+        }
+
+        carregarDados();
     }, [cliente]);
 
+    const itens201 = itensPedido.filter(item => item.unidade === 201);
+    const itens203 = itensPedido.filter(item => item.unidade === 203);
+
     return (
-    <div className="pedido-venda-container">
-        <div className="pedido-card">
-        <h2 className="pedido-title">Pedido de Venda</h2>
+        <div className="pedido-venda-container">
+            <div className="pedido-card">
+                <h2 className="pedido-title">Pedido de Venda</h2>
+                <div className="form-grid">
 
-            <div className="form-grid">
-                
-                {/* Cliente */}
-                <label>Cliente:</label>
-                <div className="field-group full">
-                    <input type="text" className='input-cod'  
-                        value={codClienteDigitado} 
-                        onChange={(e) => {setCodClienteDigitado(e.target.value);}} 
-                        onBlur={() => buscarClientePorCodigo(codClienteDigitado)} 
-                    />
-                    <input type="text" className='input-desc' value={cliente?.des_pessoa || ''} readOnly/>
-                    <FaSearch className="icon" onClick={() => setOpenLovPessoas(true)} />
-                    <LovClientes 
-                        isOpen={openLovPessoas} 
-                        setLovOpen={() => setOpenLovPessoas(!openLovPessoas)} 
-                        onSelect={(cli) => { setCliente(cli); setRepresentante(null); setCodClienteDigitado(cli.cod_pessoa); }}
-                    />
-                    <FaEraser className="icon" 
-                    onClick={() => { 
-                        setCliente(null); 
-                        setRepresentante(null); 
-                        setOperacao({ cod_oper: null, des_oper: null }); 
-                        setCodClienteDigitado(''); 
-                        setCodRepresentanteDigitado(''); 
-                        setCodCondPgtoDigitado('');
-                        setCodOperacaoDigitado('');
-                        }}
+                    {/* Cliente */}
+                    <label>Cliente:</label>
+                    <div className="field-group full">
+                        <input type="text" className='input-cod'
+                            value={codClienteDigitado}
+                            onChange={(e) => { setCodClienteDigitado(e.target.value); }}
+                            onBlur={() => buscarClientePorCodigo(codClienteDigitado)}
                         />
-                </div>
+                        <input type="text" className='input-desc' value={cliente?.des_pessoa || ''} readOnly />
+                        <FaSearch className="icon" onClick={() => setOpenLovPessoas(true)} />
+                        <LovClientes
+                            isOpen={openLovPessoas}
+                            setLovOpen={() => setOpenLovPessoas(!openLovPessoas)}
+                            onSelect={(cli) => { atualizarCliente(cli); setRepresentante(null); setCodClienteDigitado(cli.cod_pessoa); }}
+                        />
+                        <FaEraser className="icon"
+                            onClick={() => {
+                                atualizarCliente(null);
+                                setRepresentante(null);
+                                setOperacao({ cod_oper: null, des_oper: null });
+                                setCodClienteDigitado('');
+                                setCodRepresentanteDigitado('');
+                                setCodCondPgtoDigitado('');
+                                setCodOperacaoDigitado('');
+                                setObservacoes([]);
+                                setObsEditando(null);
+                                setOpenObsModal(false);
+                            }}
+                        />
+                    </div>
 
-                {/* Representante */}
-                <label>Representante:</label>
-                <div className="field-group full">
-                    <input type="text" className='input-cod' value={codRepresentanteDigitado} 
-                        onChange={(e) => setCodRepresentanteDigitado(e.target.value)} 
-                        onBlur={() => buscarRepresentantePorCodigo(codRepresentanteDigitado)} 
-                    />
-                    <input type="text" className='input-desc' value={representante?.des_pessoa || ''} readOnly/>
-                    <FaSearch className="icon" onClick={() => {if (!cliente) { alert('Selecione um cliente primeiro'); return; } setOpenLovRepresentantes(true); }} />
-                    <LovRepresentantes 
-                        isOpen={openLovRepresentantes} 
-                        setLovOpen={() => setOpenLovRepresentantes(!openLovRepresentantes)} 
-                        codPessoa={cliente?.cod_pessoa} 
-                        onSelect={(rep) => { setRepresentante(rep); setCodRepresentanteDigitado(rep.cod_pessoa_rep); }} 
-                    />
-                    <FaEraser className="icon" onClick={() => { setRepresentante(null); setCodRepresentanteDigitado(''); }} />
-                </div>
+                    {/* Representante */}
+                    <label>Representante:</label>
+                    <div className="field-group full">
+                        <input type="text" className='input-cod' value={codRepresentanteDigitado}
+                            onChange={(e) => setCodRepresentanteDigitado(e.target.value)}
+                            onBlur={() => buscarRepresentantePorCodigo(codRepresentanteDigitado)}
+                        />
+                        <input type="text" className='input-desc' value={representante?.des_pessoa || ''} readOnly />
+                        <FaSearch className="icon" onClick={() => { if (!cliente) { alert('Selecione um cliente primeiro'); return; } setOpenLovRepresentantes(true); }} />
+                        <LovRepresentantes
+                            isOpen={openLovRepresentantes}
+                            setLovOpen={() => setOpenLovRepresentantes(!openLovRepresentantes)}
+                            codPessoa={cliente?.cod_pessoa}
+                            onSelect={(rep) => { setRepresentante(rep); setCodRepresentanteDigitado(rep.cod_pessoa_rep); }}
+                        />
+                        <FaEraser className="icon" onClick={() => { setRepresentante(null); setCodRepresentanteDigitado(''); }} />
+                    </div>
 
-                {/* Operação */}
-                <label>Operação:</label>
-                <div className="field-group full">
-                    <input type="text" className='input-cod' value={codOperacaoDigitado} 
-                        onChange={(e) => setCodOperacaoDigitado(e.target.value)} 
-                        onBlur={() => buscarOperacaoPorCodigo(codOperacaoDigitado)} 
-                    />
-                    <input type="text" className='input-desc' value={operacao.des_oper || ''} readOnly/>
-                    <FaSearch className="icon" onClick={() => {if (!cliente) { alert('Selecione um cliente primeiro'); return; } setOpenLovOperacoes(true); }} />
-                    <LovOperacoes 
-                        isOpen={openLovOperacoes} 
-                        setLovOpen={() => setOpenLovOperacoes(!openLovOperacoes)} 
-                        onSelect={(op) => {setOperacao({ cod_oper: op.cod_oper, des_oper: op.des_oper }); setCodOperacaoDigitado(op.cod_oper);}} 
-                     />
-                     <FaEraser className="icon" onClick={() => {setOperacao({ cod_oper: null, des_oper: null }); setCodOperacaoDigitado('');}} />
-                </div>
+                    {/* Operação */}
+                    <label>Operação:</label>
+                    <div className="field-group full">
+                        <input type="text" className='input-cod' value={codOperacaoDigitado}
+                            onChange={(e) => setCodOperacaoDigitado(e.target.value)}
+                            onBlur={() => buscarOperacaoPorCodigo(codOperacaoDigitado)}
+                        />
+                        <input type="text" className='input-desc' value={operacao.des_oper || ''} readOnly />
+                        <FaSearch className="icon" onClick={() => { if (!cliente) { alert('Selecione um cliente primeiro'); return; } setOpenLovOperacoes(true); }} />
+                        <LovOperacoes
+                            isOpen={openLovOperacoes}
+                            setLovOpen={() => setOpenLovOperacoes(!openLovOperacoes)}
+                            onSelect={(op) => { setOperacao({ cod_oper: op.cod_oper, des_oper: op.des_oper }); setCodOperacaoDigitado(op.cod_oper); }}
+                        />
+                        <FaEraser className="icon" onClick={() => { setOperacao({ cod_oper: null, des_oper: null }); setCodOperacaoDigitado(''); }} />
+                    </div>
 
-                {/* Condição pagamento */}
-                <label>Cond. pgto.:</label>
-                <div className="field-group full" >
-                    <input type="text" className='input-cod' value={codCondPgtoDigitado} 
-                        onChange={(e) => setCodCondPgtoDigitado(e.target.value)} 
-                        onBlur={() => buscarCondPgtoPorCodigo(codCondPgtoDigitado)} 
-                    />
-                    <input type="text" className='input-desc' value={CondPgto.des_cond_pgto || ''} readOnly/>
-                    <FaSearch className="icon" onClick={() => {if (!cliente) { alert('Selecione um cliente primeiro'); return; } setOpenLovCondPgto(true); }} />
-                    <LovCondPgto 
-                        isOpen={openLovCondPgto} 
-                        setLovOpen={() => setOpenLovCondPgto(!openLovCondPgto)} 
-                        onSelect={(cond) => {
-                            setCondPgto({ cod_cond_pgto: cond.cod_cond_pgto, des_cond_pgto: cond.des_cond_pgto }); 
-                            setCodCondPgtoDigitado(cond.cod_cond_pgto);
-                        }}
-                    />
-                    <FaEraser className="icon" onClick={() => {setCondPgto({ cod_cond_pgto: null, des_cond_pgto: null }); setCodCondPgtoDigitado('');}} />
+                    {/* Condição pagamento */}
+                    <label>Cond. pgto.:</label>
+                    <div className="field-group full" >
+                        <input type="text" className='input-cod' value={codCondPgtoDigitado}
+                            onChange={(e) => setCodCondPgtoDigitado(e.target.value)}
+                            onBlur={() => buscarCondPgtoPorCodigo(codCondPgtoDigitado)}
+                        />
+                        <input type="text" className='input-desc' value={CondPgto.des_cond_pgto || ''} readOnly />
+                        <FaSearch className="icon" onClick={() => { if (!cliente) { alert('Selecione um cliente primeiro'); return; } setOpenLovCondPgto(true); }} />
+                        <LovCondPgto
+                            isOpen={openLovCondPgto}
+                            setLovOpen={() => setOpenLovCondPgto(!openLovCondPgto)}
+                            onSelect={(cond) => {
+                                setCondPgto({ cod_cond_pgto: cond.cod_cond_pgto, des_cond_pgto: cond.des_cond_pgto });
+                                setCodCondPgtoDigitado(cond.cod_cond_pgto);
+                            }}
+                        />
+                        <FaEraser className="icon" onClick={() => { setCondPgto({ cod_cond_pgto: null, des_cond_pgto: null }); setCodCondPgtoDigitado(''); }} />
+                    </div>
+                <div></div>
                 </div>
-
-                <div></div> {/* Espaço vazio para alinhamento */}
             </div>
-        </div>
-        <div className="item-card">
-            <h2 className="pedido-title">Itens do Pedido</h2>
-            {itensPedido.length > 0 && (
-                <table className="itens-grid">
+
+            <div className="item-card">
+                <h2 className="pedido-title">Itens do Pedido</h2>
+                <div className="tabelas-container">
+                    {/* Tabela Unidade 201 */}
+                    <div className="tabela-unidade">
+                        <h3>Unidade 201 (Matriz)</h3>
+                        <div className="item-selection-actions">
+                            <div className="item-selection-menu">
+                                <button
+                                    type="button"
+                                    className="item-selection-trigger"
+                                    onClick={() => setMenuSelecaoItensOpen(prev => prev === 201 ? null : 201)}
+                                >
+                                    Selecionar
+                                </button>
+                                {menuSelecaoItensOpen === 201 && (
+                                    <div className="item-selection-dropdown">
+                                        <button type="button" onClick={() => selecionarItensPorUnidade(201, true)}>Marcar todos</button>
+                                        <button type="button" onClick={() => selecionarItensPorUnidade(201, false)}>Desmarcar todos</button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <table className="itens-grid">
+                            <thead>
+                                <tr>
+                                    <th>Sel.</th>
+                                    <th>Seq</th>
+                                    <th>Cód.</th>
+                                    <th>Item</th>
+                                    <th>Estoque</th>
+                                    <th>Qtd.</th>
+                                    <th>Vlr Lista</th>
+                                    <th>Vlr Total</th>
+                                    <th>Custo Méd.</th>
+                                    <th>Sobra %</th>
+                                    <th>Info</th>
+                                    <th>
+                                        <button
+                                            type="button"
+                                            className="btn-limpar-itens"
+                                            onClick={() => removerItensPorUnidade(201)}
+                                            title="Remover itens da unidade 201"
+                                            disabled={!itens201.length}
+                                        >
+                                            <FaTrash />
+                                        </button>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {itens201.map(item => {
+                                    const valores = calcularValoresItem(item);
+                                    const freteItem = freteSelecionado[item.unidade];
+                                    return (
+                                        <tr key={item.seq}>
+                                            <td>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={item.selecionado}
+                                                    onChange={(e) => handleCheckboxChange(item.seq, e.target.checked)}
+                                                />
+                                            </td>
+                                            <td>{item.seq}</td>
+                                            <td>{item.cod_item}</td>
+                                            <td>{item.descricao}</td>
+                                            <td>{item.estoque}</td>
+                                            <td>
+                                                <input
+                                                    className="item-table-input"
+                                                    value={item.quantidade}
+                                                    onChange={(e) => handleQuantidadeChange(item.seq, e.target.value)}
+                                                    onBlur={() => validarMultiplo(item.seq)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            e.target.blur();
+                                                        }
+                                                    }}
+                                                />
+                                            </td>
+                                            <td>
+                                                <input
+                                                    className="item-table-input item-table-money"
+                                                    value={item.valorLista}
+                                                    onChange={(e) => {
+                                                        const v = maskMoneyBR(e.target.value);
+                                                        handleValorListaChange(item.seq, v);
+                                                    }}
+                                                />
+                                            </td>
+                                            <td>{format.moeda(valores.valorVendaTotal ?? 0)}</td>
+                                            <td>{format.moeda(item.vlrMedio ?? 0)}</td>
+                                            <td style={{ color: valores.sobraReal >= 0 ? 'green' : 'red', fontWeight: 'bold' }}>
+                                                {format.percentual(valores.sobraPercentual ?? 0)}
+                                            </td>
+                                            <td className="info-cell">
+                                                <IoInformationOutline className="icon info-icon" />
+                                                <div className="tooltip-info">
+                                                    <strong>Detalhes do Item</strong>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>ICMS:</span>    
+                                                        <span className='tip-valor'>{format.moeda(valores.icms ?? 0)}</span>
+                                                        <span className='tip-percent'>{format.percentual(item.impostos?.perIcms)}</span> 
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>ICMS ST:</span> 
+                                                        <span className='tip-valor'>{format.moeda(valores.st ?? 0)}</span>
+                                                        <span className='tip-percent'>{format.percentual(item.impostos?.perSubstTrib)}</span>
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>DIFAL:</span> 
+                                                        <span className='tip-valor'>{format.moeda(valores.difal ?? 0)}</span>
+                                                        <span className='tip-percent'>{format.percentual(item.impostos?.perDifal)}</span> 
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>PIS:</span> 
+                                                        <span className='tip-valor'>{format.moeda(valores.pis ?? 0)}</span>
+                                                        <span className='tip-percent'>{format.percentual(item.impostos?.perPis)}</span> 
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>COFINS:</span> 
+                                                        <span className='tip-valor'>{format.moeda(valores.cofins ?? 0)}</span>
+                                                        <span className='tip-percent'>{format.percentual(item.impostos?.perCofins)}</span> 
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>IPI:</span> 
+                                                        <span className='tip-valor'>{format.moeda(valores.ipi ?? 0)}</span>
+                                                        <span className='tip-percent'>{format.percentual(item.impostos?.perIpi)}</span> 
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>FCP:</span> 
+                                                        <span className='tip-valor'>{format.moeda(valores.fcp ?? 0)}</span>
+                                                        <span className='tip-percent'>{format.percentual(item.impostos?.perFcp)}</span> 
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>ICMS deson (Funrural):</span>
+                                                        <span className='tip-valor'>{format.moeda(valores.valorFunrural ?? 0)}</span>
+                                                        <span className='tip-percent'>{format.percentual(item.impostos?.perFunrural)}</span>
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>Frete rateado:</span> 
+                                                        <span className='tip-valor'>{format.moeda(item.valorFrete ?? 0)}</span>
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>Sobra:</span>
+                                                        <span className='tip-valor'>{format.moeda(valores.sobraReal ?? 0)}</span>
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>Transportadora:</span>
+                                                        <span className='tip-valor'>{freteItem?.nome || '-'}</span>
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>Prazo:</span>
+                                                        <span className='tip-valor'>{freteItem ? `${freteItem.prazo} dias` : '-'}</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <button
+                                                    type="button"
+                                                    className="btn-remover-item"
+                                                    onClick={() => removerItem(item.seq)}
+                                                    title="Remover item"
+                                                >
+                                                    <FaTrash />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Tabela Unidade 203 */}
+                    <div className="tabela-unidade">
+                        <h3>Unidade 203 (Filial)</h3>
+                        <div className="item-selection-actions">
+                            <div className="item-selection-menu">
+                                <button
+                                    type="button"
+                                    className="item-selection-trigger"
+                                    onClick={() => setMenuSelecaoItensOpen(prev => prev === 203 ? null : 203)}
+                                >
+                                    Selecionar
+                                </button>
+                                {menuSelecaoItensOpen === 203 && (
+                                    <div className="item-selection-dropdown">
+                                        <button type="button" onClick={() => selecionarItensPorUnidade(203, true)}>Marcar todos</button>
+                                        <button type="button" onClick={() => selecionarItensPorUnidade(203, false)}>Desmarcar todos</button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <table className="itens-grid">
+                            <thead>
+                                <tr>
+                                    <th>Sel.</th>
+                                    <th>Seq</th>
+                                    <th>Cód.</th>
+                                    <th>Item</th>
+                                    <th>Estoque</th>
+                                    <th>Qtd.</th>
+                                    <th>Vlr Lista</th>
+                                    <th>Vlr Total</th>
+                                    <th>Custo Méd.</th>
+                                    <th>Sobra %</th>
+                                    <th>Info</th>
+                                    <th>
+                                        <button
+                                            type="button"
+                                            className="btn-limpar-itens"
+                                            onClick={() => removerItensPorUnidade(203)}
+                                            title="Remover itens da unidade 203"
+                                            disabled={!itens203.length}
+                                        >
+                                            <FaTrash />
+                                        </button>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {itens203.map(item => {
+                                    const valores = calcularValoresItem(item);
+                                    const freteItem = freteSelecionado[item.unidade];
+                                    return (
+                                        <tr key={item.seq}>
+                                            <td>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={item.selecionado}
+                                                    onChange={(e) => handleCheckboxChange(item.seq, e.target.checked)}
+                                                />
+                                            </td>
+                                            <td>{item.seq}</td>
+                                            <td>{item.cod_item}</td>
+                                            <td>{item.descricao}</td>
+                                            <td>{item.estoque}</td>
+                                            <td>
+                                                <input
+                                                    className="item-table-input"
+                                                    value={item.quantidade}
+                                                    onChange={(e) => handleQuantidadeChange(item.seq, e.target.value)}
+                                                    onBlur={() => validarMultiplo(item.seq)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            e.target.blur();
+                                                        }
+                                                    }}
+                                                />
+                                            </td>
+                                            <td>
+                                                <input
+                                                    className="item-table-input item-table-money"
+                                                    value={item.valorLista}
+                                                    onChange={(e) => {
+                                                        const v = maskMoneyBR(e.target.value);
+                                                        handleValorListaChange(item.seq, v);
+                                                    }}
+                                                />
+                                            </td>
+                                            <td>{format.moeda(valores.valorVendaTotal ?? 0)}</td>
+                                            <td>{format.moeda(item.vlrMedio ?? 0)}</td>
+                                            <td style={{ color: valores.sobraReal >= 0 ? 'green' : 'red', fontWeight: 'bold' }}>
+                                                {format.percentual(valores.sobraPercentual ?? 0)}
+                                            </td>
+                                            <td className="info-cell">
+                                                <IoInformationOutline className="icon info-icon" />
+                                                <div className="tooltip-info">
+                                                    <strong>Detalhes do Item</strong>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>ICMS:</span>    
+                                                        <span className='tip-valor'>{format.moeda(valores.icms ?? 0)}</span>
+                                                        <span className='tip-percent'>{format.percentual(item.impostos?.perIcms)}</span> 
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>ICMS ST:</span> 
+                                                        <span className='tip-valor'>{format.moeda(valores.st ?? 0)}</span>
+                                                        <span className='tip-percent'>{format.percentual(item.impostos?.perSubstTrib)}</span>
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>DIFAL:</span> 
+                                                        <span className='tip-valor'>{format.moeda(valores.difal ?? 0)}</span>
+                                                        <span className='tip-percent'>{format.percentual(item.impostos?.perDifal)}</span> 
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>PIS:</span> 
+                                                        <span className='tip-valor'>{format.moeda(valores.pis ?? 0)}</span>
+                                                        <span className='tip-percent'>{format.percentual(item.impostos?.perPis)}</span> 
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>COFINS:</span> 
+                                                        <span className='tip-valor'>{format.moeda(valores.cofins ?? 0)}</span>
+                                                        <span className='tip-percent'>{format.percentual(item.impostos?.perCofins)}</span> 
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>IPI:</span> 
+                                                        <span className='tip-valor'>{format.moeda(valores.ipi ?? 0)}</span>
+                                                        <span className='tip-percent'>{format.percentual(item.impostos?.perIpi)}</span> 
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>FCP:</span> 
+                                                        <span className='tip-valor'>{format.moeda(valores.fcp ?? 0)}</span>
+                                                        <span className='tip-percent'>{format.percentual(item.impostos?.perFcp)}</span> 
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>ICMS deson (Funrural):</span>
+                                                        <span className='tip-valor'>{format.moeda(valores.valorFunrural ?? 0)}</span>
+                                                        <span className='tip-percent'>{format.percentual(item.impostos?.perFunrural)}</span>
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>Frete rateado:</span> 
+                                                        <span className='tip-valor'>{format.moeda(item.valorFrete ?? 0)}</span>
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>Sobra:</span>
+                                                        <span className='tip-valor'>{format.moeda(valores.sobraReal ?? 0)}</span>
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>Transportadora:</span>
+                                                        <span className='tip-valor'>{freteItem?.nome || '-'}</span>
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>Prazo:</span>
+                                                        <span className='tip-valor'>{freteItem ? `${freteItem.prazo} dias` : '-'}</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <button
+                                                    type="button"
+                                                    className="btn-remover-item"
+                                                    onClick={() => removerItem(item.seq)}
+                                                    title="Remover item"
+                                                >
+                                                    <FaTrash />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div className="item-card-container">
+                    <button className="btn-adicionar-item" onClick={() => 
+                        {
+                            if(!cliente){
+                                setModalErro({
+                                    aberto: true,
+                                    mensagem: `Selecione um cliente antes de adicionar item!`
+                                });
+                                return;
+                            }
+                            if(!operacao.cod_oper){
+                                setModalErro({
+                                    aberto: true,
+                                    mensagem: `Selecione uma operação antes de adicionar item!`
+                                });
+                                return;
+                            }
+                            if(!CondPgto.cod_cond_pgto){
+                                setModalErro({
+                                    aberto: true,
+                                    mensagem: `Selecione uma condição de pagamento antes de adicionar item!`
+                                });
+                                return;
+                            }
+                            setOpenLovItens(true)}   
+                        }>+ Item</button>
+                    <button className="btn-cotar-simfrete" onClick={cotar}>Cotar SimFrete</button>
+                </div>
+
+                <LovItens
+                    isOpen={openLovItens}
+                    setLovOpen={() => setOpenLovItens(!openLovItens)}
+                    itensExistentes={itensPedido}
+                    onSelect={(item) => adicionarItem(item)}
+                />
+                <LoadingOverlay isOpen={loading} />
+
+            </div>
+            <ModalErro
+                aberto={modalErro.aberto}
+                mensagem={modalErro.mensagem}
+                onClose={() => {
+                    setModalErro({ aberto: false, mensagem: '', seqItem: null });
+                    setTimeout(() => {
+                        if (modalErro.focusSelector) {
+                            const input = document.querySelector(modalErro.focusSelector);
+                            input?.focus();
+                            return;
+                        }
+                        if (modalErro.seqItem) {
+                            const input = document.querySelector(`input[data-seq="${modalErro.seqItem}"]`);
+                            input?.focus();
+                        }
+                    }, 0);
+                }}
+            />
+            <div className="obs-card">
+               <h2 className="pedido-title">Observações</h2>
+
+                <table className="obs-grid">
                     <thead>
-                    <tr>
-                        <th>Seq</th>
-                        <th>Código</th>
-                        <th>Item</th>
-                        <th>Unidade</th>
-                        <th>Estoque</th>
-                        <th>Quantidade</th>
-                        <th>Valor Lista</th>
-                        <th>Valor Total</th>
-                        <th>Custo Médio</th>
-                        <th>CMV</th>
-                        <th>Sobra</th>
-                    </tr>
+                        <tr>
+                            <th>Observação</th>
+                            <th>Pedido</th>
+                            <th>Nota fiscal</th>
+                            <th>Registro de saídas</th>
+                            <th>Contas a receber</th>
+                            <th></th>
+                        </tr>
                     </thead>
 
                     <tbody>
-                    {itensPedido.map((item, index) => {
-                        
-                        const valores = calcularValoresItem(item);
-                        return(
+                        {observacoes.map(obs => (
+                            <tr key={obs.num_seq} onClick={() => editarObs(obs)}>
 
-                        <tr key={item.seq}>
-                        <td>{item.seq}</td>
-                        <td>{item.cod_item}</td>
-                        <td>{item.descricao}</td>
+                                <td className='obs-grid-desc'>{obs.descricao}</td>
 
-                        {/* Unidade */}
-                        <td>
-                            <select
-                                value={item.unidade || ''}
-                                onChange={(e) => atualizarItemPorUnidade(index, Number(e.target.value))}
-                            >
-                                <option value="">Selecione</option>
-                                <option value="201">201</option>
-                                <option value="203">203</option>
-                            </select>
+                                <td><input type="checkbox"checked={obs.pedido} disabled/></td>
+                                <td><input type="checkbox"checked={obs.nota} disabled/></td>
+                                <td><input type="checkbox"checked={obs.registro} disabled/></td>
+                                <td><input type="checkbox"checked={obs.financeiro} disabled/></td>
 
+                                <td onClick={(e) => e.stopPropagation()}>
+                                    <FaTrash onClick={() => removerObs(obs.num_seq)} />
+                                </td>
 
-                        </td>
-                        <td>{item.estoque}</td>
-                        {/* Quantidade */}
-                        <td>
-                            <input 
-                                value={item.quantidade.toLocaleString('pt-BR')}
-                                onChange={(e) => {
-                                    const novosItens = [...itensPedido];
-                                    novosItens[index].quantidade = e.target.value;
-                                    setItensPedido(novosItens);
-                                }}
-                                onBlur={() => validarMultiplo(index)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.target.blur(); // força validação
-                                    }
-                                }} 
-                            />
-                            <ModalErro
-                                aberto={modalErro.aberto}
-                                mensagem={modalErro.mensagem}
-                                onClose={() => {
-                                    setModalErro({ aberto: false, mensagem: '', indexItem: null });
-
-                                    // devolve foco ao input
-                                    setTimeout(() => {
-                                        const inputs = document.querySelectorAll('input[type="number"]');
-                                        if (modalErro.indexItem !== null) {
-                                            inputs[modalErro.indexItem]?.focus();
-                                        }
-                                    }, 0);
-                                }}
-                            />
-                            {item.erroQtd && (
-                                <div className="mensagem-erro">
-                                    {item.erroQtd}
-                                </div>
-                            )}
-                        </td> 
-                        <td><input value = {item.valorLista}
-                        onChange={(e) => {
-                                    const v = maskMoneyBR(e.target.value)
-                                    const novosItens = [...itensPedido];
-                                    novosItens[index].valorLista = v;
-                                    setItensPedido(novosItens);
-                                }}/></td>
-                        <td>{format.moeda(valores.valorVendaTotal ?? 0)}</td>
-                        <td>{format.moeda(item.vlrMedio ?? 0)}</td>
-                        <td>{format.percentual(valores.cmv ?? 0)}</td>
-                        <td
-                            style={{
-                                color: valores.sobraReal >= 0 ? 'green' : 'red',
-                                fontWeight: 'bold'
-                            }}
-                        >
-                            {format.moeda(valores.sobraReal ?? 0)}
-                        </td>
-                        <td className="info-cell">
-                        <IoInformationOutline className="icon info-icon" />
-
-                        <div className="tooltip-info">
-                            <strong>Detalhes do Item</strong>
-
-                            <div>
-                                <span className='tip-nome'>ICMS:</span>
-                                <span className='tip-percent'>{format.percentual(item.impostos?.perIcms)}</span>
-                                <span className='tip-valor'>{format.moeda(valores.icms ?? 0)}</span>
-                            </div>
-
-                            <div>
-                                ICMS ST: R$ {(valores.st ?? 0)}
-                                {' '}({item.impostos?.perSubstTrib}%)
-                            </div>
-
-                            <div>
-                                DIFAL: R$ {(valores.difal ?? 0)}
-                                {' '}({item.impostos?.perDifal}%)
-                            </div>
-
-                            <div>
-                                PIS: R$ {(valores.pis ?? 0)}
-                                {' '}({item.impostos?.perPis}%)
-                            </div>
-
-                            <div>
-                                COFINS: R$ {(valores.cofins ?? 0)}
-                                {' '}({item.impostos?.perCofins}%)
-                            </div>
-
-                            <div>
-                                IPI: R$ {(valores.ipi ?? 0)}
-                                {' '}({item.impostos?.perIpi}%)
-                            </div>
-
-                            <div>
-                                FCP: R$ {(valores.fcp ?? 0)}
-                                {' '}({item.impostos?.perFcp}%)
-                            </div>
-
-                            <div>
-                                Frete rateado: R$ {(item.valorFrete ?? 0)}
-                            </div>
-
-                            <hr />
-                        </div>
-
-                        </td>
-
-                        <td><FaTrash className="icon" onClick={()=> removerItem(item.seq)}/></td>
-                        </tr>
-                    )})}
+                            </tr>
+                        ))}
                     </tbody>
                 </table>
-                )}
-                <div className="item-card-container">
-                <button className="btn-adicionar-item" onClick={() => setOpenLovItens(true)}>+ Item</button>
-                <button className="btn-cotar-simfrete" onClick={() => cotar(itensPedido, cliente)}>Cotar SimFrete</button>
-            </div>
-            <LovItens 
-                isOpen={openLovItens} 
-                setLovOpen={() => setOpenLovItens(!openLovItens)} 
-                onSelect={(item) => adicionarItem(item)} 
-            />
-            <LovTransportadoras
-                isOpen={openLovTransportadoras}
-                cotacoes={cotacoesSimFrete}
-                selecionados={freteSelecionado}
-                onConfirm={confirmarSelecaoFrete}
-                onClose={() => setOpenLovTransportadoras(false)}
-            />
-        </div>
-        {Object.values(freteSelecionado).some(v => v) && (
-        <div className="frete-resumo">
-            {Object.entries(freteSelecionado).map(([u, f]) =>
-            f ? (
-                <div key={u}>
-                <strong>Unidade {u}</strong> — {f.nome} — R$ {f.valor} — {f.prazo} dias
+                <LovObservacao
+                    isOpen={openObsModal}
+                    onClose={() => setOpenObsModal(false)}
+                    onSave={salvarObs}
+                    obs={obsEditando}
+                />
+
+                <div className="obs-footer">
+                    <button className="btn-adicionar" onClick={() => 
+                        {
+                            if(!cliente){
+                                setModalErro({
+                                    aberto: true,
+                                    mensagem: `Selecione um cliente antes de adicionar uma observação!`
+                                });
+                                return;
+                            }
+                            if(!operacao.cod_oper){
+                                setModalErro({
+                                    aberto: true,
+                                    mensagem: `Selecione uma operação antes de adicionar uma observação!`
+                                });
+                                return;
+                            }
+                            if(!CondPgto.cod_cond_pgto){
+                                setModalErro({
+                                    aberto: true,
+                                    mensagem: `Selecione uma condição de pagamento antes de adicionar uma observação!`
+                                });
+                                return;
+                            }
+                        abrirNovaObs()}   
+                        }>+ Adicionar</button>
                 </div>
-            ) : null
-            )}+
+
+            </div>
+            <div className="oc-card">
+                <h2 className="pedido-title">Ordem de Compra</h2>
+                <label>Ordem de Compra: </label>
+                <input
+                    type="text"
+                    className='input-desc'
+                    value={ordemCompra}
+                    maxLength={20}
+                    data-field="ordem-compra"
+                    onChange={(e) => setOrdemCompra(e.target.value)}
+                    onBlur={validarOrdemCompra}
+                />
+            </div>
+            <div className="triang-card">
+                <h2 className="pedido-title">Triangulação</h2>
+                <div className="form-grid">
+                    <label>Cliente:</label>
+                    <div className="field-group full">
+                        <input type="text" className='input-cod'
+                            value={codClienteTriangulacaoDigitado}
+                            onChange={(e) => { setCodClienteTriangulacaoDigitado(e.target.value); }}
+                            onBlur={buscarClienteTriangulacaoPorCodigo}
+                            />
+                        <input type="text" className='input-desc' value={clienteTriangulacao?.des_pessoa || ''} readOnly />
+                        <FaSearch className="icon" onClick={() => setOpenLovTriangulacao(true)} />
+                        <LovClientes
+                            isOpen={openLovTriangulacao}
+                            setLovOpen={() => setOpenLovTriangulacao(!openLovTriangulacao)}
+                            onSelect={(cli) => {
+                                setClienteTriangulacao(cli);
+                                setCodClienteTriangulacaoDigitado(cli.cod_pessoa);
+                            }}
+                            />
+                        <FaEraser className="icon"
+                            onClick={() => {
+                                setClienteTriangulacao(null);
+                                setCodClienteTriangulacaoDigitado('');
+                            }}
+                            />
+                    </div>
+                    <label>Operação:</label>
+                    <div className="field-group full">
+                        <input
+                            type="text"
+                            className='input-cod'
+                            value={codOperacaoTriangulacaoDigitado}
+                            onChange={(e) => setCodOperacaoTriangulacaoDigitado(e.target.value)}
+                            onBlur={buscarOperacaoTriangulacaoPorCodigo}
+                        />
+                        <input
+                            type="text"
+                            className='input-desc'
+                            value={operacaoTriangulacao.des_oper || ''}
+                            readOnly
+                        />
+                        <FaSearch className="icon" onClick={() => setOpenLovOperacoesTriangulacao(true)} />
+                        <LovOperacoes
+                            isOpen={openLovOperacoesTriangulacao}
+                            setLovOpen={() => setOpenLovOperacoesTriangulacao(!openLovOperacoesTriangulacao)}
+                            onSelect={(op) => {
+                                setOperacaoTriangulacao({ cod_oper: op.cod_oper, des_oper: op.des_oper });
+                                setCodOperacaoTriangulacaoDigitado(op.cod_oper);
+                            }}
+                        />
+                        <FaEraser
+                            className="icon"
+                            onClick={() => {
+                                setOperacaoTriangulacao({ cod_oper: null, des_oper: null });
+                                setCodOperacaoTriangulacaoDigitado('');
+                            }}
+                        />
+                    </div>
+                </div>
+            </div>
+            <div className="endereco-card">
+                <h2 className="pedido-title">Endereço de Entrega</h2>
+                <div className="endereco-actions">
+                    <button type="button" className="endereco-tab active" onClick={carregarEnderecoPadraoCliente}>PADRÃO</button>
+                    <button type="button" className="endereco-tab" onClick={abrirLovEnderecos}>ENDEREÇOS</button>
+                </div>
+                <div className="endereco-grid">
+                    <label>CEP:</label>
+                    <div className="endereco-row endereco-row-cep">
+                        <input
+                            type="text"
+                            className="endereco-input endereco-input-small"
+                            value={codCepDigitado}
+                            onChange={(e) => setCodCepDigitado(e.target.value)}
+                            onBlur={buscarCepPorCodigo}
+                        />
+                        <FaSearch className="info-icon" onClick={() => setOpenLovCep(true)}/>
+                        <LovCep
+                            isOpen={openLovCep}
+                            setLovOpen={() => setOpenLovCep(!openLovCep)}
+                            codCep={codCepDigitado}
+                            onSelect={aplicarCep}
+                        />
+                        <LovEnderecos
+                            isOpen={openLovEnderecos}
+                            setLovOpen={setOpenLovEnderecos}
+                            codPessoa={getCodigoPessoaCliente()}
+                            onSelect={aplicarEnderecoEntrega}
+                        />
+                    </div>
+                    <label>UF:</label>
+                    <div className="endereco-row endereco-row-duplo">
+                        <input
+                            type="text"
+                            className="endereco-input endereco-input-uf"
+                            value={codUfDigitado}
+                            onChange={(e) => setCodUfDigitado(e.target.value)}
+                            onBlur={buscarUfPorCodigo}
+                        />
+                        <input type="text" className="endereco-input endereco-input-wide" value={getDescricaoUf(uf)} readOnly />
+                        <div className="endereco-row-icons">
+                            <FaSearch className="icon" onClick={() => setOpenLovUf(true)} />
+                            <LovUf
+                                isOpen={openLovUf}
+                                setLovOpen={() => setOpenLovUf(!openLovUf)}
+                                codUf={codUfDigitado}
+                                onSelect={(ufSelecionada) => {
+                                    setUf(ufSelecionada);
+                                    setCodUfDigitado(ufSelecionada.cod_uf);
+                                }}
+                            />
+                            <FaEraser className="info-icon" onClick={limparEnderecoCep} />
+                        </div>
+                    </div>
+                    <label>Cidade:</label>
+                    <div className="endereco-row endereco-row-duplo">
+                        <input type="text" className="endereco-input endereco-input-city-code" value={codCidadeDigitado} onChange={(e) => setCodCidadeDigitado(e.target.value)} onBlur={buscarCidadePorCodigo} />
+                        <input type="text" className="endereco-input endereco-input-wide" value={cidade?.des_cidade || ''} readOnly />
+                        <div className="endereco-row-icons">
+                            <FaSearch className="icon" onClick={() => setOpenLovCidades(true)} />
+                            <LovCidades
+                                isOpen={openLovCidades}
+                                setLovOpen={() => setOpenLovCidades(!openLovCidades)}
+                                codIbge={codCidadeDigitado}
+                                onSelect={async (cid) => {
+                                    setCidade(cid);
+                                    setCodCidadeDigitado(cid.cod_ibge);
+                                    await carregarUfPorCodigo(cid.cod_uf);
+                                }}
+                            />
+                            <FaEraser className="info-icon" onClick={limparEnderecoCep} />
+                        </div>
+                    </div>
+                    <label>Tipo:</label>
+                    <div className="endereco-row">
+                        <select
+                            className="endereco-input endereco-select"
+                            value={tipoLogradouroSelecionado}
+                            onChange={(e) => setTipoLogradouroSelecionado(e.target.value)}
+                        >
+                            <option value="">Selecione</option>
+                            {tiposLogradouro.map((tipo) => (
+                                <option key={tipo.cod_tipo} value={tipo.des_tipo}>
+                                    {tipo.des_tipo}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <label>Logradouro:</label>
+                    <div className="endereco-row">
+                        <input
+                            type="text"
+                            className="endereco-input endereco-input-logradouro"
+                            value={logradouroDigitado}
+                            onChange={(e) => setLogradouroDigitado(e.target.value)}
+                        />
+                    </div>
+                    <label>Número:</label>
+                    <div className="endereco-row">
+                        <input
+                            type="text"
+                            className="endereco-input endereco-input-small"
+                            value={numeroEnderecoDigitado}
+                            onChange={(e) => setNumeroEnderecoDigitado(e.target.value)}
+                        />
+                    </div>
+                    <label>Complemento:</label>
+                    <div className="endereco-row">
+                        <input
+                            type="text"
+                            className="endereco-input endereco-input-logradouro"
+                            value={complementoEnderecoDigitado}
+                            onChange={(e) => setComplementoEnderecoDigitado(e.target.value)}
+                        />
+                    </div>
+                    <label>Bairro:</label>
+                    <div className="endereco-row">
+                        <input
+                            type="text"
+                            className="endereco-input endereco-input-bairro"
+                            value={bairroDigitado}
+                            onChange={(e) => setBairroDigitado(e.target.value)}
+                        />
+                    </div>
+                    <label>Referência:</label>
+                    <div className="endereco-row">
+                        <input
+                            type="text"
+                            className="endereco-input endereco-input-logradouro"
+                            value={referenciaEnderecoDigitado}
+                            onChange={(e) => setReferenciaEnderecoDigitado(e.target.value)}
+                        />
+                    </div>
+                    <label>Data da Carga:</label>
+                    <div className="endereco-row endereco-row-data">
+                        <input
+                            type="text"
+                            className="endereco-input endereco-input-date"
+                            value={dataCargaDigitada}
+                            onChange={(e) => setDataCargaDigitada(e.target.value)}
+                        />
+                        <FaCalendarAlt className="info-icon" />
+                    </div>
+                </div>
+            </div>
         </div>
-        )}
-    </div>
     );
 }

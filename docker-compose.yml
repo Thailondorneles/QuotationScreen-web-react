@@ -1,0 +1,25 @@
+services:
+  backend:
+    build:
+      context: ./backend-simfrete
+      dockerfile: Dockerfile
+    container_name: projeto-cotacao-backend
+    env_file:
+      - ./backend-simfrete/.env
+    restart: unless-stopped
+    expose:
+      - "3001"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        REACT_APP_SIMFRETE_API_BASE_URL: ${REACT_APP_SIMFRETE_API_BASE_URL:-/}
+        REACT_APP_UNIMED_API_BASE_URL: ${REACT_APP_UNIMED_API_BASE_URL:-/api/unimed/}
+    container_name: projeto-cotacao-frontend
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    restart: unless-stopped

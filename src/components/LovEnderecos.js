@@ -25,7 +25,6 @@ export function LovEnderecos({ isOpen, setLovOpen, codPessoa, onSelect }) {
 
                 setEnderecos(response.data.items || []);
             } catch (error) {
-                console.error(error);
                 setEnderecos([]);
             } finally {
                 setLoading(false);

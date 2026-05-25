@@ -11,7 +11,8 @@
 .obs-card,
 .oc-card,
 .triang-card,
-.endereco-card {
+.endereco-card,
+.integracao-card {
     width: min(calc(100% - 32px), 1840px);
     box-sizing: border-box;
     background: #fff;

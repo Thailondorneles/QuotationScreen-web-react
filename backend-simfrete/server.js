@@ -6,19 +6,25 @@ const oracledb = require('oracledb');
 const http = require('http');
 const https = require('https');
 
-dotenv.config();
+dotenv.config({ quiet: true });
+
+let oracleClientIniciado = false;
 
 function iniciarOracleClient() {
+  if (oracleClientIniciado) {
+    return;
+  }
+
   const libDir = process.env.ORACLE_CLIENT_LIB_DIR;
 
   if (!libDir) {
+    oracleClientIniciado = true;
     return;
   }
 
   oracledb.initOracleClient({ libDir });
+  oracleClientIniciado = true;
 }
-
-iniciarOracleClient();
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -67,18 +73,12 @@ const erpApi = axios.create({
 });
 
 async function getOracleConnection() {
+  iniciarOracleClient();
+
   if (oraclePool) {
     return oraclePool.getConnection();
   }
 
-  return oracledb.getConnection({
-    user: process.env.ORACLE_USER,
-    password: process.env.ORACLE_PASSWORD,
-    connectString: process.env.ORACLE_CONNECT_STRING
-  });
-}
-
-async function iniciarOraclePool() {
   oraclePool = await oracledb.createPool({
     user: process.env.ORACLE_USER,
     password: process.env.ORACLE_PASSWORD,
@@ -87,6 +87,8 @@ async function iniciarOraclePool() {
     poolMax: Number(process.env.ORACLE_POOL_MAX || 4),
     poolIncrement: 1
   });
+
+  return oraclePool.getConnection();
 }
 
 async function gerarNumeroPedido(connection) {
@@ -275,12 +277,4 @@ app.post('/api/pedidos/enviar-erp', async (req, res) => {
   }
 });
 
-async function iniciarServidor() {
-  await iniciarOraclePool();
-
-  app.listen(port, host);
-}
-
-iniciarServidor().catch((err) => {
-  process.exit(1);
-});
+app.listen(port, host);

@@ -25,6 +25,7 @@
 .modal-conteudo {
     padding: 16px;
     font-size: 14px;
+    white-space: pre-line;
 }
 
 .modal-acoes {

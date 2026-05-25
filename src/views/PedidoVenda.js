@@ -29,6 +29,7 @@ import { format } from '../utils/format.js';
 import { maskMoneyBR } from '../utils/maskMoney.js';
 import LoadingOverlay from '../components/LoadingOverlay.js';
 import { LovObservacao } from '../components/LovObservacao.js';
+import { enviarPedidoErp } from '../services/pedidosErp.js';
 
 
 export function PedidoVenda() {
@@ -74,6 +75,10 @@ export function PedidoVenda() {
         mensagem: '',
         seqItem: null,
         focusSelector: null
+    });
+    const [modalSucesso, setModalSucesso] = useState({
+        aberto: false,
+        mensagem: ''
     });
     const nextId = useRef(1);
     const [freteSelecionado, setFreteSelecionado] = useState({
@@ -133,6 +138,51 @@ export function PedidoVenda() {
         limparCidadeUf();
     }
 
+    function limparTelaPedidoVenda() {
+        setOpenLovItens(false);
+        setOpenLovPessoas(false);
+        setOpenLovTriangulacao(false);
+        setOpenLovRepresentantes(false);
+        setOpenLovOperacoes(false);
+        setOpenLovOperacoesTriangulacao(false);
+        setOpenLovCondPgto(false);
+        setOpenLovCidades(false);
+        setOpenLovUf(false);
+        setOpenLovCep(false);
+        setOpenLovEnderecos(false);
+        setCliente(null);
+        setClienteTriangulacao(null);
+        setRepresentante(null);
+        setOperacao({ cod_oper: null, des_oper: null });
+        setOperacaoTriangulacao({ cod_oper: null, des_oper: null });
+        setCondPgto({ cod_cond_pgto: null, des_cond_pgto: null });
+        setCodClienteDigitado('');
+        setCodClienteTriangulacaoDigitado('');
+        setCodRepresentanteDigitado('');
+        setCodOperacaoDigitado('');
+        setCodOperacaoTriangulacaoDigitado('');
+        setCodCondPgtoDigitado('');
+        setItensPedido([]);
+        setFreteSelecionado({ 201: null, 203: null });
+        setObservacoes([]);
+        setOpenObsModal(false);
+        setObsEditando(null);
+        setOrdemCompra('');
+        setMenuSelecaoItensOpen(null);
+        setModalErro({
+            aberto: false,
+            mensagem: '',
+            seqItem: null,
+            focusSelector: null
+        });
+        setModalSucesso({
+            aberto: false,
+            mensagem: ''
+        });
+        nextId.current = 1;
+        limparEnderecoCep();
+    }
+
     async function atualizarCliente(cli) {
         const codigoAtual = String(cliente?.cod_pessoa ?? '').trim();
         const codigoNovo = String(cli?.cod_pessoa ?? '').trim();
@@ -167,7 +217,6 @@ export function PedidoVenda() {
             const tiposValidos = itens.filter(item => item.des_tipo && item.des_tipo.trim() !== '');
             setTiposLogradouro(tiposValidos);
         } catch (error) {
-            console.error(error);
         }
     }
 
@@ -311,11 +360,9 @@ export function PedidoVenda() {
             );
 
             if (erros.length) {
-                console.error('Erro ao carregar dados de alguns itens:', erros);
                 alert('Erro ao carregar informaÃ§Ãµes de estoque ou impostos para alguns itens adicionados.');
             }
         } catch (error) {
-            console.error('Erro ao carregar dados dos itens:', error);
             alert('Erro ao carregar informações de estoque ou impostos para o item adicionado.');
         } finally {
             if (multiplosItens) {
@@ -498,7 +545,6 @@ export function PedidoVenda() {
             }
             atualizarCliente(cli);
         } catch (error) {
-            console.error(error);
             alert('Erro ao buscar cliente');
         }
     }
@@ -522,7 +568,6 @@ export function PedidoVenda() {
             }
             setClienteTriangulacao(cli);
         } catch (error) {
-            console.error(error);
             alert('Erro ao buscar cliente de triangulacao');
         }
     }
@@ -548,7 +593,6 @@ export function PedidoVenda() {
              
             setRepresentante(rep);
         } catch (error) {
-            console.error(error);
             alert('Erro ao buscar representante');
         }
     }
@@ -572,7 +616,6 @@ export function PedidoVenda() {
             }
             setOperacao(oper);
         } catch (error) {
-            console.error(error);
             alert('Erro ao buscar operação');
         }
     }
@@ -599,7 +642,6 @@ export function PedidoVenda() {
                 des_oper: oper.des_oper
             });
         } catch (error) {
-            console.error(error);
             alert('Erro ao buscar operação da triangulação');
         }
     }
@@ -623,7 +665,6 @@ export function PedidoVenda() {
             }
             setCondPgto(cond);
         } catch (error) {
-            console.error(error);
             alert('Erro ao buscar condição de pagamento');
         }
     }
@@ -669,7 +710,6 @@ export function PedidoVenda() {
                     return;
                 }
             } catch (error) {
-                console.error(error);
             }
         }
 
@@ -730,7 +770,6 @@ export function PedidoVenda() {
 
             await aplicarEnderecoEntrega(enderecoPadrao);
         } catch (error) {
-            console.error(error);
             alert('Erro ao buscar endereco padrao');
         }
     }
@@ -756,7 +795,6 @@ export function PedidoVenda() {
 
             await aplicarCep(cep);
         } catch (error) {
-            console.error(error);
             alert('Erro ao buscar CEP');
         }
     }
@@ -788,7 +826,6 @@ export function PedidoVenda() {
             setCodCidadeDigitado(cid.cod_ibge);
             await carregarUfPorCodigo(cid.cod_uf);
         } catch (error) {
-            console.error(error);
             alert('Erro ao buscar cidade');
         }
     }
@@ -817,7 +854,6 @@ export function PedidoVenda() {
             setUf(ufEncontrada);
             setCodUfDigitado(ufEncontrada.cod_uf);
         } catch (error) {
-            console.error(error);
             alert('Erro ao buscar UF');
         }
     }
@@ -885,7 +921,6 @@ export function PedidoVenda() {
             setFreteSelecionado(selecaoAuto);
             aplicarRateioFrete(selecaoAuto);
         }catch (err){
-            console.error(err);
             alert(err.message || 'Erro ao cotar frete');
         }finally{
             setLoading(false);
@@ -982,6 +1017,273 @@ export function PedidoVenda() {
         setObservacoes(lista);
     }
 
+    function dataAtualErp() {
+        const hoje = new Date();
+        const dia = String(hoje.getDate()).padStart(2, '0');
+        const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+        const ano = hoje.getFullYear();
+
+        return `${dia}/${mes}/${ano}`;
+    }
+
+    function apenasNumeros(valor) {
+        return String(valor ?? '').replace(/\D/g, '');
+    }
+
+    function limparCamposVazios(valor) {
+        if (Array.isArray(valor)) {
+            return valor
+                .map(limparCamposVazios)
+                .filter(item => item !== null && item !== undefined);
+        }
+
+        if (valor && typeof valor === 'object') {
+            return Object.entries(valor).reduce((acc, [chave, item]) => {
+                const itemLimpo = limparCamposVazios(item);
+
+                if (itemLimpo === null || itemLimpo === undefined || itemLimpo === '') {
+                    return acc;
+                }
+
+                if (Array.isArray(itemLimpo) && itemLimpo.length === 0) {
+                    return acc;
+                }
+
+                acc[chave] = itemLimpo;
+                return acc;
+            }, {});
+        }
+
+        return valor;
+    }
+
+    function valorDecimalErp(valor) {
+        const valorTexto = String(valor ?? '0').trim();
+
+        if (valorTexto.includes(',')) {
+            return valorTexto.replace(/[^\d,]/g, '');
+        }
+
+        return Number(valor || 0).toFixed(2).replace('.', ',');
+    }
+
+    function getUsuarioIntegracao() {
+        const params = new URLSearchParams(window.location.search);
+
+        return (
+            params.get('usuario') ||
+            params.get('user') ||
+            params.get('codUsuario') ||
+            params.get('cod_usuario') ||
+            ''
+        ).trim();
+    }
+
+    function validarPedidoErp() {
+        if (!itensPedido.length) {
+            return {
+                mensagem: 'Informe ao menos um item antes de enviar o pedido.'
+            };
+        }
+
+        const itemSemQuantidade = itensPedido.find(item => {
+            const quantidade = Number(item.quantidade);
+            return !Number.isFinite(quantidade) || quantidade <= 0;
+        });
+
+        if (itemSemQuantidade) {
+            return {
+                mensagem: `Informe uma quantidade valida para o item ${itemSemQuantidade.seq}.`,
+                seqItem: itemSemQuantidade.seq
+            };
+        }
+
+        if (!cliente?.cod_pessoa) {
+            return {
+                mensagem: 'Selecione um cliente antes de enviar o pedido.'
+            };
+        }
+
+        if (!operacao?.cod_oper) {
+            return {
+                mensagem: 'Selecione uma operacao antes de enviar o pedido.'
+            };
+        }
+
+        if (!CondPgto?.cod_cond_pgto) {
+            return {
+                mensagem: 'Selecione uma condicao de pagamento antes de enviar o pedido.'
+            };
+        }
+
+        return null;
+    }
+
+    function temEnderecoEntrega() {
+        return Boolean(
+            codCepDigitado ||
+            logradouroDigitado ||
+            bairroDigitado ||
+            numeroEnderecoDigitado ||
+            complementoEnderecoDigitado ||
+            referenciaEnderecoDigitado ||
+            tipoLogradouroSelecionado
+        );
+    }
+
+    function montarPeObservacoes() {
+        const observacoesMarcadas = observacoes.filter(obs =>
+            obs.pedido || obs.nota || obs.registro || obs.financeiro
+        );
+
+        if (!observacoesMarcadas.length) {
+            return null;
+        }
+
+        return observacoesMarcadas.map((obs, index) => ({
+            txtObs: obs.descricao || '-',
+            indPedido: obs.pedido ? 1 : 0,
+            indNf: obs.nota ? 1 : 0,
+            indRegistro: obs.registro ? 1 : 0,
+            indCr: obs.financeiro ? 1 : 0,
+            numSeq: index + 1,
+            tipTransacao: 1
+        }));
+    }
+
+    function montarPeEndEntrega(unidadePedido, dataTransacao) {
+        if (!temEnderecoEntrega()) {
+            return null;
+        }
+
+        const endereco = [tipoLogradouroSelecionado, logradouroDigitado].filter(Boolean).join(' ');
+
+        return limparCamposVazios({
+            codEmp: '01',
+            codUnidade: unidadePedido,
+            codCompl: 99,
+            desEndereco: endereco || logradouroDigitado,
+            desBairro: bairroDigitado,
+            numCep: Number(apenasNumeros(codCepDigitado)),
+            numLogradouro: Number(apenasNumeros(numeroEnderecoDigitado) || 0),
+            dtaTransacao: dataTransacao,
+            tipTransacao: 1
+        });
+    }
+
+    function montarPayloadPedidoErpPorUnidade(unidadePedido, itensUnidade) {
+        const dataErp = dataAtualErp();
+        const dataTransacao = dataCargaDigitada || dataErp;
+        const peObservacoes = montarPeObservacoes();
+        const peEndEntrega = montarPeEndEntrega(unidadePedido, dataTransacao);
+
+        const pePedidos = {
+            codEmp: '01',
+            codUnidade: unidadePedido,
+            numPedido: '0',
+            numSeqConf: 2,
+            codCompl: 99,
+            desNumOcCliente: ordemCompra || null,
+            codSituacao: 6,
+            dtaEmissao: dataErp,
+            dtaDigitacao: dataErp,
+            tipFrete: 1,
+            codCondPgto: String(CondPgto.cod_cond_pgto),
+            codOper: String(operacao.cod_oper),
+            codOperRemessa: operacaoTriangulacao.cod_oper ? String(operacaoTriangulacao.cod_oper) : null,
+            indConsumidor: 1,
+            codCliente: String(cliente.cod_pessoa),
+            codClienteRemessa: clienteTriangulacao?.cod_pessoa ? String(clienteTriangulacao.cod_pessoa) : null,
+            tipTransacao: 1,
+            peItens: itensUnidade.map((item, index) => ({
+                codItem: String(item.cod_item),
+                qtdNegociada: Number(item.quantidade),
+                vlrUniBruto: valorDecimalErp(item.valorLista),
+                codUnidadeRetira: unidadePedido,
+                tipTransacao: 1,
+                qtdReservada: Number(item.quantidade),
+                indVlrAlterado: 0,
+                numItem: index + 1
+            }))
+        };
+
+        if (peObservacoes) {
+            pePedidos.peObservacoes = peObservacoes;
+        }
+
+        if (peEndEntrega) {
+            pePedidos.peEndEntrega = peEndEntrega;
+        }
+
+        return limparCamposVazios({
+            codEmp: '01',
+            codMaquina: 1,
+            usuario: getUsuarioIntegracao() || null,
+            pePedidos
+        });
+    }
+
+    function montarPayloadsPedidoErp() {
+        const erroValidacao = validarPedidoErp();
+
+        if (erroValidacao) {
+            throw erroValidacao;
+        }
+
+        return [201, 203]
+            .map(unidade => ({
+                unidade,
+                itens: itensPedido.filter(item => Number(item.unidade) === unidade)
+            }))
+            .filter(grupo => grupo.itens.length)
+            .map(grupo => montarPayloadPedidoErpPorUnidade(grupo.unidade, grupo.itens));
+    }
+
+    async function finalizarPedidoErp() {
+        try {
+            setLoading(true);
+
+            const payloads = montarPayloadsPedidoErp();
+
+            const responses = await Promise.all(payloads.map(async payload => {
+                const response = await enviarPedidoErp(payload);
+
+                return {
+                    unidade: payload.pePedidos.codUnidade,
+                    data: response.data
+                };
+            }));
+
+            const pedidos = responses
+                .sort((a, b) => Number(a.unidade) - Number(b.unidade))
+                .map(response => `Pedido ${response.unidade}: ${response.data.numPedido}`)
+                .join('\n');
+
+            setModalSucesso({
+                aberto: true,
+                mensagem: pedidos
+            });
+        } catch (error) {
+
+            const erroBackend = error?.response?.data;
+            const detalheErro = erroBackend?.detalhe
+                ? JSON.stringify(erroBackend.detalhe)
+                : error.message;
+            const etapaErro = erroBackend?.etapa ? ` Etapa: ${erroBackend.etapa}.` : '';
+            const pedidoErro = erroBackend?.numPedido ? ` Pedido: ${erroBackend.numPedido}.` : '';
+
+            setModalErro({
+                aberto: true,
+                seqItem: error?.seqItem || null,
+                mensagem: erroBackend
+                    ? `${erroBackend.erro}.${etapaErro}${pedidoErro} Detalhe: ${detalheErro}`
+                    : error.mensagem || error.message || 'Erro ao integrar pedido com o ERP.'
+            });
+        } finally {
+            setLoading(false);
+        }
+    }
+
     async function carregarObservacoesCliente(codCliente) {
         try {
             const response = await getClientesComentarios({
@@ -1006,7 +1308,6 @@ export function PedidoVenda() {
 
             setObservacoes(observacoesFormatadas);
         } catch (error) {
-            console.error('Erro ao buscar observacoes do cliente:', error);
         }
     }
 
@@ -1562,6 +1863,14 @@ export function PedidoVenda() {
                     }, 0);
                 }}
             />
+            <ModalErro
+                aberto={modalSucesso.aberto}
+                mensagem={modalSucesso.mensagem}
+                onClose={() => {
+                    setModalSucesso({ aberto: false, mensagem: '' });
+                    limparTelaPedidoVenda();
+                }}
+            />
             <div className="obs-card">
                <h2 className="pedido-title">Observações</h2>
 
@@ -1849,6 +2158,13 @@ export function PedidoVenda() {
                         />
                         <FaCalendarAlt className="info-icon" />
                     </div>
+                </div>
+            </div>
+            <div className="integracao-card">
+                <div className="obs-footer">
+                    <button type="button" className="btn-adicionar" onClick={finalizarPedidoErp}>
+                        Enviar pedido ao ERP
+                    </button>
                 </div>
             </div>
         </div>

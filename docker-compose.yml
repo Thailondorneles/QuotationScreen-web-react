@@ -6,6 +6,8 @@ services:
     container_name: projeto-cotacao-backend
     env_file:
       - ./backend-simfrete/.env
+    volumes:
+      - ${ORACLE_CLIENT_LIB_DIR_HOST:-/opt/oracle/instantclient_23_26}:${ORACLE_CLIENT_LIB_DIR_CONTAINER:-/opt/oracle/instantclient_23_26}:ro
     restart: unless-stopped
     expose:
       - "3001"

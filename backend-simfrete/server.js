@@ -8,6 +8,15 @@ const https = require('https');
 
 dotenv.config({ quiet: true });
 
+process.on('unhandledRejection', (reason) => {
+  console.error('Erro assincrono nao tratado:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Excecao nao tratada:', err);
+  process.exit(1);
+});
+
 let oracleClientIniciado = false;
 
 function iniciarOracleClient() {
@@ -24,6 +33,7 @@ function iniciarOracleClient() {
 
   oracledb.initOracleClient({ libDir });
   oracleClientIniciado = true;
+  console.log(`Oracle Client inicializado em: ${libDir}`);
 }
 
 const app = express();
@@ -33,6 +43,16 @@ const simFreteUrl = 'https://centralunimed.simfrete.com/CotacaoService/consultar
 const unimedApiBaseUrl = process.env.UNIMED_API_BASE_URL;
 const erpPedidosUrl = process.env.ERP_PEDIDOS_URL;
 let oraclePool;
+
+console.log('Iniciando backend-simfrete...');
+console.log('Configuracao carregada:', {
+  port,
+  host,
+  unimedApiBaseUrl: Boolean(unimedApiBaseUrl),
+  erpPedidosUrl: Boolean(erpPedidosUrl),
+  oracleConnectString: Boolean(process.env.ORACLE_CONNECT_STRING),
+  oracleClientLibDir: process.env.ORACLE_CLIENT_LIB_DIR || null
+});
 
 if (!process.env.SIMFRETE_USER || !process.env.SIMFRETE_PASS) {
   throw new Error('SIMFRETE_USER e SIMFRETE_PASS devem estar configurados.');
@@ -87,6 +107,7 @@ async function getOracleConnection() {
     poolMax: Number(process.env.ORACLE_POOL_MAX || 4),
     poolIncrement: 1
   });
+  console.log('Pool Oracle iniciado.');
 
   return oraclePool.getConnection();
 }
@@ -141,6 +162,7 @@ app.use('/api/unimed', async (req, res) => {
 
     return res.status(response.status).json(response.data);
   } catch (err) {
+    console.error('Erro ao consultar servico unimed:', err?.response?.data || err.message);
     return res.status(err?.response?.status || 500).json({
       erro: 'Erro ao consultar servico unimed'
     });
@@ -164,6 +186,7 @@ app.post('/api/cotacao', async (req, res) => {
 
     res.json(response.data);
   } catch (err) {
+    console.error('Erro ao cotar frete:', err?.response?.data || err.message);
     res.status(500).json({
       erro: 'Erro ao cotar frete'
     });
@@ -235,6 +258,13 @@ app.post('/api/pedidos/enviar-erp', async (req, res) => {
   } catch (err) {
     const erro = err?.response?.data || err.message;
     const statusErro = err?.response?.status || 500;
+    console.error('Erro ao integrar pedido com o ERP:', {
+      etapa,
+      numPedido,
+      statusErro,
+      erro
+    });
+    console.error(err.stack);
 
     if (connection && numPedido) {
       try {
@@ -253,6 +283,7 @@ app.post('/api/pedidos/enviar-erp', async (req, res) => {
           { autoCommit: true }
         );
       } catch (updateErr) {
+        console.error('Erro ao registrar falha de integracao:', updateErr.message);
       }
     }
 
@@ -272,9 +303,17 @@ app.post('/api/pedidos/enviar-erp', async (req, res) => {
       try {
         await connection.close();
       } catch (closeErr) {
+        console.error('Erro ao fechar conexao Oracle:', closeErr.message);
       }
     }
   }
 });
 
-app.listen(port, host);
+const server = app.listen(port, host, () => {
+  console.log(`Backend rodando em http://${host}:${port}`);
+});
+
+server.on('error', (err) => {
+  console.error('Erro ao iniciar servidor HTTP:', err);
+  process.exit(1);
+});

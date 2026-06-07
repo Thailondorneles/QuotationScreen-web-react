@@ -149,7 +149,10 @@ app.use('/api/unimed', async (req, res) => {
     return res.status(405).json({ erro: 'Metodo nao permitido' });
   }
 
-  const targetPath = req.path.replace(/^\/+/, '');
+  const encodedPath = req.originalUrl
+    .slice(req.baseUrl.length)
+    .split('?')[0];
+  const targetPath = encodedPath.replace(/^\/+/, '');
 
   if (!targetPath) {
     return res.status(400).json({ erro: 'Recurso nao informado' });

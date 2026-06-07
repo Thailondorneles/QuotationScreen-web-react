@@ -10,7 +10,7 @@
 
 .lov-modal {
     background: #fff;
-    width: 850px;
+    width: min(1050px, calc(100vw - 48px));
     height: 550px;
     display: flex;
     flex-direction: column;
@@ -224,6 +224,24 @@
 
 .lov-list tr.lov-row-selected td {
     background: #eaf5e9;
+}
+
+.lov-list tr.lov-row-marca-propria td {
+    background: #fff8e1;
+}
+
+.lov-list tr.lov-row-marca-propria:hover td {
+    background: #ffefb3;
+}
+
+.lov-list tr.lov-row-selected.lov-row-marca-propria td {
+    background: #f1f7d5;
+}
+
+.lov-brand-star {
+    margin-right: 6px;
+    color: #d6a100;
+    vertical-align: -1px;
 }
 
 .lov-list tr.lov-row-disabled td {

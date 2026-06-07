@@ -1,5 +1,6 @@
 import '../style/lovStyle.css';
 import { FaX, FaChevronLeft, FaChevronRight } from "react-icons/fa6";
+import { FaStar } from "react-icons/fa";
 import { useEffect, useMemo, useState } from 'react';
 import { useLovPagination } from '../hooks/useLovPagination';
 import { getItens, getItemByFilter } from '../services/itens';
@@ -18,12 +19,19 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
     const lov = useLovPagination({
         limit: 25,
         fetchFn: ({ filtro, offset, limit }) => {
-            if (filtro && filtro.trim() !== '') {
-                return getItemByFilter({ filtro, offset, limit});
+            const filtroBusca = normalizarFiltroItem(filtro);
+
+            if (filtroBusca) {
+                return getItemByFilter({ filtro: filtroBusca, offset, limit});
             }
             return getItens({ offset, limit });
         }
     });
+
+    function normalizarFiltroItem(valor) {
+        return String(valor ?? '')
+            .trim();
+    }
 
     const itensAgrupados = Object.values(
         lov.data.reduce((acc, item) => {
@@ -32,6 +40,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
                     cod_item: item.cod_item,
                     cod_completo: item.cod_completo,
                     des_item: item.des_item,
+                    principios_ativos: item.principios_ativos,
                     qtd_multiplo: item.qtd_multiplo,
                     qtd_altura: item.qtd_altura,
                     qtd_largura: item.qtd_largura,
@@ -46,6 +55,10 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
 
             if (!acc[item.cod_item].cod_completo && item.cod_completo) {
                 acc[item.cod_item].cod_completo = item.cod_completo;
+            }
+
+            if (!acc[item.cod_item].principios_ativos && item.principios_ativos) {
+                acc[item.cod_item].principios_ativos = item.principios_ativos;
             }
 
             if (item.cod_unidade === 201) {
@@ -84,10 +97,13 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
 
     useEffect(() => {
         if (isOpen) {
+            const filtroInicial = 'POLIMAX';
+
+            setFiltro(filtroInicial);
             setItensSelecionados({});
             setMenuSelecionarOpen(false);
             setOrdenacao({ coluna: null, direcao: null });
-            lov.buscar({ filtro: '', novoOffset: 0 });
+            lov.buscar({ filtro: filtroInicial, novoOffset: 0 });
         }
     }, [isOpen]);
 
@@ -182,6 +198,10 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
         );
     }
 
+    function itemEhMarcaPropria(item) {
+        return String(item.cod_completo ?? '').trim().toUpperCase() === 'POLIMAX';
+    }
+
     return (
         <div className="lov-overlay">
             <div className="lov-modal">
@@ -249,6 +269,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
                                 <th className="lov-check-col"></th>
                                 <th>{cabecalhoOrdenavel('cod_item', 'Código')}</th>
                                 <th>{cabecalhoOrdenavel('des_item', 'Descrição')}</th>
+                                <th>{cabecalhoOrdenavel('principios_ativos', 'Princípio ativo')}</th>
                                 <th>{cabecalhoOrdenavel('cod_completo', 'Marca')}</th>
                                 <th>{cabecalhoOrdenavel('estoque_matriz', 'Estoque Matriz')}</th>
                                 <th>{cabecalhoOrdenavel('estoque_filial', 'Estoque Filial')}</th>
@@ -258,11 +279,15 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
                             {itensOrdenados.map(item => {
                                 const existe = itemJaExiste(item.cod_item);
                                 const selecionado = itemEstaSelecionado(item.cod_item);
+                                const marcaPropria = itemEhMarcaPropria(item);
 
                                 return (
                                     <tr
                                         key={item.cod_item}
-                                        className={existe ? 'lov-row-disabled' : selecionado ? 'lov-row-selected' : ''}
+                                        className={[
+                                            existe ? 'lov-row-disabled' : selecionado ? 'lov-row-selected' : '',
+                                            marcaPropria ? 'lov-row-marca-propria' : ''
+                                        ].filter(Boolean).join(' ')}
                                         onClick={() => !existe && alternarItem(item.cod_item, item)}
                                     >
                                         <td className="lov-check-col">
@@ -276,7 +301,17 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
                                         </td>
                                     <td>{item.cod_item}</td>
                                     <td>{item.des_item}</td>
-                                    <td>{item.cod_completo || '-'}</td>
+                                    <td>{item.principios_ativos || '-'}</td>
+                                    <td>
+                                        {marcaPropria && (
+                                            <FaStar
+                                                className="lov-brand-star"
+                                                title="Marca própria"
+                                                aria-label="Marca própria"
+                                            />
+                                        )}
+                                        {item.cod_completo || '-'}
+                                    </td>
                                     <td>{item.estoque_matriz}</td>
                                     <td>{item.estoque_filial}</td>
                                 </tr>

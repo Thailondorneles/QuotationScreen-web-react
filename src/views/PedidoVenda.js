@@ -240,8 +240,10 @@ export function PedidoVenda() {
                 codItem: item.cod_item
             })
         ]);
-        const estoque = responseEstoque.data.items[0]?.qtd_disponivel ?? 0;
-        const vlrMedio = responseEstoque.data.items[0]?.vlr_medio_unitario ?? 0;
+        const itemEstoque = responseEstoque.data.items[0] || {};
+        const estoque = itemEstoque.qtd_disponivel ?? 0;
+        const vlrMedio = itemEstoque.vlr_medio_unitario ?? 0;
+        const principiosAtivos = itemEstoque.principios_ativos ?? item.principiosAtivos;
         // Busca impostos
         const imp = respImp.data || {};
         const indSubsMercadoria = Number(imp.ind_subs_mercadoria || 0);
@@ -283,6 +285,7 @@ export function PedidoVenda() {
         return {
             estoque,
             vlrMedio,
+            principiosAtivos,
             valorLista,
             impostos,
             baseST
@@ -295,6 +298,7 @@ export function PedidoVenda() {
             grupoId,
             cod_item: itemLov.cod_item,
             descricao: itemLov.des_item,
+            principiosAtivos: itemLov.principios_ativos,
             qtdMultiplo: itemLov.qtd_multiplo,
             qtdAltura: itemLov.qtd_altura,
             qtdLargura: itemLov.qtd_largura,
@@ -1491,6 +1495,7 @@ export function PedidoVenda() {
                                     <th>Seq</th>
                                     <th>Cód.</th>
                                     <th>Item</th>
+                                    <th>Princ. ativo</th>
                                     <th>Estoque</th>
                                     <th>Qtd.</th>
                                     <th>Vlr Lista</th>
@@ -1527,6 +1532,7 @@ export function PedidoVenda() {
                                             <td>{item.seq}</td>
                                             <td>{item.cod_item}</td>
                                             <td>{item.descricao}</td>
+                                            <td>{item.principiosAtivos || '-'}</td>
                                             <td>{item.estoque}</td>
                                             <td>
                                                 <input
@@ -1662,6 +1668,7 @@ export function PedidoVenda() {
                                     <th>Seq</th>
                                     <th>Cód.</th>
                                     <th>Item</th>
+                                    <th>Princ. ativo</th>
                                     <th>Estoque</th>
                                     <th>Qtd.</th>
                                     <th>Vlr Lista</th>
@@ -1698,6 +1705,7 @@ export function PedidoVenda() {
                                             <td>{item.seq}</td>
                                             <td>{item.cod_item}</td>
                                             <td>{item.descricao}</td>
+                                            <td>{item.principiosAtivos || '-'}</td>
                                             <td>{item.estoque}</td>
                                             <td>
                                                 <input

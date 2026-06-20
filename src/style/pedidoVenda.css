@@ -5,6 +5,8 @@
     flex-direction: column;
     padding-top: 2%;
     background-color: #ffffff;
+    overflow-x: hidden;
+    max-width: 100%;
 }
 .pedido-card,
 .item-card,
@@ -44,9 +46,24 @@
     margin-bottom: 12px;
 }
 
+.pedido-card,
+.item-card,
+.obs-card,
+.oc-card,
+.triang-card,
+.endereco-card,
+.integracao-card {
+    max-width: calc(100vw - 32px);
+    overflow-x: hidden;
+}
+
+.item-card {
+    overflow: visible;
+}
+
 .form-grid {
     display: grid;
-    grid-template-columns: 140px 1fr;
+    grid-template-columns: 140px minmax(0, 1fr);
     row-gap: 12px;
     column-gap: 12px;
     align-items: center;
@@ -98,11 +115,26 @@ label {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.field-group.full .input-cod {
+  flex: 0 0 180px;
+  width: 180px;
+  max-width: 25%;
+}
+
+.field-group.full .input-desc {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
 }
 
 .icon {
   color: #2e7d32;
   cursor: pointer;
+  flex: 0 0 auto;
 }
 
 .item-card-container {
@@ -179,6 +211,57 @@ label {
 .info-cell:hover .tooltip-info {
   opacity: 1;
   visibility: visible;
+}
+
+.cliente-historico-info {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.cliente-historico-info:hover .tooltip-info {
+  opacity: 1;
+  visibility: visible;
+}
+
+.cliente-historico-verde {
+  color: #2e8b1c;
+  background-color: #2e8b1c;
+}
+
+.cliente-historico-amarelo {
+  color: #c78a00;
+  background-color: #c78a00;
+}
+
+.cliente-historico-vermelho {
+  color: #c62828;
+  background-color: #c62828;
+}
+
+.cliente-historico-sinaleira {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  display: inline-block;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.55), 0 1px 2px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+}
+
+.cliente-historico-tooltip {
+  right: 0;
+  left: auto;
+  width: 240px;
+  max-width: min(240px, calc(100vw - 48px));
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.cliente-historico-tooltip .tip-nome {
+  width: 96px;
+  flex-basis: 96px;
 }
 
 
@@ -278,6 +361,33 @@ label {
 
 .itens-grid tbody tr:hover {
     background: #eef7ec;
+}
+
+.itens-grid tbody tr.item-row-acordo {
+    background: #f1e8ff;
+}
+
+.itens-grid tbody tr.item-row-acordo:nth-child(even) {
+    background: #eadcff;
+}
+
+.itens-grid tbody tr.item-row-acordo:hover {
+    background: #e2d0fb;
+}
+
+.item-acordo-marca {
+    margin-left: 3px;
+    color: #6f35b5;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.tooltip-acordo {
+    margin: 6px 0;
+    padding: 6px 0;
+    border-top: 1px solid #e0d3f4;
+    border-bottom: 1px solid #e0d3f4;
+    color: #4c2378;
 }
 
 .itens-grid input:not([type="checkbox"]),

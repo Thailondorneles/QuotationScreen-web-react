@@ -11,3 +11,15 @@ export function getItemByFilter({ filtro, offset = 0, limit = 25 }) {
         params: { offset, limit }
     });
 }
+
+export function getItensAcordos({ codItem, offset = 0, limit = 25 }) {
+    return unimedApi.get(`itensAcordos/${codItem}`, {
+        params: { offset, limit }
+    });
+}
+
+export function getItemUltimaCompra({ codItem, codCliente, offset = 0, limit = 25 }) {
+    return unimedApi.get(`itensUltimaCompra/${codItem}/${codCliente}`, {
+        params: { offset, limit }
+    });
+}

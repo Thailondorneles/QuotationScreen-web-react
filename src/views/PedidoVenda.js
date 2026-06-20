@@ -13,7 +13,7 @@ import { LovEnderecos } from '../components/LovEnderecos.js';
 import { getCepsByFilter } from '../services/ceps.js';
 import { getEnderecosPadraoByFilter } from '../services/enderecosPadrao.js';
 import { getRepresentantesByCliente, getRepresentantesByIdCliente } from '../services/representantes.js';
-import { getClienteByFilter, getClientesComentarios } from '../services/clientes.js';
+import { getClienteByFilter, getClientesComentarios, getClientesHistorico } from '../services/clientes.js';
 import { getCidadesByFilter } from '../services/cidades.js';
 import { getUfByFilter } from '../services/uf.js';
 import { getTipLogradouro } from '../services/tipLogradouro.js';
@@ -24,6 +24,7 @@ import { IoInformationOutline } from "react-icons/io5";
 import { getImpostos } from '../services/impostos.js';
 import { ModalErro } from '../components/ModalErro.js';
 import { getListaPreco } from '../services/listaPreco.js';
+import { getItensAcordos, getItemUltimaCompra } from '../services/itens.js';
 import { cotarSimFrete } from '../config/simFreteService.js';
 import { format } from '../utils/format.js';
 import { maskMoneyBR } from '../utils/maskMoney.js';
@@ -86,11 +87,22 @@ export function PedidoVenda() {
         203: null
     });
     const [loading, setLoading] = useState(false);
+    const [loadingDadosCliente, setLoadingDadosCliente] = useState(false);
     const [observacoes, setObservacoes] = useState([]);
+    const [historicoCliente, setHistoricoCliente] = useState({
+        loading: false,
+        ultimaCompra: null,
+        erro: false
+    });
     const [openObsModal, setOpenObsModal] = useState(false);
     const [obsEditando, setObsEditando] = useState(null);
     const [ordemCompra, setOrdemCompra] = useState('');
     const [menuSelecaoItensOpen, setMenuSelecaoItensOpen] = useState(null);
+    const dadosClienteCache = useRef(new Map());
+    const representanteClienteCache = useRef(new Map());
+    const historicoClienteCache = useRef(new Map());
+    const acordosItemCache = useRef(new Map());
+    const ultimaCompraItemCache = useRef(new Map());
 
     function validarOrdemCompra() {
         const possuiCaracterEspecial = /[\|/]/.test(ordemCompra);
@@ -165,6 +177,8 @@ export function PedidoVenda() {
         setItensPedido([]);
         setFreteSelecionado({ 201: null, 203: null });
         setObservacoes([]);
+        setHistoricoCliente({ loading: false, ultimaCompra: null, erro: false });
+        setLoadingDadosCliente(false);
         setOpenObsModal(false);
         setObsEditando(null);
         setOrdemCompra('');
@@ -225,7 +239,7 @@ export function PedidoVenda() {
         const operacaoAtual = contexto.operacaoAtual ?? operacao;
         const condPgtoAtual = contexto.condPgtoAtual ?? CondPgto;
         // Busca estoque disponível
-        const [responseEstoque, respImp] = await Promise.all([
+        const [responseEstoque, respImp, acordosComerciais, ultimaCompraItem] = await Promise.all([
             getEstoqueDisponivel({
                 codItem: item.cod_item,
                 codUnidade: item.unidade,
@@ -238,7 +252,9 @@ export function PedidoVenda() {
                 codPessoa: clienteAtual.cod_pessoa,
                 codCondPgto: condPgtoAtual.cod_cond_pgto,
                 codItem: item.cod_item
-            })
+            }),
+            carregarAcordosItem(item.cod_item),
+            carregarUltimaCompraItem(item.cod_item, clienteAtual.cod_pessoa)
         ]);
         const itemEstoque = responseEstoque.data.items[0] || {};
         const estoque = itemEstoque.qtd_disponivel ?? 0;
@@ -288,8 +304,81 @@ export function PedidoVenda() {
             principiosAtivos,
             valorLista,
             impostos,
-            baseST
+            baseST,
+            acordosComerciais,
+            ultimaCompraItem
         };
+    }
+
+    async function carregarAcordosItem(codItem) {
+        const codigo = String(codItem ?? '').trim();
+
+        if (acordosItemCache.current.has(codigo)) {
+            return await acordosItemCache.current.get(codigo);
+        }
+
+        const promise = getItensAcordos({
+            codItem: codigo,
+            offset: 0,
+            limit: 25
+        })
+            .then(response => response.data.items || [])
+            .catch(() => []);
+
+        acordosItemCache.current.set(codigo, promise);
+
+        const acordos = await promise;
+        acordosItemCache.current.set(codigo, acordos);
+
+        return acordos;
+    }
+
+    function itemPossuiAcordo(item) {
+        return Boolean(item?.acordosComerciais?.length);
+    }
+
+    function getPedidosAcordoTexto(acordos = []) {
+        const pedidos = [...new Set(
+            acordos
+                .map(acordo => acordo.num_pedido)
+                .filter(Boolean)
+        )];
+
+        if (!pedidos.length) return '-';
+
+        const primeirosPedidos = pedidos.slice(0, 3).join(', ');
+
+        return pedidos.length > 3
+            ? `${primeirosPedidos}, ...`
+            : primeirosPedidos;
+    }
+
+    async function carregarUltimaCompraItem(codItem, codCliente) {
+        const chave = `${String(codItem ?? '').trim()}-${String(codCliente ?? '').trim()}`;
+
+        if (ultimaCompraItemCache.current.has(chave)) {
+            return await ultimaCompraItemCache.current.get(chave);
+        }
+
+        const promise = getItemUltimaCompra({
+            codItem,
+            codCliente,
+            offset: 0,
+            limit: 1
+        })
+            .then(response => response.data.items?.[0] || null)
+            .catch(() => null);
+
+        ultimaCompraItemCache.current.set(chave, promise);
+
+        const ultimaCompra = await promise;
+        ultimaCompraItemCache.current.set(chave, ultimaCompra);
+
+        return ultimaCompra;
+    }
+
+    function formatarDataUltimaCompraItem(item) {
+        return formatarDataHistoricoCliente(item?.ultimaCompraItem?.dta_emissao);
     }
 
     function criarItensPedido(itemLov) {
@@ -312,6 +401,8 @@ export function PedidoVenda() {
             valorLista: 0,
             impostos: null,
             baseST: null,
+            acordosComerciais: [],
+            ultimaCompraItem: null,
             selecionado: false,
             valorFrete: 0
         };
@@ -530,11 +621,105 @@ export function PedidoVenda() {
         };
     }
 
+    function formatarDataHistoricoCliente(data) {
+        if (!data) return '-';
+
+        const dataCompra = new Date(data);
+        if (Number.isNaN(dataCompra.getTime())) return '-';
+
+        return dataCompra.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+    }
+
+    function getStatusHistoricoCliente() {
+        const dias = Number(historicoCliente.ultimaCompra?.dias_da_ultima_compra);
+
+        if (!historicoCliente.ultimaCompra || Number.isNaN(dias)) {
+            return {
+                classe: 'cliente-historico-vermelho',
+                texto: 'Nunca comprado'
+            };
+        }
+
+        if (dias <= 45) {
+            return {
+                classe: 'cliente-historico-verde',
+                texto: 'Compra recente'
+            };
+        }
+
+        return {
+            classe: 'cliente-historico-amarelo',
+            texto: 'Compra antiga'
+        };
+    }
+
+    function clienteTemDadosPedido(cli) {
+        if (!cli) return false;
+
+        return ['cod_oper', 'des_oper', 'cod_cond_pgto', 'des_cond_pgto']
+            .some(campo => Object.prototype.hasOwnProperty.call(cli, campo));
+    }
+
+    async function buscarDetalhesClientePedido(cli) {
+        const codCliente = String(cli?.cod_pessoa ?? '').trim();
+
+        if (dadosClienteCache.current.has(codCliente)) {
+            return dadosClienteCache.current.get(codCliente);
+        }
+
+        if (clienteTemDadosPedido(cli)) {
+            dadosClienteCache.current.set(codCliente, cli);
+            return cli;
+        }
+
+        const response = await getClienteByFilter({
+            filtro: cli.cod_pessoa,
+            offset: 0,
+            limit: 1
+        });
+
+        const dadosCliente = response.data.items?.[0] || cli;
+        dadosClienteCache.current.set(codCliente, dadosCliente);
+
+        return dadosCliente;
+    }
+
+    async function carregarRepresentanteCliente(codCliente) {
+        const codigo = String(codCliente ?? '').trim();
+
+        if (representanteClienteCache.current.has(codigo)) {
+            return representanteClienteCache.current.get(codigo);
+        }
+
+        const response = await getRepresentantesByCliente({
+            filtro: codigo,
+            offset: 0,
+            limit: 1
+        });
+        const representanteCliente = response.data.items?.[0] || null;
+
+        representanteClienteCache.current.set(codigo, representanteCliente);
+
+        return representanteCliente;
+    }
+
     async function buscarClientePorCodigo() {
-        if (!codClienteDigitado) return;
+        const codigoCliente = String(codClienteDigitado ?? '').trim();
+
+        if (!codigoCliente) {
+            setLoadingDadosCliente(false);
+            return;
+        }
+
+        if (String(cliente?.cod_pessoa ?? '').trim() === codigoCliente) {
+            return;
+        }
+
+        setLoadingDadosCliente(true);
+
         try {
             const response = await getClienteByFilter({
-                filtro: codClienteDigitado,
+                filtro: codigoCliente,
                 offset: 0,
                 limit: 1
             });
@@ -545,10 +730,12 @@ export function PedidoVenda() {
                     mensagem: 'Cliente não encontrato com o código digitado!'
                 });
                 atualizarCliente(null);
+                setLoadingDadosCliente(false);
                 return;
             }
             atualizarCliente(cli);
         } catch (error) {
+            setLoadingDadosCliente(false);
             alert('Erro ao buscar cliente');
         }
     }
@@ -1315,6 +1502,48 @@ export function PedidoVenda() {
         }
     }
 
+    async function carregarHistoricoCliente(codCliente) {
+        const codigo = String(codCliente ?? '').trim();
+
+        if (historicoClienteCache.current.has(codigo)) {
+            setHistoricoCliente({
+                loading: false,
+                ultimaCompra: historicoClienteCache.current.get(codigo),
+                erro: false
+            });
+            return;
+        }
+
+        setHistoricoCliente({
+            loading: true,
+            ultimaCompra: null,
+            erro: false
+        });
+
+        try {
+            const response = await getClientesHistorico({
+                filtro: codCliente,
+                offset: 0,
+                limit: 1
+            });
+
+            const ultimaCompra = response.data.items?.[0] || null;
+            historicoClienteCache.current.set(codigo, ultimaCompra);
+
+            setHistoricoCliente({
+                loading: false,
+                ultimaCompra,
+                erro: false
+            });
+        } catch (error) {
+            setHistoricoCliente({
+                loading: false,
+                ultimaCompra: null,
+                erro: true
+            });
+        }
+    }
+
     useEffect(() => {
         if (!cliente) {
             setRepresentante(null);
@@ -1324,51 +1553,76 @@ export function PedidoVenda() {
             setCodOperacaoDigitado('');
             setCodCondPgtoDigitado('');
             setObservacoes([]);
+            setHistoricoCliente({ loading: false, ultimaCompra: null, erro: false });
+            setLoadingDadosCliente(false);
             setObsEditando(null);
             setOpenObsModal(false);
             return;
         }
 
-        async function carregarDados() {
-            const response = await getRepresentantesByCliente({
-                filtro: cliente.cod_pessoa,
-                offset: 0,
-                limit: 25
-            });
+        const codCliente = String(cliente.cod_pessoa ?? '').trim();
+        let carregamentoCancelado = false;
 
-            const responseOper = await getClienteByFilter({
-                filtro: cliente.cod_pessoa,
-                offset: 0,
-                limit: 25
-            });
+        setLoadingDadosCliente(true);
 
-            const responseCondPgto = await getClienteByFilter({
-                filtro: cliente.cod_pessoa,
-                offset: 0,
-                limit: 25
-            });
+        const representantePromise = carregarRepresentanteCliente(codCliente);
+        const detalhesClientePromise = buscarDetalhesClientePedido(cliente);
+        const observacoesPromise = carregarObservacoesCliente(codCliente);
+        const historicoPromise = carregarHistoricoCliente(codCliente);
 
-            setRepresentante(response.data.items[0] || null);
-            setCodRepresentanteDigitado(response.data.items[0]?.cod_pessoa_rep || '');
+        representantePromise.then(representanteCliente => {
+            if (carregamentoCancelado) return;
+
+            setRepresentante(representanteCliente);
+            setCodRepresentanteDigitado(representanteCliente?.cod_pessoa_rep || '');
+        }).catch(() => {
+            if (carregamentoCancelado) return;
+
+            setRepresentante(null);
+            setCodRepresentanteDigitado('');
+        });
+
+        detalhesClientePromise.then(dadosClientePedido => {
+            if (carregamentoCancelado) return;
+
             setOperacao({
-                cod_oper: responseOper.data.items[0]?.cod_oper || null,
-                des_oper: responseOper.data.items[0]?.des_oper || null
+                cod_oper: dadosClientePedido?.cod_oper || null,
+                des_oper: dadosClientePedido?.des_oper || null
             });
-            setCodOperacaoDigitado(responseOper.data.items[0]?.cod_oper || '');
+            setCodOperacaoDigitado(dadosClientePedido?.cod_oper || '');
             setCondPgto({
-                cod_cond_pgto: responseCondPgto.data.items[0]?.cod_cond_pgto || null,
-                des_cond_pgto: responseCondPgto.data.items[0]?.des_cond_pgto || null
+                cod_cond_pgto: dadosClientePedido?.cod_cond_pgto || null,
+                des_cond_pgto: dadosClientePedido?.des_cond_pgto || null
             });
-            setCodCondPgtoDigitado(responseCondPgto.data.items[0]?.cod_cond_pgto || '');
+            setCodCondPgtoDigitado(dadosClientePedido?.cod_cond_pgto || '');
+        }).catch(() => {
+            if (carregamentoCancelado) return;
 
-            await carregarObservacoesCliente(cliente.cod_pessoa);
-        }
+            setOperacao({ cod_oper: null, des_oper: null });
+            setCodOperacaoDigitado('');
+            setCondPgto({ cod_cond_pgto: null, des_cond_pgto: null });
+            setCodCondPgtoDigitado('');
+        });
 
-        carregarDados();
+        Promise.allSettled([
+            representantePromise,
+            detalhesClientePromise,
+            observacoesPromise,
+            historicoPromise
+        ]).finally(() => {
+            if (!carregamentoCancelado) {
+                setLoadingDadosCliente(false);
+            }
+        });
+
+        return () => {
+            carregamentoCancelado = true;
+        };
     }, [cliente]);
 
     const itens201 = itensPedido.filter(item => item.unidade === 201);
     const itens203 = itensPedido.filter(item => item.unidade === 203);
+    const statusHistoricoCliente = getStatusHistoricoCliente();
 
     return (
         <div className="pedido-venda-container">
@@ -1385,6 +1639,41 @@ export function PedidoVenda() {
                             onBlur={() => buscarClientePorCodigo(codClienteDigitado)}
                         />
                         <input type="text" className='input-desc' value={cliente?.des_pessoa || ''} readOnly />
+                        {cliente && (
+                            <div className="cliente-historico-info">
+                                <span
+                                    className={`cliente-historico-sinaleira ${statusHistoricoCliente.classe}`}
+                                    title={statusHistoricoCliente.texto}
+                                    aria-label={statusHistoricoCliente.texto}
+                                />
+                                <div className="tooltip-info cliente-historico-tooltip">
+                                    <div className='tip-linha'>
+                                        <span className='tip-nome'>Status:</span>
+                                        <span className='tip-valor'>{statusHistoricoCliente.texto}</span>
+                                    </div>
+                                    <div className='tip-linha'>
+                                        <span className='tip-nome'>Dias sem:</span>
+                                        <span className='tip-valor'>
+                                            {historicoCliente.loading
+                                                ? 'Carregando...'
+                                                : historicoCliente.ultimaCompra?.dias_da_ultima_compra ?? '-'}
+                                        </span>
+                                    </div>
+                                    <div className='tip-linha'>
+                                        <span className='tip-nome'>Última compra:</span>
+                                        <span className='tip-valor'>
+                                            {formatarDataHistoricoCliente(historicoCliente.ultimaCompra?.dta_emissao)}
+                                        </span>
+                                    </div>
+                                    {historicoCliente.erro && (
+                                        <div className='tip-linha'>
+                                            <span className='tip-nome'>Histórico:</span>
+                                            <span className='tip-valor'>Erro ao buscar</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                         <FaSearch className="icon" onClick={() => setOpenLovPessoas(true)} />
                         <LovClientes
                             isOpen={openLovPessoas}
@@ -1520,8 +1809,9 @@ export function PedidoVenda() {
                                 {itens201.map(item => {
                                     const valores = calcularValoresItem(item);
                                     const freteItem = freteSelecionado[item.unidade];
+                                    const possuiAcordo = itemPossuiAcordo(item);
                                     return (
-                                        <tr key={item.seq}>
+                                        <tr key={item.seq} className={possuiAcordo ? 'item-row-acordo' : ''}>
                                             <td>
                                                 <input
                                                     type="checkbox"
@@ -1530,7 +1820,10 @@ export function PedidoVenda() {
                                                 />
                                             </td>
                                             <td>{item.seq}</td>
-                                            <td>{item.cod_item}</td>
+                                            <td>
+                                                {item.cod_item}
+                                                {possuiAcordo && <span className="item-acordo-marca">©</span>}
+                                            </td>
                                             <td>{item.descricao}</td>
                                             <td>{item.principiosAtivos || '-'}</td>
                                             <td>{item.estoque}</td>
@@ -1622,6 +1915,19 @@ export function PedidoVenda() {
                                                         <span className='tip-nome'>Prazo:</span>
                                                         <span className='tip-valor'>{freteItem ? `${freteItem.prazo} dias` : '-'}</span>
                                                     </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>Última compra:</span>
+                                                        <span className='tip-valor'>{formatarDataUltimaCompraItem(item)}</span>
+                                                    </div>
+                                                    {possuiAcordo && (
+                                                        <div className="tooltip-acordo">
+                                                            <strong>Item possui acordo comercial</strong>
+                                                            <div className='tip-linha'>
+                                                                <span className='tip-nome'>Pedidos:</span>
+                                                                <span className='tip-valor'>{getPedidosAcordoTexto(item.acordosComerciais)}</span>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </td>
                                             <td>
@@ -1693,8 +1999,9 @@ export function PedidoVenda() {
                                 {itens203.map(item => {
                                     const valores = calcularValoresItem(item);
                                     const freteItem = freteSelecionado[item.unidade];
+                                    const possuiAcordo = itemPossuiAcordo(item);
                                     return (
-                                        <tr key={item.seq}>
+                                        <tr key={item.seq} className={possuiAcordo ? 'item-row-acordo' : ''}>
                                             <td>
                                                 <input
                                                     type="checkbox"
@@ -1703,7 +2010,10 @@ export function PedidoVenda() {
                                                 />
                                             </td>
                                             <td>{item.seq}</td>
-                                            <td>{item.cod_item}</td>
+                                            <td>
+                                                {item.cod_item}
+                                                {possuiAcordo && <span className="item-acordo-marca">©</span>}
+                                            </td>
                                             <td>{item.descricao}</td>
                                             <td>{item.principiosAtivos || '-'}</td>
                                             <td>{item.estoque}</td>
@@ -1795,6 +2105,19 @@ export function PedidoVenda() {
                                                         <span className='tip-nome'>Prazo:</span>
                                                         <span className='tip-valor'>{freteItem ? `${freteItem.prazo} dias` : '-'}</span>
                                                     </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>Última compra:</span>
+                                                        <span className='tip-valor'>{formatarDataUltimaCompraItem(item)}</span>
+                                                    </div>
+                                                    {possuiAcordo && (
+                                                        <div className="tooltip-acordo">
+                                                            <strong>Item possui acordo comercial</strong>
+                                                            <div className='tip-linha'>
+                                                                <span className='tip-nome'>Pedidos:</span>
+                                                                <span className='tip-valor'>{getPedidosAcordoTexto(item.acordosComerciais)}</span>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </td>
                                             <td>
@@ -1850,7 +2173,7 @@ export function PedidoVenda() {
                     itensExistentes={itensPedido}
                     onSelect={(item) => adicionarItem(item)}
                 />
-                <LoadingOverlay isOpen={loading} />
+                <LoadingOverlay isOpen={loading || loadingDadosCliente} />
 
             </div>
             <ModalErro

@@ -57,6 +57,7 @@
     overflow-x: hidden;
 }
 
+.pedido-card,
 .item-card {
     overflow: visible;
 }
@@ -264,6 +265,38 @@ label {
   flex-basis: 96px;
 }
 
+.condicao-pmv-info {
+  margin-left: 2px;
+}
+
+.condicao-pmv-tooltip {
+  right: -55px;
+  width: 350px;
+  max-width: min(350px, calc(100vw - 48px));
+  line-height: 1.4;
+}
+
+.condicao-pmv-tooltip > strong {
+  display: block;
+  margin-bottom: 7px;
+}
+
+.condicao-pmv-tooltip .tip-nome {
+  width: 155px;
+  flex-basis: 155px;
+  white-space: nowrap;
+}
+
+.credito-valor-bom {
+  color: #2e7d32;
+  font-weight: 700;
+}
+
+.credito-valor-ruim {
+  color: #c62828;
+  font-weight: 700;
+}
+
 
 /* =========================
    TABELA
@@ -408,11 +441,161 @@ label {
 
 
 .tabelas-container {
-    display: grid;
+    display: none;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
     margin-top: 10px;
     overflow: visible;
+}
+
+.itens-table-wrapper {
+    width: 100%;
+    margin-top: 10px;
+    overflow: visible;
+    padding-bottom: 6px;
+}
+
+.tabelas-itens-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    width: 100%;
+    min-width: 0;
+    align-items: start;
+}
+
+.tabela-itens-bloco {
+    min-width: 0;
+}
+
+.tabela-bloco-cabecalho {
+    display: flex;
+    height: 52px;
+    padding: 0 6px 5px;
+    box-sizing: border-box;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-end;
+}
+
+.tabela-bloco-cabecalho h3 {
+    margin: 0 0 4px;
+    font-size: 15px;
+    line-height: 1.1;
+}
+
+.tabela-bloco-cabecalho > span {
+    color: #6d7478;
+    font-size: 11px;
+}
+
+.tabela-unidade-resumo .tabela-bloco-cabecalho {
+    align-items: center;
+    text-align: center;
+}
+
+.tabela-bloco-cabecalho .item-selection-trigger {
+    font-size: 12px;
+}
+
+.tabela-itens-bloco .itens-grid {
+    margin-top: 0;
+}
+
+.tabela-itens-bloco .itens-grid thead tr {
+    height: 34px;
+}
+
+.tabela-itens-bloco .itens-grid tbody tr {
+    height: 52px;
+}
+
+.tabela-itens-bloco .itens-grid tbody td {
+    height: 52px;
+    padding-top: 3px;
+    padding-bottom: 3px;
+    box-sizing: border-box;
+}
+
+.itens-grid-selecao th:nth-child(1),
+.itens-grid-selecao td:nth-child(1) { width: 32px; }
+
+.itens-grid-selecao th:nth-child(2),
+.itens-grid-selecao td:nth-child(2) { width: 34px; }
+
+.itens-grid-selecao th:nth-child(3),
+.itens-grid-selecao td:nth-child(3) { width: 52px; }
+
+.itens-grid-selecao th:nth-child(4),
+.itens-grid-selecao td:nth-child(4) { width: 130px; }
+
+.itens-grid-selecao th:nth-child(5),
+.itens-grid-selecao td:nth-child(5) { width: 115px; }
+
+.itens-grid-selecao th:nth-child(6),
+.itens-grid-selecao td:nth-child(6) { width: 72px; }
+
+.itens-grid-selecao th:nth-child(7),
+.itens-grid-selecao td:nth-child(7) { width: 52px; }
+
+.itens-grid-selecao th:nth-child(8),
+.itens-grid-selecao td:nth-child(8) { width: 28px; }
+
+.item-cell-text {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+}
+
+.itens-grid-unidade th:nth-child(1),
+.itens-grid-unidade td:nth-child(1) { width: 52px; }
+
+.itens-grid-unidade th:nth-child(2),
+.itens-grid-unidade td:nth-child(2) { width: 66px; }
+
+.itens-grid-unidade th:nth-child(3),
+.itens-grid-unidade td:nth-child(3) { width: 72px; }
+
+.itens-grid-unidade th:nth-child(4),
+.itens-grid-unidade td:nth-child(4) { width: 58px; }
+
+.itens-grid-unidade th:nth-child(5),
+.itens-grid-unidade td:nth-child(5) { width: 28px; }
+
+.tabela-itens-principal .item-selection-menu {
+    line-height: 1;
+}
+
+@media (max-width: 1500px) {
+    .tabelas-itens-layout {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 18px;
+    }
+
+    .tabela-itens-bloco {
+        width: 100%;
+    }
+
+    .tabela-bloco-cabecalho {
+        height: auto;
+        min-height: 52px;
+        padding-top: 8px;
+    }
+
+    .tabela-unidade-resumo .tabela-bloco-cabecalho {
+        align-items: flex-start;
+        text-align: left;
+    }
+}
+
+.info-cell-content {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .tabela-unidade {

@@ -9,6 +9,7 @@ export function LovClientes({ isOpen, setLovOpen, onSelect }) {
 
     const lov = useLovPagination({
         limit: 25,
+        cacheKey: 'clientes',
         fetchFn: ({ filtro, offset, limit }) => {
             if (filtro && filtro.trim() !== '') {
                 return getClienteByFilter({ filtro, offset, limit });
@@ -18,10 +19,13 @@ export function LovClientes({ isOpen, setLovOpen, onSelect }) {
     });
 
     useEffect(() => {
-        if (isOpen) {
-            lov.buscar({ filtro: '', novoOffset: 0 });
+        lov.buscar({ filtro: '', novoOffset: 0 }).catch(() => {});
+    }, []);
+
+    useEffect(() => {
+        if (isOpen && lov.precisaAtualizar) {
+            lov.buscar({ filtro, novoOffset: lov.offset }).catch(() => {});
         }
-        // eslint-disable-next-line
     }, [isOpen]);
 
     if (!isOpen) return null;

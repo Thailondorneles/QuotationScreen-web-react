@@ -31,6 +31,7 @@ import { maskMoneyBR } from '../utils/maskMoney.js';
 import LoadingOverlay from '../components/LoadingOverlay.js';
 import { LovObservacao } from '../components/LovObservacao.js';
 import { enviarPedidoErp } from '../services/pedidosErp.js';
+import { LovUnidadesPedido } from '../components/LovUnidadesPedido.js';
 
 
 export function PedidoVenda() {
@@ -53,6 +54,12 @@ export function PedidoVenda() {
     const [cidade, setCidade] = useState(null);
     const [operacaoTriangulacao, setOperacaoTriangulacao] = useState({ cod_oper: null, des_oper: null });
     const [CondPgto, setCondPgto] = useState({ cod_cond_pgto: null, des_cond_pgto: null });
+    const [prazoMedioVenda, setPrazoMedioVenda] = useState(null);
+    const [creditoCliente, setCreditoCliente] = useState({
+        atingido: null,
+        limiteMensal: null,
+        titulosVencidos: null
+    });
     const [codClienteDigitado, setCodClienteDigitado] = useState('');
     const [codClienteTriangulacaoDigitado, setCodClienteTriangulacaoDigitado] = useState('');
     const [codRepresentanteDigitado, setCodRepresentanteDigitado] = useState('');
@@ -98,6 +105,7 @@ export function PedidoVenda() {
     const [obsEditando, setObsEditando] = useState(null);
     const [ordemCompra, setOrdemCompra] = useState('');
     const [menuSelecaoItensOpen, setMenuSelecaoItensOpen] = useState(null);
+    const [openLovUnidadesPedido, setOpenLovUnidadesPedido] = useState(false);
     const dadosClienteCache = useRef(new Map());
     const representanteClienteCache = useRef(new Map());
     const historicoClienteCache = useRef(new Map());
@@ -168,6 +176,8 @@ export function PedidoVenda() {
         setOperacao({ cod_oper: null, des_oper: null });
         setOperacaoTriangulacao({ cod_oper: null, des_oper: null });
         setCondPgto({ cod_cond_pgto: null, des_cond_pgto: null });
+        setPrazoMedioVenda(null);
+        setCreditoCliente({ atingido: null, limiteMensal: null, titulosVencidos: null });
         setCodClienteDigitado('');
         setCodClienteTriangulacaoDigitado('');
         setCodRepresentanteDigitado('');
@@ -205,6 +215,8 @@ export function PedidoVenda() {
         if (mudouCliente) {
             limparEnderecoCep();
             setItensPedido([]);
+            setPrazoMedioVenda(null);
+            setCreditoCliente({ atingido: null, limiteMensal: null, titulosVencidos: null });
             nextId.current = 1;
             setFreteSelecionado({ 201: null, 203: null });
         }
@@ -388,6 +400,7 @@ export function PedidoVenda() {
             cod_item: itemLov.cod_item,
             descricao: itemLov.des_item,
             principiosAtivos: itemLov.principios_ativos,
+            marca: itemLov.cod_completo,
             qtdMultiplo: itemLov.qtd_multiplo,
             qtdAltura: itemLov.qtd_altura,
             qtdLargura: itemLov.qtd_largura,
@@ -466,8 +479,8 @@ export function PedidoVenda() {
         }
     }
 
-    function removerItem(seq) {
-        setItensPedido(prev => prev.filter(item => item.seq !== seq));
+    function removerItem(grupoId) {
+        setItensPedido(prev => prev.filter(item => item.grupoId !== grupoId));
     }
 
     function removerItensPorUnidade(unidade) {
@@ -478,10 +491,10 @@ export function PedidoVenda() {
         }));
     }
 
-    function handleQuantidadeChange(seq, valor) {
+    function handleQuantidadeChange(grupoId, valor) {
         setItensPedido(prev =>
             prev.map(item =>
-                item.seq === seq ? { ...item, quantidade: valor } : item
+                item.grupoId === grupoId ? { ...item, quantidade: valor } : item
             )
         );
     }
@@ -498,8 +511,8 @@ export function PedidoVenda() {
         carregarTiposLogradouro();
     }, []);
 
-    function validarMultiplo(seq) {
-        const item = itensPedido.find(i => i.seq === seq);
+    function validarMultiplo(grupoId) {
+        const item = itensPedido.find(i => i.grupoId === grupoId);
         if (!item) return;
 
         const qtd = Number(item.quantidade);
@@ -511,19 +524,24 @@ export function PedidoVenda() {
             setModalErro({
                 aberto: true,
                 mensagem: `Quantidade informada não está de acordo com a quantidade múltipla do item: ${multiplo}.`,
-                seqItem: seq
+                seqItem: item.seq
             });
             // Limpa a quantidade do item com erro
-            handleQuantidadeChange(seq, '');
+            handleQuantidadeChange(grupoId, '');
         }
     }
 
-    function handleCheckboxChange(seq, checked) {
+    function handleCheckboxChange(grupoId, checked) {
         setItensPedido(prev =>
             prev.map(item =>
-                item.seq === seq ? { ...item, selecionado: checked } : item
+                item.grupoId === grupoId ? { ...item, selecionado: checked } : item
             )
         );
+    }
+
+    function selecionarTodosItens(selecionado) {
+        setItensPedido(prev => prev.map(item => ({ ...item, selecionado })));
+        setMenuSelecaoItensOpen(null);
     }
 
     function selecionarItensPorUnidade(unidade, selecionado) {
@@ -656,8 +674,11 @@ export function PedidoVenda() {
     function clienteTemDadosPedido(cli) {
         if (!cli) return false;
 
-        return ['cod_oper', 'des_oper', 'cod_cond_pgto', 'des_cond_pgto']
-            .some(campo => Object.prototype.hasOwnProperty.call(cli, campo));
+        return [
+            'cod_oper', 'des_oper', 'cod_cond_pgto', 'des_cond_pgto', 'pmv',
+            'atingido', 'vlr_lim_mensal', 'qtd_titulos_vencidos'
+        ]
+            .every(campo => Object.prototype.hasOwnProperty.call(cli, campo));
     }
 
     async function buscarDetalhesClientePedido(cli) {
@@ -1414,14 +1435,20 @@ export function PedidoVenda() {
         });
     }
 
-    function montarPayloadsPedidoErp() {
+    function montarPayloadsPedidoErp(unidadesSelecionadas = [201, 203]) {
         const erroValidacao = validarPedidoErp();
 
         if (erroValidacao) {
             throw erroValidacao;
         }
 
-        return [201, 203]
+        const unidades = unidadesSelecionadas.map(Number);
+
+        if (!unidades.length) {
+            throw { mensagem: 'Selecione ao menos uma unidade para gerar o pedido.' };
+        }
+
+        return unidades
             .map(unidade => ({
                 unidade,
                 itens: itensPedido.filter(item => Number(item.unidade) === unidade)
@@ -1430,11 +1457,23 @@ export function PedidoVenda() {
             .map(grupo => montarPayloadPedidoErpPorUnidade(grupo.unidade, grupo.itens));
     }
 
-    async function finalizarPedidoErp() {
+    function abrirSelecaoUnidadesPedido() {
+        const erroValidacao = validarPedidoErp();
+
+        if (erroValidacao) {
+            setModalErro({ aberto: true, ...erroValidacao });
+            return;
+        }
+
+        setOpenLovUnidadesPedido(true);
+    }
+
+    async function finalizarPedidoErp(unidadesSelecionadas) {
         try {
+            setOpenLovUnidadesPedido(false);
             setLoading(true);
 
-            const payloads = montarPayloadsPedidoErp();
+            const payloads = montarPayloadsPedidoErp(unidadesSelecionadas);
 
             const responses = await Promise.all(payloads.map(async payload => {
                 const response = await enviarPedidoErp(payload);
@@ -1549,6 +1588,8 @@ export function PedidoVenda() {
             setRepresentante(null);
             setOperacao({ cod_oper: null, des_oper: null });
             setCondPgto({ cod_cond_pgto: null, des_cond_pgto: null });
+            setPrazoMedioVenda(null);
+            setCreditoCliente({ atingido: null, limiteMensal: null, titulosVencidos: null });
             setCodRepresentanteDigitado('');
             setCodOperacaoDigitado('');
             setCodCondPgtoDigitado('');
@@ -1594,6 +1635,21 @@ export function PedidoVenda() {
                 cod_cond_pgto: dadosClientePedido?.cod_cond_pgto || null,
                 des_cond_pgto: dadosClientePedido?.des_cond_pgto || null
             });
+            const numeroOuNull = valor => {
+                if (valor === null || valor === undefined || valor === '') return null;
+                const numero = Number(valor);
+                return Number.isFinite(numero) ? numero : null;
+            };
+            const pmv = numeroOuNull(dadosClientePedido?.pmv);
+            const atingido = numeroOuNull(dadosClientePedido?.atingido);
+            const limiteMensal = numeroOuNull(dadosClientePedido?.vlr_lim_mensal);
+            const titulosVencidos = numeroOuNull(dadosClientePedido?.qtd_titulos_vencidos);
+            setPrazoMedioVenda(pmv);
+            setCreditoCliente({
+                atingido,
+                limiteMensal,
+                titulosVencidos
+            });
             setCodCondPgtoDigitado(dadosClientePedido?.cod_cond_pgto || '');
         }).catch(() => {
             if (carregamentoCancelado) return;
@@ -1601,6 +1657,8 @@ export function PedidoVenda() {
             setOperacao({ cod_oper: null, des_oper: null });
             setCodOperacaoDigitado('');
             setCondPgto({ cod_cond_pgto: null, des_cond_pgto: null });
+            setPrazoMedioVenda(null);
+            setCreditoCliente({ atingido: null, limiteMensal: null, titulosVencidos: null });
             setCodCondPgtoDigitado('');
         });
 
@@ -1620,9 +1678,65 @@ export function PedidoVenda() {
         };
     }, [cliente]);
 
+    const itensAgrupados = Array.from(
+        itensPedido.reduce((grupos, item) => {
+            if (!grupos.has(item.grupoId)) {
+                grupos.set(item.grupoId, { grupoId: item.grupoId });
+            }
+
+            const grupo = grupos.get(item.grupoId);
+            grupo[item.unidade] = item;
+            return grupos;
+        }, new Map()).values()
+    );
     const itens201 = itensPedido.filter(item => item.unidade === 201);
     const itens203 = itensPedido.filter(item => item.unidade === 203);
     const statusHistoricoCliente = getStatusHistoricoCliente();
+    const limiteCreditoRuim = creditoCliente.atingido !== null
+        && (creditoCliente.atingido < 0 || creditoCliente.atingido > 100);
+    const possuiTitulosVencidos = Number(creditoCliente.titulosVencidos || 0) > 0;
+    const statusCreditoCliente = limiteCreditoRuim && possuiTitulosVencidos
+        ? { classe: 'cliente-historico-vermelho', texto: 'Limite atingido e títulos vencidos' }
+        : limiteCreditoRuim || possuiTitulosVencidos
+            ? { classe: 'cliente-historico-amarelo', texto: 'Atenção à situação financeira' }
+            : { classe: 'cliente-historico-verde', texto: 'Situação financeira regular' };
+    const possuiDadosFinanceiros = prazoMedioVenda !== null
+        || Object.values(creditoCliente).some(valor => valor !== null);
+
+    function renderInfoItem(item, valores) {
+        if (!item) return '-';
+
+        const freteItem = freteSelecionado[item.unidade];
+        const possuiAcordo = itemPossuiAcordo(item);
+
+        return (
+            <div className="info-cell-content">
+                <IoInformationOutline className="icon info-icon" />
+                <div className="tooltip-info">
+                    <strong>Detalhes do Item</strong>
+                    <div className="tip-linha"><span className="tip-nome">ICMS:</span><span className="tip-valor">{format.moeda(valores.icms ?? 0)}</span><span className="tip-percent">{format.percentual(item.impostos?.perIcms)}</span></div>
+                    <div className="tip-linha"><span className="tip-nome">ICMS ST:</span><span className="tip-valor">{format.moeda(valores.st ?? 0)}</span><span className="tip-percent">{format.percentual(item.impostos?.perSubstTrib)}</span></div>
+                    <div className="tip-linha"><span className="tip-nome">DIFAL:</span><span className="tip-valor">{format.moeda(valores.difal ?? 0)}</span><span className="tip-percent">{format.percentual(item.impostos?.perDifal)}</span></div>
+                    <div className="tip-linha"><span className="tip-nome">PIS:</span><span className="tip-valor">{format.moeda(valores.pis ?? 0)}</span><span className="tip-percent">{format.percentual(item.impostos?.perPis)}</span></div>
+                    <div className="tip-linha"><span className="tip-nome">COFINS:</span><span className="tip-valor">{format.moeda(valores.cofins ?? 0)}</span><span className="tip-percent">{format.percentual(item.impostos?.perCofins)}</span></div>
+                    <div className="tip-linha"><span className="tip-nome">IPI:</span><span className="tip-valor">{format.moeda(valores.ipi ?? 0)}</span><span className="tip-percent">{format.percentual(item.impostos?.perIpi)}</span></div>
+                    <div className="tip-linha"><span className="tip-nome">FCP:</span><span className="tip-valor">{format.moeda(valores.fcp ?? 0)}</span><span className="tip-percent">{format.percentual(item.impostos?.perFcp)}</span></div>
+                    <div className="tip-linha"><span className="tip-nome">ICMS deson (Funrural):</span><span className="tip-valor">{format.moeda(valores.valorFunrural ?? 0)}</span><span className="tip-percent">{format.percentual(item.impostos?.perFunrural)}</span></div>
+                    <div className="tip-linha"><span className="tip-nome">Frete rateado:</span><span className="tip-valor">{format.moeda(item.valorFrete ?? 0)}</span></div>
+                    <div className="tip-linha"><span className="tip-nome">Sobra:</span><span className="tip-valor">{format.moeda(valores.sobraReal ?? 0)}</span></div>
+                    <div className="tip-linha"><span className="tip-nome">Transportadora:</span><span className="tip-valor">{freteItem?.nome || '-'}</span></div>
+                    <div className="tip-linha"><span className="tip-nome">Prazo:</span><span className="tip-valor">{freteItem ? `${freteItem.prazo} dias` : '-'}</span></div>
+                    <div className="tip-linha"><span className="tip-nome">Última compra:</span><span className="tip-valor">{formatarDataUltimaCompraItem(item)}</span></div>
+                    {possuiAcordo && (
+                        <div className="tooltip-acordo">
+                            <strong>Item possui acordo comercial</strong>
+                            <div className="tip-linha"><span className="tip-nome">Pedidos:</span><span className="tip-valor">{getPedidosAcordoTexto(item.acordosComerciais)}</span></div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="pedido-venda-container">
@@ -1739,6 +1853,41 @@ export function PedidoVenda() {
                             onBlur={() => buscarCondPgtoPorCodigo(codCondPgtoDigitado)}
                         />
                         <input type="text" className='input-desc' value={CondPgto.des_cond_pgto || ''} readOnly />
+                        {possuiDadosFinanceiros && (
+                            <div className="cliente-historico-info condicao-pmv-info">
+                                <span
+                                    className={`cliente-historico-sinaleira ${statusCreditoCliente.classe}`}
+                                    aria-label={statusCreditoCliente.texto}
+                                />
+                                <div className="tooltip-info cliente-historico-tooltip condicao-pmv-tooltip">
+                                    <strong>{statusCreditoCliente.texto}</strong>
+                                    <div className="tip-linha">
+                                        <span className="tip-nome">Prazo médio de pagamento:</span>
+                                        <span className="tip-valor">{prazoMedioVenda !== null ? `${prazoMedioVenda.toLocaleString('pt-BR')} dias` : '-'}</span>
+                                    </div>
+                                    <div className="tip-linha">
+                                        <span className="tip-nome">Período:</span>
+                                        <span className="tip-valor">180 dias</span>
+                                    </div>
+                                    <div className="tip-linha">
+                                        <span className="tip-nome">Limite mensal:</span>
+                                        <span className="tip-valor">{creditoCliente.limiteMensal !== null ? format.moeda(creditoCliente.limiteMensal) : '-'}</span>
+                                    </div>
+                                    <div className="tip-linha">
+                                        <span className="tip-nome">Consumido:</span>
+                                        <span className={`tip-valor ${limiteCreditoRuim ? 'credito-valor-ruim' : 'credito-valor-bom'}`}>
+                                            {creditoCliente.atingido !== null ? format.percentual(creditoCliente.atingido) : '-'}
+                                        </span>
+                                    </div>
+                                    <div className="tip-linha">
+                                        <span className="tip-nome">Títulos vencidos:</span>
+                                        <span className={`tip-valor ${possuiTitulosVencidos ? 'credito-valor-ruim' : 'credito-valor-bom'}`}>
+                                            {creditoCliente.titulosVencidos !== null ? format.numero(creditoCliente.titulosVencidos) : '-'}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                         <FaSearch className="icon" onClick={() => { if (!cliente) { alert('Selecione um cliente primeiro'); return; } setOpenLovCondPgto(true); }} />
                         <LovCondPgto
                             isOpen={openLovCondPgto}
@@ -1756,6 +1905,72 @@ export function PedidoVenda() {
 
             <div className="item-card">
                 <h2 className="pedido-title">Itens do Pedido</h2>
+                <div className="itens-table-wrapper">
+                    <div className="tabelas-itens-layout">
+                        <section className="tabela-itens-bloco tabela-itens-principal">
+                            <div className="tabela-bloco-cabecalho">
+                                <h3>Itens</h3>
+                                <div className="item-selection-menu">
+                                    <button type="button" className="item-selection-trigger" onClick={() => setMenuSelecaoItensOpen(prev => prev === 'todos' ? null : 'todos')}>Selecionar</button>
+                                    {menuSelecaoItensOpen === 'todos' && (
+                                        <div className="item-selection-dropdown">
+                                            <button type="button" onClick={() => selecionarTodosItens(true)}>Marcar todos</button>
+                                            <button type="button" onClick={() => selecionarTodosItens(false)}>Desmarcar todos</button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <table className="itens-grid itens-grid-selecao">
+                                <thead><tr><th>Sel.</th><th>Seq</th><th>Cód.</th><th>Item</th><th>Princ. ativo</th><th>Marca</th><th>Qtd.</th><th></th></tr></thead>
+                                <tbody>
+                                    {itensAgrupados.map(grupo => {
+                                        const itemBase = grupo[201] || grupo[203];
+                                        const possuiAcordo = [grupo[201], grupo[203]].some(item => item && itemPossuiAcordo(item));
+                                        return (
+                                            <tr key={grupo.grupoId} className={possuiAcordo ? 'item-row-acordo' : ''}>
+                                                <td><input type="checkbox" checked={Boolean(itemBase.selecionado)} onChange={(e) => handleCheckboxChange(grupo.grupoId, e.target.checked)} /></td>
+                                                <td>{itemBase.seq}</td>
+                                                <td>{itemBase.cod_item}{possuiAcordo && <span className="item-acordo-marca">©</span>}</td>
+                                                <td><span className="item-cell-text">{itemBase.descricao}</span></td>
+                                                <td><span className="item-cell-text">{itemBase.principiosAtivos || '-'}</span></td>
+                                                <td>{itemBase.marca || '-'}</td>
+                                                <td><input className="item-table-input" data-seq={itemBase.seq} value={itemBase.quantidade} onChange={(e) => handleQuantidadeChange(grupo.grupoId, e.target.value)} onBlur={() => validarMultiplo(grupo.grupoId)} onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }} /></td>
+                                                <td><button type="button" className="btn-remover-item" onClick={() => removerItem(grupo.grupoId)} title="Remover item"><FaTrash /></button></td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </section>
+
+                        {[{ unidade: 201, titulo: 'Unidade 201 (Matriz)' }, { unidade: 203, titulo: 'Unidade 203 (Filial)' }].map(config => (
+                            <section className="tabela-itens-bloco tabela-unidade-resumo" key={config.unidade}>
+                                <div className="tabela-bloco-cabecalho"><h3>{config.titulo}</h3><span>Dados da unidade</span></div>
+                                <table className="itens-grid itens-grid-unidade">
+                                    <thead><tr><th>Estoque</th><th>Vlr Lista</th><th>Vlr Total</th><th>Sobra %</th><th>Info</th></tr></thead>
+                                    <tbody>
+                                        {itensAgrupados.map(grupo => {
+                                            const item = grupo[config.unidade];
+                                            const possuiAcordo = item && itemPossuiAcordo(item);
+                                            if (!item) return <tr key={grupo.grupoId}><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>;
+                                            const valores = calcularValoresItem(item);
+                                            return (
+                                                <tr key={grupo.grupoId} className={possuiAcordo ? 'item-row-acordo' : ''}>
+                                                    <td>{item.estoque}</td>
+                                                    <td><input className="item-table-input item-table-money" value={item.valorLista} onChange={(e) => handleValorListaChange(item.seq, maskMoneyBR(e.target.value))} /></td>
+                                                    <td>{format.moeda(valores.valorVendaTotal ?? 0)}</td>
+                                                    <td style={{ color: valores.sobraReal >= 0 ? 'green' : 'red', fontWeight: 'bold' }}>{format.percentual(valores.sobraPercentual ?? 0)}</td>
+                                                    <td className="info-cell">{renderInfoItem(item, valores)}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </section>
+                        ))}
+                    </div>
+                </div>
+                {false && (
                 <div className="tabelas-container">
                     {/* Tabela Unidade 201 */}
                     <div className="tabela-unidade">
@@ -2137,6 +2352,7 @@ export function PedidoVenda() {
                         </table>
                     </div>
                 </div>
+                )}
 
                 <div className="item-card-container">
                     <button className="btn-adicionar-item" onClick={() => 
@@ -2493,11 +2709,16 @@ export function PedidoVenda() {
             </div>
             <div className="integracao-card">
                 <div className="obs-footer">
-                    <button type="button" className="btn-adicionar" onClick={finalizarPedidoErp}>
+                    <button type="button" className="btn-adicionar" onClick={abrirSelecaoUnidadesPedido}>
                         Enviar pedido ao ERP
                     </button>
                 </div>
             </div>
+            <LovUnidadesPedido
+                isOpen={openLovUnidadesPedido}
+                onClose={() => setOpenLovUnidadesPedido(false)}
+                onConfirm={finalizarPedidoErp}
+            />
         </div>
     );
 }

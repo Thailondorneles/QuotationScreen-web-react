@@ -6,7 +6,7 @@ import { useLovPagination } from '../hooks/useLovPagination';
 import { getItens, getItemByFilter } from '../services/itens';
 
 export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] }) {
-    const [filtro, setFiltro] = useState('');
+    const [filtro, setFiltro] = useState('POLIMAX');
     const [itensSelecionados, setItensSelecionados] = useState({});
     const [menuSelecionarOpen, setMenuSelecionarOpen] = useState(false);
     const [ordenacao, setOrdenacao] = useState({ coluna: null, direcao: null });
@@ -18,6 +18,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
 
     const lov = useLovPagination({
         limit: 25,
+        cacheKey: 'itens',
         fetchFn: ({ filtro, offset, limit }) => {
             const filtroBusca = normalizarFiltroItem(filtro);
 
@@ -27,6 +28,10 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
             return getItens({ offset, limit });
         }
     });
+
+    useEffect(() => {
+        lov.buscar({ filtro: 'POLIMAX', novoOffset: 0 }).catch(() => {});
+    }, []);
 
     function normalizarFiltroItem(valor) {
         return String(valor ?? '')
@@ -97,13 +102,11 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
 
     useEffect(() => {
         if (isOpen) {
-            const filtroInicial = 'POLIMAX';
-
-            setFiltro(filtroInicial);
             setItensSelecionados({});
             setMenuSelecionarOpen(false);
-            setOrdenacao({ coluna: null, direcao: null });
-            lov.buscar({ filtro: filtroInicial, novoOffset: 0 });
+            if (lov.precisaAtualizar) {
+                lov.buscar({ filtro, novoOffset: lov.offset }).catch(() => {});
+            }
         }
     }, [isOpen]);
 
@@ -161,7 +164,6 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
 
         onSelect(selecionados);
         setLovOpen(false);
-        setFiltro('');
         setItensSelecionados({});
         setMenuSelecionarOpen(false);
     }

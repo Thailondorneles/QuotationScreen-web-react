@@ -1,5 +1,5 @@
 {
-  "name": "projeto-tela-cotacao",
+  "name": "QuotationScreen-web-react",
   "version": "1.0.0",
   "private": true,
   "proxy": "http://localhost:3001",

@@ -274,6 +274,59 @@
     text-align: right;
 }
 
+.lov-modal-unidades-pedido {
+    width: min(520px, calc(100vw - 32px));
+    height: auto;
+    min-height: 300px;
+}
+
+.lov-unidades-intro {
+    padding: 16px;
+    color: #555;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.lov-list-unidades-pedido {
+    flex: 0 0 auto;
+    overflow: visible;
+}
+
+.lov-list-unidades-pedido td {
+    height: 44px;
+}
+
+.lov-unidades-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 16px;
+}
+
+.lov-unidades-actions button {
+    min-width: 100px;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.lov-unidades-cancelar {
+    background: #e5e5e5;
+    color: #333;
+}
+
+.lov-unidades-confirmar {
+    background: #2e7d32;
+    color: #fff;
+}
+
+.lov-unidades-confirmar:disabled {
+    background: #9e9e9e;
+    cursor: not-allowed;
+}
+
 .lov-list table {
     width: 100%;
     border-collapse: collapse;

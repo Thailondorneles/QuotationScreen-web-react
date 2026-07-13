@@ -331,6 +331,7 @@ export function PedidoVenda() {
 
         const promise = getItensAcordos({
             codItem: codigo,
+            codCliente: getCodigoPessoaCliente(),
             offset: 0,
             limit: 25
         })
@@ -420,8 +421,8 @@ export function PedidoVenda() {
             valorFrete: 0
         };
         // Cria os dois itens (201 e 203)
-        const item201 = { ...itemBase, seq: nextId.current, unidade: 201 };
-        const item203 = { ...itemBase, seq: nextId.current + 1, unidade: 203 };
+        const item201 = { ...itemBase, seq: nextId.current, unidade: 201, ticktMedio: itemLov.tickt_medio_matriz };
+        const item203 = { ...itemBase, seq: nextId.current + 1, unidade: 203, ticktMedio: itemLov.tickt_medio_filial };
         nextId.current += 2; // avança o contador
 
         return [item201, item203];
@@ -1727,6 +1728,7 @@ export function PedidoVenda() {
                     <div className="tip-linha"><span className="tip-nome">Transportadora:</span><span className="tip-valor">{freteItem?.nome || '-'}</span></div>
                     <div className="tip-linha"><span className="tip-nome">Prazo:</span><span className="tip-valor">{freteItem ? `${freteItem.prazo} dias` : '-'}</span></div>
                     <div className="tip-linha"><span className="tip-nome">Última compra:</span><span className="tip-valor">{formatarDataUltimaCompraItem(item)}</span></div>
+                    <div className="tip-linha"><span className="tip-nome">Ticket médio:</span><span className="tip-valor">{item.ticktMedio != null ? format.moeda(item.ticktMedio) : '-'}</span></div>
                     {possuiAcordo && (
                         <div className="tooltip-acordo">
                             <strong>Item possui acordo comercial</strong>
@@ -2134,6 +2136,10 @@ export function PedidoVenda() {
                                                         <span className='tip-nome'>Última compra:</span>
                                                         <span className='tip-valor'>{formatarDataUltimaCompraItem(item)}</span>
                                                     </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>Ticket médio:</span>
+                                                        <span className='tip-valor'>{item.ticktMedio != null ? format.moeda(item.ticktMedio) : '-'}</span>
+                                                    </div>
                                                     {possuiAcordo && (
                                                         <div className="tooltip-acordo">
                                                             <strong>Item possui acordo comercial</strong>
@@ -2323,6 +2329,10 @@ export function PedidoVenda() {
                                                     <div className='tip-linha'>
                                                         <span className='tip-nome'>Última compra:</span>
                                                         <span className='tip-valor'>{formatarDataUltimaCompraItem(item)}</span>
+                                                    </div>
+                                                    <div className='tip-linha'>
+                                                        <span className='tip-nome'>Ticket médio:</span>
+                                                        <span className='tip-valor'>{item.ticktMedio != null ? format.moeda(item.ticktMedio) : '-'}</span>
                                                     </div>
                                                     {possuiAcordo && (
                                                         <div className="tooltip-acordo">

@@ -12,8 +12,8 @@ export function getItemByFilter({ filtro, offset = 0, limit = 25 }) {
     });
 }
 
-export function getItensAcordos({ codItem, offset = 0, limit = 25 }) {
-    return unimedApi.get(`itensAcordos/${codItem}`, {
+export function getItensAcordos({ codItem, codCliente, offset = 0, limit = 25 }) {
+    return unimedApi.get(`itensAcordos/${codItem}/${codCliente}`, {
         params: { offset, limit }
     });
 }

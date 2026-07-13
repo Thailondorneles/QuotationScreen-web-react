@@ -53,6 +53,8 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
                     qtd_m3: item.qtd_m3,
                     qtd_m2: item.qtd_m2,
                     qtd_peso_bruto: item.qtd_peso_bruto,
+                    tickt_medio_matriz: null,
+                    tickt_medio_filial: null,
                     estoque_matriz: 0,
                     estoque_filial: 0
                 };
@@ -68,10 +70,12 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
 
             if (item.cod_unidade === 201) {
                 acc[item.cod_item].estoque_matriz = item.qtd_disponivel;
+                acc[item.cod_item].tickt_medio_matriz = item.tickt_medio;
             }
 
             if (item.cod_unidade === 203) {
                 acc[item.cod_item].estoque_filial = item.qtd_disponivel;
+                acc[item.cod_item].tickt_medio_filial = item.tickt_medio;
             }
 
             return acc;

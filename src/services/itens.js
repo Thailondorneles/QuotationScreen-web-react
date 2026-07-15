@@ -1,15 +1,19 @@
 import { unimedApi } from "../config/apis.js";
 
-export function getItens({ offset = 0, limit = 25 }) {
-    return unimedApi.get("itens", {
-        params: { offset, limit }
-    });
+export function getItens() {
+    return unimedApi.get("itens");
 }
 
-export function getItemByFilter({ filtro, offset = 0, limit = 25 }) {
-    return unimedApi.get(`itens/${encodeURIComponent(filtro)}`, {
-        params: { offset, limit }
-    });
+export function getItemByFilter({ filtro }) {
+    return unimedApi.get(`itens/${encodeURIComponent(filtro)}`);
+}
+
+export function getItensDetalhados({ codItens }) {
+    const codigos = [...new Set(codItens)]
+        .map(codigo => String(codigo ?? '').trim())
+        .filter(Boolean);
+
+    return unimedApi.get(`itensDetalhados/${codigos.join(',')}`);
 }
 
 export function getItensAcordos({ codItem, codCliente, offset = 0, limit = 25 }) {

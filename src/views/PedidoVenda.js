@@ -19,12 +19,11 @@ import { getUfByFilter } from '../services/uf.js';
 import { getTipLogradouro } from '../services/tipLogradouro.js';
 import { getCondPgtoByFilter } from '../services/condPgto.js';
 import { getOperacoesByFilter } from '../services/operacoes.js';
-import { getEstoqueDisponivel } from '../services/estoqueDisponivel.js';
 import { IoInformationOutline } from "react-icons/io5";
 import { getImpostos } from '../services/impostos.js';
 import { ModalErro } from '../components/ModalErro.js';
 import { getListaPreco } from '../services/listaPreco.js';
-import { getItensAcordos, getItemUltimaCompra } from '../services/itens.js';
+import { getItensAcordos, getItensDetalhados, getItemUltimaCompra } from '../services/itens.js';
 import { cotarSimFrete } from '../config/simFreteService.js';
 import { format } from '../utils/format.js';
 import { maskMoneyBR } from '../utils/maskMoney.js';
@@ -111,6 +110,7 @@ export function PedidoVenda() {
     const historicoClienteCache = useRef(new Map());
     const acordosItemCache = useRef(new Map());
     const ultimaCompraItemCache = useRef(new Map());
+    const recalculoClienteId = useRef(0);
 
     function validarOrdemCompra() {
         const possuiCaracterEspecial = /[\|/]/.test(ordemCompra);
@@ -211,17 +211,60 @@ export function PedidoVenda() {
         const codigoAtual = String(cliente?.cod_pessoa ?? '').trim();
         const codigoNovo = String(cli?.cod_pessoa ?? '').trim();
         const mudouCliente = codigoAtual !== codigoNovo;
+        const idRecalculo = mudouCliente
+            ? ++recalculoClienteId.current
+            : recalculoClienteId.current;
 
         if (mudouCliente) {
             limparEnderecoCep();
-            setItensPedido([]);
             setPrazoMedioVenda(null);
             setCreditoCliente({ atingido: null, limiteMensal: null, titulosVencidos: null });
-            nextId.current = 1;
             setFreteSelecionado({ 201: null, 203: null });
         }
 
         setCliente(cli);
+
+        if (!mudouCliente || !codigoNovo || !itensPedido.length) {
+            if (mudouCliente) setLoading(false);
+            return;
+        }
+
+        setLoading(true);
+
+        try {
+            const resultados = await Promise.allSettled(
+                itensPedido.map(async item => ({
+                    seq: item.seq,
+                    dados: await buscarDadosItem(item, { clienteAtual: cli })
+                }))
+            );
+            const dadosPorSeq = new Map();
+            const erros = [];
+
+            resultados.forEach(resultado => {
+                if (resultado.status === 'fulfilled') {
+                    dadosPorSeq.set(resultado.value.seq, resultado.value.dados);
+                } else {
+                    erros.push(resultado.reason);
+                }
+            });
+
+            if (idRecalculo === recalculoClienteId.current) {
+                setItensPedido(prev => prev.map(item =>
+                    dadosPorSeq.has(item.seq)
+                        ? { ...item, ...dadosPorSeq.get(item.seq) }
+                        : item
+                ));
+            }
+
+            if (erros.length && idRecalculo === recalculoClienteId.current) {
+                alert('Erro ao recalcular impostos, acordos ou histórico de alguns itens para o novo cliente.');
+            }
+        } finally {
+            if (idRecalculo === recalculoClienteId.current) {
+                setLoading(false);
+            }
+        }
     }
 
     async function carregarTiposLogradouro() {
@@ -251,13 +294,8 @@ export function PedidoVenda() {
         const operacaoAtual = contexto.operacaoAtual ?? operacao;
         const condPgtoAtual = contexto.condPgtoAtual ?? CondPgto;
         // Busca estoque disponível
-        const [responseEstoque, respImp, acordosComerciais, ultimaCompraItem] = await Promise.all([
-            getEstoqueDisponivel({
-                codItem: item.cod_item,
-                codUnidade: item.unidade,
-                offset: 0,
-                limit: 1
-            }),
+        const detalheItem = contexto.detalheItem || {};
+        const [respImp, acordosComerciais, ultimaCompraItem] = await Promise.all([
             getImpostos({
                 codOper: operacaoAtual.cod_oper,
                 codUnidade: item.unidade,
@@ -265,13 +303,16 @@ export function PedidoVenda() {
                 codCondPgto: condPgtoAtual.cod_cond_pgto,
                 codItem: item.cod_item
             }),
-            carregarAcordosItem(item.cod_item),
+            carregarAcordosItem(item.cod_item, clienteAtual.cod_pessoa),
             carregarUltimaCompraItem(item.cod_item, clienteAtual.cod_pessoa)
         ]);
-        const itemEstoque = responseEstoque.data.items[0] || {};
-        const estoque = itemEstoque.qtd_disponivel ?? 0;
-        const vlrMedio = itemEstoque.vlr_medio_unitario ?? 0;
-        const principiosAtivos = itemEstoque.principios_ativos ?? item.principiosAtivos;
+        const unidadeMatriz = Number(item.unidade) === 201;
+        const estoque = unidadeMatriz
+            ? (detalheItem.qtd_estoque_matriz ?? item.estoque ?? 0)
+            : (detalheItem.qtd_estoque_filial ?? item.estoque ?? 0);
+        const vlrMedio = unidadeMatriz
+            ? (detalheItem.vlr_medio_unitario_matriz ?? item.vlrMedio ?? 0)
+            : (detalheItem.vlr_medio_unitario_filial ?? item.vlrMedio ?? 0);
         // Busca impostos
         const imp = respImp.data || {};
         const indSubsMercadoria = Number(imp.ind_subs_mercadoria || 0);
@@ -313,7 +354,14 @@ export function PedidoVenda() {
         return {
             estoque,
             vlrMedio,
-            principiosAtivos,
+            ticktMedio: detalheItem.ticket_medio ?? item.ticktMedio ?? null,
+            qtdMultiplo: detalheItem.qtd_multiplo ?? item.qtdMultiplo,
+            qtdAltura: detalheItem.qtd_altura ?? item.qtdAltura,
+            qtdLargura: detalheItem.qtd_largura ?? item.qtdLargura,
+            qtdComprimento: detalheItem.qtd_comprimento ?? item.qtdComprimento,
+            qtdM3: detalheItem.qtd_m3 ?? item.qtdM3,
+            qtdM2: detalheItem.qtd_m2 ?? item.qtdM2,
+            pesoBruto: detalheItem.qtd_peso_bruto ?? item.pesoBruto,
             valorLista,
             impostos,
             baseST,
@@ -322,26 +370,28 @@ export function PedidoVenda() {
         };
     }
 
-    async function carregarAcordosItem(codItem) {
+    async function carregarAcordosItem(codItem, codCliente = getCodigoPessoaCliente()) {
         const codigo = String(codItem ?? '').trim();
+        const codigoCliente = String(codCliente ?? '').trim();
+        const chave = `${codigoCliente}-${codigo}`;
 
-        if (acordosItemCache.current.has(codigo)) {
-            return await acordosItemCache.current.get(codigo);
+        if (acordosItemCache.current.has(chave)) {
+            return await acordosItemCache.current.get(chave);
         }
 
         const promise = getItensAcordos({
             codItem: codigo,
-            codCliente: getCodigoPessoaCliente(),
+            codCliente: codigoCliente,
             offset: 0,
             limit: 25
         })
             .then(response => response.data.items || [])
             .catch(() => []);
 
-        acordosItemCache.current.set(codigo, promise);
+        acordosItemCache.current.set(chave, promise);
 
         const acordos = await promise;
-        acordosItemCache.current.set(codigo, acordos);
+        acordosItemCache.current.set(chave, acordos);
 
         return acordos;
     }
@@ -402,13 +452,13 @@ export function PedidoVenda() {
             descricao: itemLov.des_item,
             principiosAtivos: itemLov.principios_ativos,
             marca: itemLov.cod_completo,
-            qtdMultiplo: itemLov.qtd_multiplo,
-            qtdAltura: itemLov.qtd_altura,
-            qtdLargura: itemLov.qtd_largura,
-            qtdComprimento: itemLov.qtd_comprimento,
-            qtdM3: itemLov.qtd_m3,
-            qtdM2: itemLov.qtd_m2,
-            pesoBruto: itemLov.qtd_peso_bruto,
+            qtdMultiplo: null,
+            qtdAltura: null,
+            qtdLargura: null,
+            qtdComprimento: null,
+            qtdM3: null,
+            qtdM2: null,
+            pesoBruto: null,
             quantidade: '',
             estoque: 0,
             vlrMedio: 0,
@@ -421,8 +471,8 @@ export function PedidoVenda() {
             valorFrete: 0
         };
         // Cria os dois itens (201 e 203)
-        const item201 = { ...itemBase, seq: nextId.current, unidade: 201, ticktMedio: itemLov.tickt_medio_matriz };
-        const item203 = { ...itemBase, seq: nextId.current + 1, unidade: 203, ticktMedio: itemLov.tickt_medio_filial };
+        const item201 = { ...itemBase, seq: nextId.current, unidade: 201, estoque: itemLov.estoque_matriz };
+        const item203 = { ...itemBase, seq: nextId.current + 1, unidade: 203, estoque: itemLov.estoque_filial };
         nextId.current += 2; // avança o contador
 
         return [item201, item203];
@@ -442,10 +492,18 @@ export function PedidoVenda() {
 
         // Busca dados completos para cada item e atualiza
         try {
+            const responseDetalhes = await getItensDetalhados({
+                codItens: itensLov.map(item => item.cod_item)
+            });
+            const detalhesPorCodigo = new Map(
+                (responseDetalhes.data?.items || []).map(item => [String(item.cod_item), item])
+            );
             const resultados = await Promise.allSettled(
                 novosItens.map(async item => ({
                     seq: item.seq,
-                    dados: await buscarDadosItem(item)
+                    dados: await buscarDadosItem(item, {
+                        detalheItem: detalhesPorCodigo.get(String(item.cod_item))
+                    })
                 }))
             );
             const dadosPorSeq = new Map();

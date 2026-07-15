@@ -1,62 +1,104 @@
 import '../style/lovStyle.css';
 import { FaX, FaChevronLeft, FaChevronRight } from "react-icons/fa6";
 import { FaStar } from "react-icons/fa";
-import { useEffect, useMemo, useState } from 'react';
-import { useLovPagination } from '../hooks/useLovPagination';
-import { getItens, getItemByFilter } from '../services/itens';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { getItens } from '../services/itens';
+
+const ITENS_POR_PAGINA = 25;
+const CACHE_TTL = 5 * 60 * 1000;
+const FILTRO_PADRAO = 'POLIMAX';
+let cacheItens = null;
+let requisicaoItens = null;
+
+function normalizarTextoBusca(valor) {
+    return String(valor ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toUpperCase();
+}
+
+function normalizarFiltroItem(valor) {
+    return String(valor ?? '').trim();
+}
 
 export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] }) {
-    const [filtro, setFiltro] = useState('POLIMAX');
+    const [filtro, setFiltro] = useState(FILTRO_PADRAO);
     const [itensSelecionados, setItensSelecionados] = useState({});
     const [menuSelecionarOpen, setMenuSelecionarOpen] = useState(false);
     const [ordenacao, setOrdenacao] = useState({ coluna: null, direcao: null });
+    const [todosItens, setTodosItens] = useState([]);
+    const [filtroAplicado, setFiltroAplicado] = useState(FILTRO_PADRAO);
+    const [offset, setOffset] = useState(0);
+    const [loading, setLoading] = useState(false);
+    const [atualizadoEm, setAtualizadoEm] = useState(0);
+    const ultimaRequisicao = useRef(0);
 
     const itensExistentesCodigos = useMemo(
         () => new Set(itensExistentes.map(item => item.cod_item)),
         [itensExistentes]
     );
 
-    const lov = useLovPagination({
-        limit: 25,
-        cacheKey: 'itens',
-        fetchFn: ({ filtro, offset, limit }) => {
-            const filtroBusca = normalizarFiltroItem(filtro);
-
-            if (filtroBusca) {
-                return getItemByFilter({ filtro: filtroBusca, offset, limit});
-            }
-            return getItens({ offset, limit });
+    async function carregarTodosItens() {
+        if (cacheItens && cacheItens.expiraEm > Date.now()) {
+            return cacheItens.itens;
         }
-    });
 
-    useEffect(() => {
-        lov.buscar({ filtro: 'POLIMAX', novoOffset: 0 }).catch(() => {});
-    }, []);
+        if (requisicaoItens) {
+            return requisicaoItens;
+        }
 
-    function normalizarFiltroItem(valor) {
-        return String(valor ?? '')
-            .trim();
+        requisicaoItens = getItens()
+            .then(response => {
+                const resposta = response.data || {};
+                const itens = Array.isArray(resposta) ? resposta : (resposta.items || []);
+
+                cacheItens = {
+                    itens,
+                    expiraEm: Date.now() + CACHE_TTL
+                };
+
+                return itens;
+            })
+            .finally(() => {
+                requisicaoItens = null;
+            });
+
+        return requisicaoItens;
     }
 
-    const itensAgrupados = Object.values(
-        lov.data.reduce((acc, item) => {
+    async function buscar({ filtro: valorFiltro, novoOffset = 0 }) {
+        const filtroBusca = normalizarFiltroItem(valorFiltro);
+        const idRequisicao = ultimaRequisicao.current + 1;
+        ultimaRequisicao.current = idRequisicao;
+        setLoading(true);
+
+        try {
+            const itens = await carregarTodosItens();
+
+            if (idRequisicao === ultimaRequisicao.current) {
+                setTodosItens(itens);
+                setFiltroAplicado(filtroBusca);
+                setOffset(novoOffset);
+                setAtualizadoEm(Date.now());
+            }
+        } finally {
+            if (idRequisicao === ultimaRequisicao.current) {
+                setLoading(false);
+            }
+        }
+    }
+
+    const todosItensAgrupados = useMemo(() => Object.values(
+        todosItens.reduce((acc, item) => {
             if (!acc[item.cod_item]) {
                 acc[item.cod_item] = {
                     cod_item: item.cod_item,
                     cod_completo: item.cod_completo,
                     des_item: item.des_item,
                     principios_ativos: item.principios_ativos,
-                    qtd_multiplo: item.qtd_multiplo,
-                    qtd_altura: item.qtd_altura,
-                    qtd_largura: item.qtd_largura,
-                    qtd_comprimento: item.qtd_comprimento,
-                    qtd_m3: item.qtd_m3,
-                    qtd_m2: item.qtd_m2,
-                    qtd_peso_bruto: item.qtd_peso_bruto,
-                    tickt_medio_matriz: null,
-                    tickt_medio_filial: null,
-                    estoque_matriz: 0,
-                    estoque_filial: 0
+                    estoque_matriz: Number(item.qtd_estoque_matriz ?? 0),
+                    estoque_filial: Number(item.qtd_estoque_filial ?? 0)
                 };
             }
 
@@ -68,19 +110,21 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
                 acc[item.cod_item].principios_ativos = item.principios_ativos;
             }
 
-            if (item.cod_unidade === 201) {
-                acc[item.cod_item].estoque_matriz = item.qtd_disponivel;
-                acc[item.cod_item].tickt_medio_matriz = item.tickt_medio;
-            }
-
-            if (item.cod_unidade === 203) {
-                acc[item.cod_item].estoque_filial = item.qtd_disponivel;
-                acc[item.cod_item].tickt_medio_filial = item.tickt_medio;
-            }
-
             return acc;
         }, {})
-    );
+    ), [todosItens]);
+
+    const itensAgrupados = useMemo(() => {
+        const termo = normalizarTextoBusca(filtroAplicado);
+        if (!termo) return todosItensAgrupados;
+
+        return todosItensAgrupados.filter(item => normalizarTextoBusca([
+            item.cod_item,
+            item.des_item,
+            item.principios_ativos,
+            item.cod_completo
+        ].join(' ')).includes(termo));
+    }, [todosItensAgrupados, filtroAplicado]);
 
     const itensOrdenados = useMemo(() => {
         if (!ordenacao.coluna || !ordenacao.direcao) {
@@ -104,12 +148,25 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
         });
     }, [itensAgrupados, ordenacao]);
 
+    const itensPaginados = useMemo(
+        () => itensOrdenados.slice(offset, offset + ITENS_POR_PAGINA),
+        [itensOrdenados, offset]
+    );
+
+    const podeVoltar = offset > 0;
+    const podeAvancar = offset + ITENS_POR_PAGINA < itensOrdenados.length;
+    const precisaAtualizar = Date.now() - atualizadoEm >= CACHE_TTL;
+
+    useEffect(() => {
+        buscar({ filtro: FILTRO_PADRAO, novoOffset: 0 }).catch(() => {});
+    }, []);
+
     useEffect(() => {
         if (isOpen) {
             setItensSelecionados({});
             setMenuSelecionarOpen(false);
-            if (lov.precisaAtualizar) {
-                lov.buscar({ filtro, novoOffset: lov.offset }).catch(() => {});
+            if (precisaAtualizar) {
+                buscar({ filtro, novoOffset: offset }).catch(() => {});
             }
         }
     }, [isOpen]);
@@ -144,7 +201,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
     function marcarTodos() {
         setItensSelecionados(prev => {
             const next = { ...prev };
-            itensOrdenados.forEach(item => {
+            itensPaginados.forEach(item => {
                 if (!itemJaExiste(item.cod_item)) {
                     next[item.cod_item] = item;
                 }
@@ -173,6 +230,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
     }
 
     function alternarOrdenacao(coluna) {
+        setOffset(0);
         setOrdenacao(prev => {
             if (prev.coluna !== coluna) {
                 return { coluna, direcao: 'desc' };
@@ -205,7 +263,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
     }
 
     function itemEhMarcaPropria(item) {
-        return String(item.cod_completo ?? '').trim().toUpperCase() === 'POLIMAX';
+        return String(item.cod_completo ?? '').trim().toUpperCase() === FILTRO_PADRAO;
     }
 
     return (
@@ -220,18 +278,18 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
                     <input
                         value={filtro}
                         onChange={e => setFiltro(e.target.value)}
-                        onKeyDown={e =>{
+                        onKeyDown={e => {
                             if (e.key === 'Enter' || e.key === 'Tab') {
                                 e.preventDefault();
-                                lov.buscar({ filtro, novoOffset: 0 });
+                                buscar({ filtro, novoOffset: 0 });
                             }
                         }}
                     />
                     <button
-                        onClick={() => lov.buscar({ filtro, novoOffset: 0 })}
-                        disabled={lov.loading}
+                        onClick={() => buscar({ filtro, novoOffset: 0 })}
+                        disabled={loading}
                     >
-                        {lov.loading && <span className="lov-spinner lov-spinner-button"></span>}
+                        {loading && <span className="lov-spinner lov-spinner-button"></span>}
                         BUSCAR
                     </button>
                 </div>
@@ -264,7 +322,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
                     </button>
                 </div>
                 <div className="lov-list">
-                    {lov.loading && (
+                    {loading && (
                         <div className="lov-loading">
                             <span className="lov-spinner"></span>
                         </div>
@@ -282,7 +340,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
                             </tr>
                         </thead>
                         <tbody>
-                            {itensOrdenados.map(item => {
+                            {itensPaginados.map(item => {
                                 const existe = itemJaExiste(item.cod_item);
                                 const selecionado = itemEstaSelecionado(item.cod_item);
                                 const marcaPropria = itemEhMarcaPropria(item);
@@ -305,34 +363,35 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
                                                 onClick={e => e.stopPropagation()}
                                             />
                                         </td>
-                                    <td>{item.cod_item}</td>
-                                    <td>{item.des_item}</td>
-                                    <td>{item.principios_ativos || '-'}</td>
-                                    <td>
-                                        {marcaPropria && (
-                                            <FaStar
-                                                className="lov-brand-star"
-                                                title="Marca própria"
-                                                aria-label="Marca própria"
-                                            />
-                                        )}
-                                        {item.cod_completo || '-'}
-                                    </td>
-                                    <td>{item.estoque_matriz}</td>
-                                    <td>{item.estoque_filial}</td>
-                                </tr>
-                            )})}
+                                        <td>{item.cod_item}</td>
+                                        <td>{item.des_item}</td>
+                                        <td>{item.principios_ativos || '-'}</td>
+                                        <td>
+                                            {marcaPropria && (
+                                                <FaStar
+                                                    className="lov-brand-star"
+                                                    title="Marca própria"
+                                                    aria-label="Marca própria"
+                                                />
+                                            )}
+                                            {item.cod_completo || '-'}
+                                        </td>
+                                        <td>{item.estoque_matriz}</td>
+                                        <td>{item.estoque_filial}</td>
+                                    </tr>
+                                )
+                            })}
                         </tbody>
                     </table>
                 </div>
                 <div className="lov-footer">
-                    <button disabled={!lov.podeVoltar} onClick={() => lov.buscar({ filtro, novoOffset: lov.offset - 25 })}>
+                    <button disabled={!podeVoltar} onClick={() => setOffset(offset - ITENS_POR_PAGINA)}>
                         <FaChevronLeft />
                     </button>
                     <span>
-                        {lov.offset + 1}-{lov.offset + lov.data.length}
+                        {itensOrdenados.length ? offset + 1 : 0}-{Math.min(offset + ITENS_POR_PAGINA, itensOrdenados.length)} de {itensOrdenados.length}
                     </span>
-                    <button disabled={!lov.podeAvancar} onClick={() => lov.buscar({ filtro, novoOffset: lov.offset + 25 })}>
+                    <button disabled={!podeAvancar} onClick={() => setOffset(offset + ITENS_POR_PAGINA)}>
                         <FaChevronRight />
                     </button>
                 </div>

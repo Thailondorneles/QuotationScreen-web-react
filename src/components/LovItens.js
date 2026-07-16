@@ -22,6 +22,30 @@ function normalizarFiltroItem(valor) {
     return String(valor ?? '').trim();
 }
 
+function escaparRegex(valor) {
+    return valor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function correspondeAoLike(valor, filtro) {
+    const texto = normalizarTextoBusca(valor);
+    let padrao = normalizarTextoBusca(filtro);
+
+    if (!padrao.includes('%')) {
+        return texto.includes(padrao);
+    }
+
+    if (!padrao.endsWith('%')) {
+        padrao += '%';
+    }
+
+    const regexLike = padrao
+        .split('%')
+        .map(escaparRegex)
+        .join('.*');
+
+    return new RegExp(`^${regexLike}$`).test(texto);
+}
+
 export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] }) {
     const [filtro, setFiltro] = useState(FILTRO_PADRAO);
     const [itensSelecionados, setItensSelecionados] = useState({});
@@ -118,12 +142,20 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
         const termo = normalizarTextoBusca(filtroAplicado);
         if (!termo) return todosItensAgrupados;
 
-        return todosItensAgrupados.filter(item => normalizarTextoBusca([
-            item.cod_item,
-            item.des_item,
-            item.principios_ativos,
-            item.cod_completo
-        ].join(' ')).includes(termo));
+        return todosItensAgrupados.filter(item => {
+            const camposPesquisaveis = [
+                item.cod_item,
+                item.des_item,
+                item.principios_ativos,
+                item.cod_completo
+            ];
+
+            if (termo.includes('%')) {
+                return camposPesquisaveis.some(campo => correspondeAoLike(campo, termo));
+            }
+
+            return normalizarTextoBusca(camposPesquisaveis.join(' ')).includes(termo);
+        });
     }, [todosItensAgrupados, filtroAplicado]);
 
     const itensOrdenados = useMemo(() => {

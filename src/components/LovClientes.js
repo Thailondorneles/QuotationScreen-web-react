@@ -1,30 +1,88 @@
 import '../style/lovStyle.css';
 import { FaX, FaChevronLeft, FaChevronRight } from "react-icons/fa6";
-import { useEffect, useState } from 'react';
-import { useLovPagination } from '../hooks/useLovPagination';
-import { getClientes, getClienteByFilter } from '../services/clientes';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { getClientes } from '../services/clientes';
+
+const CLIENTES_POR_PAGINA = 25;
+const CACHE_TTL = 5 * 60 * 1000;
+let cacheClientes = null;
+let requisicaoClientes = null;
+
+function normalizarTextoBusca(valor) {
+    return String(valor ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toUpperCase();
+}
 
 export function LovClientes({ isOpen, setLovOpen, onSelect }) {
     const [filtro, setFiltro] = useState('');
+    const [todosClientes, setTodosClientes] = useState([]);
+    const [filtroAplicado, setFiltroAplicado] = useState('');
+    const [offset, setOffset] = useState(0);
+    const [loading, setLoading] = useState(false);
+    const [atualizadoEm, setAtualizadoEm] = useState(0);
+    const ultimaRequisicao = useRef(0);
 
-    const lov = useLovPagination({
-        limit: 25,
-        cacheKey: 'clientes',
-        fetchFn: ({ filtro, offset, limit }) => {
-            if (filtro && filtro.trim() !== '') {
-                return getClienteByFilter({ filtro, offset, limit });
+    async function carregarTodosClientes() {
+        if (cacheClientes && cacheClientes.expiraEm > Date.now()) return cacheClientes.clientes;
+        if (requisicaoClientes) return requisicaoClientes;
+
+        requisicaoClientes = getClientes()
+            .then(response => {
+                const resposta = response.data || {};
+                const clientes = Array.isArray(resposta) ? resposta : (resposta.items || []);
+                cacheClientes = { clientes, expiraEm: Date.now() + CACHE_TTL };
+                return clientes;
+            })
+            .finally(() => { requisicaoClientes = null; });
+
+        return requisicaoClientes;
+    }
+
+    async function buscar({ filtro: valorFiltro, novoOffset = 0 }) {
+        const idRequisicao = ultimaRequisicao.current + 1;
+        ultimaRequisicao.current = idRequisicao;
+        setLoading(true);
+
+        try {
+            const clientes = await carregarTodosClientes();
+            if (idRequisicao === ultimaRequisicao.current) {
+                setTodosClientes(clientes);
+                setFiltroAplicado(String(valorFiltro ?? '').trim());
+                setOffset(novoOffset);
+                setAtualizadoEm(Date.now());
             }
-            return getClientes({ offset, limit });
+        } finally {
+            if (idRequisicao === ultimaRequisicao.current) setLoading(false);
         }
-    });
+    }
+
+    const clientesFiltrados = useMemo(() => {
+        const termo = normalizarTextoBusca(filtroAplicado);
+        if (!termo) return todosClientes;
+        return todosClientes.filter(cliente => normalizarTextoBusca(
+            `${cliente.cod_pessoa ?? ''} ${cliente.des_pessoa ?? ''}`
+        ).includes(termo));
+    }, [todosClientes, filtroAplicado]);
+
+    const clientesPaginados = useMemo(
+        () => clientesFiltrados.slice(offset, offset + CLIENTES_POR_PAGINA),
+        [clientesFiltrados, offset]
+    );
+
+    const precisaAtualizar = Date.now() - atualizadoEm >= CACHE_TTL;
+    const podeVoltar = offset > 0;
+    const podeAvancar = offset + CLIENTES_POR_PAGINA < clientesFiltrados.length;
 
     useEffect(() => {
-        lov.buscar({ filtro: '', novoOffset: 0 }).catch(() => {});
+        buscar({ filtro: '', novoOffset: 0 }).catch(() => {});
     }, []);
 
     useEffect(() => {
-        if (isOpen && lov.precisaAtualizar) {
-            lov.buscar({ filtro, novoOffset: lov.offset }).catch(() => {});
+        if (isOpen && precisaAtualizar) {
+            buscar({ filtro, novoOffset: offset }).catch(() => {});
         }
     }, [isOpen]);
 
@@ -46,18 +104,20 @@ export function LovClientes({ isOpen, setLovOpen, onSelect }) {
                         onChange={e => setFiltro(e.target.value)}
                         onKeyDown={e =>
                             e.key === 'Enter' &&
-                            lov.buscar({ filtro, novoOffset: 0 })
+                            buscar({ filtro, novoOffset: 0 })
                         }
                     />
-                    <button onClick={() => lov.buscar({ filtro, novoOffset: 0 })}>
+                    <button onClick={() => buscar({ filtro, novoOffset: 0 })} disabled={loading}>
+                        {loading && <span className="lov-spinner lov-spinner-button"></span>}
                         BUSCAR
                     </button>
                 </div>
 
                 <div className="lov-list">
+                    {loading && <div className="lov-loading"><span className="lov-spinner"></span></div>}
                     <table>
                         <tbody>
-                            {lov.data.map(clientes => (
+                            {clientesPaginados.map(clientes => (
                                 <tr key={clientes.cod_pessoa} onClick={() => { onSelect(clientes); setLovOpen(false); }}>
                                     <td>{clientes.cod_pessoa}</td>
                                     <td>{clientes.des_pessoa}</td>
@@ -67,15 +127,15 @@ export function LovClientes({ isOpen, setLovOpen, onSelect }) {
                     </table>
                 </div>
                 <div className="lov-footer">
-                    <button disabled={!lov.podeVoltar} onClick={() => lov.buscar({ filtro, novoOffset: lov.offset - 25 })}>
+                    <button disabled={!podeVoltar} onClick={() => setOffset(offset - CLIENTES_POR_PAGINA)}>
                         <FaChevronLeft />
                     </button>
 
                     <span>
-                        {lov.offset + 1}-{lov.offset + lov.data.length}
+                        {clientesFiltrados.length ? offset + 1 : 0}-{Math.min(offset + CLIENTES_POR_PAGINA, clientesFiltrados.length)} de {clientesFiltrados.length}
                     </span>
 
-                    <button disabled={!lov.podeAvancar} onClick={() => lov.buscar({ filtro, novoOffset: lov.offset + 25 })}>
+                    <button disabled={!podeAvancar} onClick={() => setOffset(offset + CLIENTES_POR_PAGINA)}>
                         <FaChevronRight />
                     </button>
                 </div>

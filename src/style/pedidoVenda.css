@@ -177,7 +177,8 @@ label {
   position: absolute;
   top: 100%;
   right: 0;
-  width: 220px;
+  width: 300px;
+  max-width: min(300px, calc(100vw - 48px));
   background: #fff;
   border: 1px solid #ccc;
   border-radius: 6px;
@@ -197,12 +198,16 @@ label {
 }
 
 .tip-nome {
-    width: 92px; 
-    flex: 0 0 92px;
+    width: 110px;
+    flex: 0 0 110px;
 }
 
 .tip-valor {
     margin-left: 8px;
+}
+
+.info-cell .tip-valor {
+    white-space: nowrap;
 }
 
 .tip-percent {
@@ -263,6 +268,12 @@ label {
 .cliente-historico-tooltip .tip-nome {
   width: 96px;
   flex-basis: 96px;
+}
+
+.consumidor-field input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #2e7d32;
 }
 
 .condicao-pmv-info {
@@ -439,14 +450,10 @@ label {
     min-width: 0;
 }
 
-
-.tabelas-container {
-    display: none;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    margin-top: 10px;
-    overflow: visible;
+.item-table-percent {
+    min-width: 58px;
 }
+
 
 .itens-table-wrapper {
     width: 100%;
@@ -457,7 +464,7 @@ label {
 
 .tabelas-itens-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1.7fr) repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1.35fr) repeat(2, minmax(0, 1.2fr));
     gap: 18px;
     width: 100%;
     min-width: 0;
@@ -518,28 +525,19 @@ label {
 }
 
 .itens-grid-selecao th:nth-child(1),
-.itens-grid-selecao td:nth-child(1) { width: 32px; }
+.itens-grid-selecao td:nth-child(1) { width: 54px; }
 
 .itens-grid-selecao th:nth-child(2),
-.itens-grid-selecao td:nth-child(2) { width: 34px; }
+.itens-grid-selecao td:nth-child(2) { width: 150px; }
 
 .itens-grid-selecao th:nth-child(3),
-.itens-grid-selecao td:nth-child(3) { width: 52px; }
+.itens-grid-selecao td:nth-child(3) { width: 125px; }
 
 .itens-grid-selecao th:nth-child(4),
-.itens-grid-selecao td:nth-child(4) { width: 130px; }
+.itens-grid-selecao td:nth-child(4) { width: 76px; }
 
 .itens-grid-selecao th:nth-child(5),
-.itens-grid-selecao td:nth-child(5) { width: 115px; }
-
-.itens-grid-selecao th:nth-child(6),
-.itens-grid-selecao td:nth-child(6) { width: 72px; }
-
-.itens-grid-selecao th:nth-child(7),
-.itens-grid-selecao td:nth-child(7) { width: 52px; }
-
-.itens-grid-selecao th:nth-child(8),
-.itens-grid-selecao td:nth-child(8) { width: 28px; }
+.itens-grid-selecao td:nth-child(5) { width: 28px; }
 
 .item-cell-text {
     display: -webkit-box;
@@ -551,19 +549,31 @@ label {
 }
 
 .itens-grid-unidade th:nth-child(1),
-.itens-grid-unidade td:nth-child(1) { width: 52px; }
+.itens-grid-unidade td:nth-child(1) { width: 42px; }
 
 .itens-grid-unidade th:nth-child(2),
-.itens-grid-unidade td:nth-child(2) { width: 66px; }
+.itens-grid-unidade td:nth-child(2) { width: 54px; }
 
 .itens-grid-unidade th:nth-child(3),
-.itens-grid-unidade td:nth-child(3) { width: 72px; }
+.itens-grid-unidade td:nth-child(3) { width: 52px; }
 
 .itens-grid-unidade th:nth-child(4),
-.itens-grid-unidade td:nth-child(4) { width: 58px; }
+.itens-grid-unidade td:nth-child(4) { width: 66px; }
 
 .itens-grid-unidade th:nth-child(5),
-.itens-grid-unidade td:nth-child(5) { width: 28px; }
+.itens-grid-unidade td:nth-child(5) { width: 72px; }
+
+.itens-grid-unidade th:nth-child(6),
+.itens-grid-unidade td:nth-child(6) { width: 58px; }
+
+.itens-grid-unidade th:nth-child(7),
+.itens-grid-unidade td:nth-child(7) { width: 28px; }
+
+.itens-grid-unidade .item-table-input:disabled {
+    background: #e4e7e9;
+    color: #8a8f93;
+    cursor: not-allowed;
+}
 
 .tabela-itens-principal .item-selection-menu {
     line-height: 1;
@@ -598,21 +608,9 @@ label {
     justify-content: center;
 }
 
-.tabela-unidade {
-    min-width: 0;
-    overflow: visible;
-    padding-bottom: 4px;
-}
-
 .tabela-unidade h3 {
     margin: 18px 0 4px;
     font-size: 15px;
-}
-
-.item-selection-actions {
-    position: relative;
-    height: 22px;
-    margin-bottom: 4px;
 }
 
 .item-selection-menu {
@@ -669,10 +667,6 @@ label {
     background: transparent;
     color: #2e7d32;
     cursor: pointer;
-}
-
-.btn-limpar-itens {
-    color: #fff;
 }
 
 .btn-limpar-itens:hover,

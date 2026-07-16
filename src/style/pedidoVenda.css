@@ -202,6 +202,91 @@ label {
     flex: 0 0 110px;
 }
 
+.unidade-totais {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+    margin-top: 7px;
+}
+
+.unidade-totais-titulo {
+    grid-column: 1 / -1;
+    color: #6d7478;
+    font-size: 10px;
+    font-weight: 700;
+    text-align: right;
+    text-transform: uppercase;
+}
+
+.pedido-total-card {
+    display: flex;
+    min-height: 58px;
+    padding: 7px 8px;
+    box-sizing: border-box;
+    flex-direction: column;
+    justify-content: center;
+    background: #f7f9fa;
+    border: 1px solid #dfe4e7;
+    border-left: 4px solid #607d8b;
+    border-radius: 4px;
+}
+
+.pedido-total-label {
+    margin-bottom: 3px;
+    color: #596268;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.pedido-total-card strong {
+    color: #263238;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.pedido-total-card small {
+    margin-top: 2px;
+    color: #6d7478;
+    font-size: 10px;
+}
+
+.pedido-total-venda {
+    border-left-color: #2e7d32;
+}
+
+.pedido-total-frete {
+    border-left-color: #3978a8;
+}
+
+.pedido-total-sobra-positiva {
+    border-left-color: #2e7d32;
+}
+
+.pedido-total-sobra-positiva strong {
+    color: #2e7d32;
+}
+
+.pedido-total-sobra-negativa {
+    border-left-color: #c62828;
+}
+
+.pedido-total-sobra-negativa strong {
+    color: #c62828;
+}
+
+.pedido-total-card .pedido-total-pendente {
+    color: #757575;
+    font-size: 11px;
+}
+
+@media (max-width: 520px) {
+    .unidade-totais {
+        grid-template-columns: 1fr;
+    }
+}
+
 .tip-valor {
     margin-left: 8px;
 }

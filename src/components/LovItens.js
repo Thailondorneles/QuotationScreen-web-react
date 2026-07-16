@@ -28,7 +28,7 @@ function escaparRegex(valor) {
 
 function correspondeAoLike(valor, filtro) {
     const texto = normalizarTextoBusca(valor);
-    let padrao = normalizarTextoBusca(filtro);
+    let padrao = normalizarTextoBusca(filtro).replace(/\s+/g, '%');
 
     if (!padrao.includes('%')) {
         return texto.includes(padrao);
@@ -141,6 +141,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
     const itensAgrupados = useMemo(() => {
         const termo = normalizarTextoBusca(filtroAplicado);
         if (!termo) return todosItensAgrupados;
+        const usaBuscaPorPartes = termo.includes('%') || /\s/.test(termo);
 
         return todosItensAgrupados.filter(item => {
             const camposPesquisaveis = [
@@ -150,7 +151,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
                 item.cod_completo
             ];
 
-            if (termo.includes('%')) {
+            if (usaBuscaPorPartes) {
                 return camposPesquisaveis.some(campo => correspondeAoLike(campo, termo));
             }
 

@@ -357,11 +357,17 @@ export function PedidoVenda() {
             baseST = Number(vlrListaST ?? valorLista ?? 0);
         }
 
+        const qtdMultiplo = detalheItem.qtd_multiplo ?? item.qtdMultiplo;
+        const quantidade = item.quantidade !== '' && item.quantidade !== null && item.quantidade !== undefined
+            ? item.quantidade
+            : Number(qtdMultiplo) > 0 ? qtdMultiplo : '';
+
         return {
             estoque,
             vlrMedio,
+            quantidade,
             ticktMedio: detalheItem.ticket_medio ?? item.ticktMedio ?? null,
-            qtdMultiplo: detalheItem.qtd_multiplo ?? item.qtdMultiplo,
+            qtdMultiplo,
             qtdAltura: detalheItem.qtd_altura ?? item.qtdAltura,
             qtdLargura: detalheItem.qtd_largura ?? item.qtdLargura,
             qtdComprimento: detalheItem.qtd_comprimento ?? item.qtdComprimento,
@@ -549,6 +555,28 @@ export function PedidoVenda() {
                 item.seq === seq ? { ...item, quantidade: valor } : item
             )
         );
+    }
+
+    function navegarQuantidadeUnidade(event, unidade) {
+        if (event.key !== 'Enter' && event.key !== 'Tab') return;
+
+        const campos = Array.from(document.querySelectorAll(
+            `input[data-field="quantidade-unidade"][data-unidade="${unidade}"]:not(:disabled)`
+        ));
+        const indiceAtual = campos.indexOf(event.currentTarget);
+        const direcao = event.shiftKey ? -1 : 1;
+        const proximoCampo = campos[indiceAtual + direcao];
+
+        if (proximoCampo) {
+            event.preventDefault();
+            proximoCampo.focus();
+            proximoCampo.select();
+            return;
+        }
+
+        if (event.key === 'Enter') {
+            event.currentTarget.blur();
+        }
     }
 
     function handleValorListaChange(seq, valor) {
@@ -1797,6 +1825,19 @@ export function PedidoVenda() {
     const unidadesComItensSelecionados = [...new Set(
         itensPedido.filter(item => item.selecionado).map(item => Number(item.unidade))
     )].sort((a, b) => a - b);
+    const totaisPorUnidade = itensPedido
+        .filter(item => item.selecionado)
+        .reduce((totais, item) => {
+            const valores = calcularValoresItem(item);
+            const totaisUnidade = totais[item.unidade];
+            totaisUnidade.valorVenda += Number(valores.valorVendaTotal || 0);
+            totaisUnidade.frete += Number(item.valorFrete || 0);
+            totaisUnidade.sobra += Number(valores.sobraReal || 0);
+            return totais;
+        }, {
+            201: { valorVenda: 0, frete: 0, sobra: 0 },
+            203: { valorVenda: 0, frete: 0, sobra: 0 }
+        });
     const statusHistoricoCliente = getStatusHistoricoCliente();
     const limiteCreditoRuim = creditoCliente.atingido !== null
         && (creditoCliente.atingido < 0 || creditoCliente.atingido > 100);
@@ -1808,6 +1849,42 @@ export function PedidoVenda() {
             : { classe: 'cliente-historico-verde', texto: 'Situação financeira regular' };
     const possuiDadosFinanceiros = prazoMedioVenda !== null
         || Object.values(creditoCliente).some(valor => valor !== null);
+
+    function renderTotaisUnidade(unidade) {
+        const totais = totaisPorUnidade[unidade];
+        const percentualFrete = totais.valorVenda > 0
+            ? (totais.frete / totais.valorVenda) * 100
+            : 0;
+        const percentualSobra = totais.valorVenda > 0
+            ? (totais.sobra / totais.valorVenda) * 100
+            : 0;
+        const freteFoiCotado = Boolean(freteSelecionado[unidade]);
+
+        return (
+            <div className="unidade-totais" aria-label={`Totais da unidade ${unidade}`}>
+                <div className="pedido-total-card pedido-total-venda">
+                    <span className="pedido-total-label">Valor total</span>
+                    <strong>{format.moeda(totais.valorVenda)}</strong>
+                </div>
+                <div className="pedido-total-card pedido-total-frete">
+                    <span className="pedido-total-label">Frete</span>
+                    {freteFoiCotado ? (
+                        <>
+                            <strong>{format.percentual(percentualFrete)}</strong>
+                            <small>{format.moeda(totais.frete)}</small>
+                        </>
+                    ) : (
+                        <strong className="pedido-total-pendente">Não cotado</strong>
+                    )}
+                </div>
+                <div className={`pedido-total-card ${totais.sobra >= 0 ? 'pedido-total-sobra-positiva' : 'pedido-total-sobra-negativa'}`}>
+                    <span className="pedido-total-label">Sobra</span>
+                    <strong>{format.percentual(percentualSobra)}</strong>
+                    <small>{format.moeda(totais.sobra)}</small>
+                </div>
+            </div>
+        );
+    }
 
     function renderInfoItem(item, valores) {
         if (!item) return '-';
@@ -2067,7 +2144,7 @@ export function PedidoVenda() {
                                             return (
                                                 <tr key={grupo.grupoId} className={possuiAcordo ? 'item-row-acordo' : ''}>
                                                     <td><input type="checkbox" checked={Boolean(item.selecionado)} onChange={(e) => handleCheckboxChange(item.seq, e.target.checked)} aria-label={`Enviar item ${item.cod_item} pela unidade ${item.unidade}`} /></td>
-                                                    <td><input className="item-table-input" data-seq={item.seq} value={item.quantidade} disabled={!item.selecionado} onChange={(e) => handleQuantidadeChange(item.seq, e.target.value)} onBlur={() => validarMultiplo(item.seq)} onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }} /></td>
+                                                    <td><input className="item-table-input" data-field="quantidade-unidade" data-unidade={item.unidade} data-seq={item.seq} value={item.quantidade} disabled={!item.selecionado} onChange={(e) => handleQuantidadeChange(item.seq, e.target.value)} onBlur={() => validarMultiplo(item.seq)} onKeyDown={(e) => navegarQuantidadeUnidade(e, item.unidade)} /></td>
                                                     <td>{item.estoque}</td>
                                                     <td><input className="item-table-input item-table-money" value={item.valorLista} onFocus={e => e.target.select()} onChange={(e) => handleValorListaChange(item.seq, maskMoneyBR(e.target.value))} /></td>
                                                     <td>{format.moeda(valores.valorVendaTotal ?? 0)}</td>
@@ -2093,6 +2170,7 @@ export function PedidoVenda() {
                                         })}
                                     </tbody>
                                 </table>
+                                {renderTotaisUnidade(config.unidade)}
                             </section>
                         ))}
                     </div>

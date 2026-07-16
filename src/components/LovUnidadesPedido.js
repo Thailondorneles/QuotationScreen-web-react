@@ -6,12 +6,12 @@ const UNIDADES = [
     { codigo: 203, nome: 'Unidade 203 (Filial)' }
 ];
 
-export function LovUnidadesPedido({ isOpen, onConfirm, onClose }) {
+export function LovUnidadesPedido({ isOpen, onConfirm, onClose, unidadesDisponiveis = [] }) {
     const [selecionadas, setSelecionadas] = useState([]);
 
     useEffect(() => {
-        if (isOpen) setSelecionadas([]);
-    }, [isOpen]);
+        if (isOpen) setSelecionadas([...unidadesDisponiveis]);
+    }, [isOpen, unidadesDisponiveis]);
 
     if (!isOpen) return null;
 
@@ -37,7 +37,7 @@ export function LovUnidadesPedido({ isOpen, onConfirm, onClose }) {
                 </div>
 
                 <div className="lov-unidades-intro">
-                    Selecione uma unidade ou marque as duas para gerar um pedido em cada unidade.
+                    Confirme as unidades que serão integradas. Somente itens marcados serão enviados.
                 </div>
 
                 <div className="lov-list lov-list-unidades-pedido">
@@ -46,7 +46,7 @@ export function LovUnidadesPedido({ isOpen, onConfirm, onClose }) {
                             <tr><th className="lov-check-col"></th><th>Unidade</th></tr>
                         </thead>
                         <tbody>
-                            {UNIDADES.map(unidade => {
+                            {UNIDADES.filter(unidade => unidadesDisponiveis.includes(unidade.codigo)).map(unidade => {
                                 const selecionada = selecionadas.includes(unidade.codigo);
                                 return (
                                     <tr

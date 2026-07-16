@@ -42,13 +42,18 @@ function montarPayload({ unidade, cliente, itens }) {
 
     const quantidadeTotal = itens.reduce((acc, item) =>
         acc + Number(item.quantidade || 0), 0);
+    const destino = Number(cliente.cod_cidade);
+
+    if (!Number.isFinite(destino) || destino <= 0) {
+        throw new Error('Cidade do cliente não encontrada para cotação do frete');
+    }
 
     return {
         remetenteCnpj: config.cnpj,
         destinatarioCnpj: cliente.cnpj,
 
         origem: Number(config.cep),
-        destino: Number(cliente.cod_cidade),
+        destino,
 
         volumeTotal: Number(volumeTotal.toFixed(4)),
         valorTotal: Number(valorTotal.toFixed(2)),

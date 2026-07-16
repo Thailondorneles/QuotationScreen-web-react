@@ -13,7 +13,7 @@ import { LovEnderecos } from '../components/LovEnderecos.js';
 import { getCepsByFilter } from '../services/ceps.js';
 import { getEnderecosPadraoByFilter } from '../services/enderecosPadrao.js';
 import { getRepresentantesByCliente, getRepresentantesByIdCliente } from '../services/representantes.js';
-import { getClienteByFilter, getClientesComentarios, getClientesHistorico } from '../services/clientes.js';
+import { getClienteByFilter, getClienteDetalhado, getClientesComentarios, getClientesHistorico } from '../services/clientes.js';
 import { getCidadesByFilter } from '../services/cidades.js';
 import { getUfByFilter } from '../services/uf.js';
 import { getTipLogradouro } from '../services/tipLogradouro.js';
@@ -54,6 +54,7 @@ export function PedidoVenda() {
     const [operacaoTriangulacao, setOperacaoTriangulacao] = useState({ cod_oper: null, des_oper: null });
     const [CondPgto, setCondPgto] = useState({ cod_cond_pgto: null, des_cond_pgto: null });
     const [prazoMedioVenda, setPrazoMedioVenda] = useState(null);
+    const [clienteConsumidor, setClienteConsumidor] = useState(false);
     const [creditoCliente, setCreditoCliente] = useState({
         atingido: null,
         limiteMensal: null,
@@ -177,6 +178,7 @@ export function PedidoVenda() {
         setOperacaoTriangulacao({ cod_oper: null, des_oper: null });
         setCondPgto({ cod_cond_pgto: null, des_cond_pgto: null });
         setPrazoMedioVenda(null);
+        setClienteConsumidor(false);
         setCreditoCliente({ atingido: null, limiteMensal: null, titulosVencidos: null });
         setCodClienteDigitado('');
         setCodClienteTriangulacaoDigitado('');
@@ -218,6 +220,7 @@ export function PedidoVenda() {
         if (mudouCliente) {
             limparEnderecoCep();
             setPrazoMedioVenda(null);
+            setClienteConsumidor(false);
             setCreditoCliente({ atingido: null, limiteMensal: null, titulosVencidos: null });
             setFreteSelecionado({ 201: null, 203: null });
         }
@@ -481,14 +484,10 @@ export function PedidoVenda() {
     async function adicionarItem(itemLov) {
         const itensLov = Array.isArray(itemLov) ? itemLov : [itemLov];
         const novosItens = itensLov.flatMap(criarItensPedido);
-        const multiplosItens = itensLov.length > 1;
 
         setItensPedido(prev => [...prev, ...novosItens]);
         setOpenLovItens(false);
-
-        if (multiplosItens) {
-            setLoading(true);
-        }
+        setLoading(true);
 
         // Busca dados completos para cada item e atualiza
         try {
@@ -532,9 +531,7 @@ export function PedidoVenda() {
         } catch (error) {
             alert('Erro ao carregar informações de estoque ou impostos para o item adicionado.');
         } finally {
-            if (multiplosItens) {
-                setLoading(false);
-            }
+            setLoading(false);
         }
     }
 
@@ -730,16 +727,6 @@ export function PedidoVenda() {
         };
     }
 
-    function clienteTemDadosPedido(cli) {
-        if (!cli) return false;
-
-        return [
-            'cod_oper', 'des_oper', 'cod_cond_pgto', 'des_cond_pgto', 'pmv',
-            'atingido', 'vlr_lim_mensal', 'qtd_titulos_vencidos'
-        ]
-            .every(campo => Object.prototype.hasOwnProperty.call(cli, campo));
-    }
-
     async function buscarDetalhesClientePedido(cli) {
         const codCliente = String(cli?.cod_pessoa ?? '').trim();
 
@@ -747,16 +734,7 @@ export function PedidoVenda() {
             return dadosClienteCache.current.get(codCliente);
         }
 
-        if (clienteTemDadosPedido(cli)) {
-            dadosClienteCache.current.set(codCliente, cli);
-            return cli;
-        }
-
-        const response = await getClienteByFilter({
-            filtro: cli.cod_pessoa,
-            offset: 0,
-            limit: 1
-        });
+        const response = await getClienteDetalhado({ codPessoa: cli.cod_pessoa });
 
         const dadosCliente = response.data.items?.[0] || cli;
         dadosClienteCache.current.set(codCliente, dadosCliente);
@@ -1648,6 +1626,7 @@ export function PedidoVenda() {
             setOperacao({ cod_oper: null, des_oper: null });
             setCondPgto({ cod_cond_pgto: null, des_cond_pgto: null });
             setPrazoMedioVenda(null);
+            setClienteConsumidor(false);
             setCreditoCliente({ atingido: null, limiteMensal: null, titulosVencidos: null });
             setCodRepresentanteDigitado('');
             setCodOperacaoDigitado('');
@@ -1704,6 +1683,7 @@ export function PedidoVenda() {
             const limiteMensal = numeroOuNull(dadosClientePedido?.vlr_lim_mensal);
             const titulosVencidos = numeroOuNull(dadosClientePedido?.qtd_titulos_vencidos);
             setPrazoMedioVenda(pmv);
+            setClienteConsumidor(Number(dadosClientePedido?.ind_consumidor) === 1);
             setCreditoCliente({
                 atingido,
                 limiteMensal,
@@ -1717,6 +1697,7 @@ export function PedidoVenda() {
             setCodOperacaoDigitado('');
             setCondPgto({ cod_cond_pgto: null, des_cond_pgto: null });
             setPrazoMedioVenda(null);
+            setClienteConsumidor(false);
             setCreditoCliente({ atingido: null, limiteMensal: null, titulosVencidos: null });
             setCodCondPgtoDigitado('');
         });
@@ -1959,7 +1940,10 @@ export function PedidoVenda() {
                         />
                         <FaEraser className="icon" onClick={() => { setCondPgto({ cod_cond_pgto: null, des_cond_pgto: null }); setCodCondPgtoDigitado(''); }} />
                     </div>
-                <div></div>
+                    <label>Consumidor Final:</label>
+                    <div className="field-group consumidor-field">
+                        <input type="checkbox" checked={clienteConsumidor} readOnly aria-label="Cliente consumidor" />
+                    </div>
                 </div>
             </div>
 

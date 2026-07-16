@@ -265,6 +265,12 @@ label {
   flex-basis: 96px;
 }
 
+.consumidor-field input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #2e7d32;
+}
+
 .condicao-pmv-info {
   margin-left: 2px;
 }

@@ -543,14 +543,6 @@ export function PedidoVenda() {
         setItensPedido(prev => prev.filter(item => item.grupoId !== grupoId));
     }
 
-    function removerItensPorUnidade(unidade) {
-        setItensPedido(prev => prev.filter(item => item.unidade !== unidade));
-        setFreteSelecionado(prev => ({
-            ...prev,
-            [unidade]: null
-        }));
-    }
-
     function handleQuantidadeChange(seq, valor) {
         setItensPedido(prev =>
             prev.map(item =>
@@ -1801,8 +1793,7 @@ export function PedidoVenda() {
             return grupos;
         }, new Map()).values()
     );
-    const itens201 = itensPedido.filter(item => item.unidade === 201);
-    const itens203 = itensPedido.filter(item => item.unidade === 203);
+    
     const unidadesComItensSelecionados = [...new Set(
         itensPedido.filter(item => item.selecionado).map(item => Number(item.unidade))
     )].sort((a, b) => a - b);

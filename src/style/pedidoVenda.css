@@ -177,7 +177,8 @@ label {
   position: absolute;
   top: 100%;
   right: 0;
-  width: 220px;
+  width: 300px;
+  max-width: min(300px, calc(100vw - 48px));
   background: #fff;
   border: 1px solid #ccc;
   border-radius: 6px;
@@ -197,12 +198,16 @@ label {
 }
 
 .tip-nome {
-    width: 92px; 
-    flex: 0 0 92px;
+    width: 110px;
+    flex: 0 0 110px;
 }
 
 .tip-valor {
     margin-left: 8px;
+}
+
+.info-cell .tip-valor {
+    white-space: nowrap;
 }
 
 .tip-percent {
@@ -450,14 +455,6 @@ label {
 }
 
 
-.tabelas-container {
-    display: none;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    margin-top: 10px;
-    overflow: visible;
-}
-
 .itens-table-wrapper {
     width: 100%;
     margin-top: 10px;
@@ -611,21 +608,9 @@ label {
     justify-content: center;
 }
 
-.tabela-unidade {
-    min-width: 0;
-    overflow: visible;
-    padding-bottom: 4px;
-}
-
 .tabela-unidade h3 {
     margin: 18px 0 4px;
     font-size: 15px;
-}
-
-.item-selection-actions {
-    position: relative;
-    height: 22px;
-    margin-bottom: 4px;
 }
 
 .item-selection-menu {
@@ -682,10 +667,6 @@ label {
     background: transparent;
     color: #2e7d32;
     cursor: pointer;
-}
-
-.btn-limpar-itens {
-    color: #fff;
 }
 
 .btn-limpar-itens:hover,

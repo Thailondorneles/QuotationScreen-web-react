@@ -4,10 +4,6 @@ export function getItens() {
     return unimedApi.get("itens");
 }
 
-export function getItemByFilter({ filtro }) {
-    return unimedApi.get(`itens/${encodeURIComponent(filtro)}`);
-}
-
 export function getItensDetalhados({ codItens }) {
     const codigos = [...new Set(codItens)]
         .map(codigo => String(codigo ?? '').trim())

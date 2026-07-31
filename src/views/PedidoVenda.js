@@ -1528,6 +1528,7 @@ export function PedidoVenda() {
             tipTransacao: 1,
             peItens: itensUnidade.map((item, index) => ({
                 codItem: String(item.cod_item),
+                codReserva: 7,
                 qtdNegociada: Number(item.quantidade),
                 vlrUniBruto: valorDecimalErp(item.valorLista),
                 codUnidadeRetira: unidadePedido,

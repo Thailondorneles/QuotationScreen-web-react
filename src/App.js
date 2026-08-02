@@ -4,8 +4,8 @@ import { routes } from './routes.js';
 function App() {
 
   return (
-    <RouterProvider router={routes} />
-  );
+    <RouterProvider router={routes}/>
+    );
 }
 
 export default App;

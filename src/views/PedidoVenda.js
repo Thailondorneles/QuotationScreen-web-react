@@ -360,7 +360,7 @@ export function PedidoVenda() {
         const qtdMultiplo = detalheItem.qtd_multiplo ?? item.qtdMultiplo;
         const quantidade = item.quantidade !== '' && item.quantidade !== null && item.quantidade !== undefined
             ? item.quantidade
-            : Number(qtdMultiplo) > 0 ? qtdMultiplo : '';
+            : Number(qtdMultiplo) > 0 ? qtdMultiplo : 1;
 
         return {
             estoque,

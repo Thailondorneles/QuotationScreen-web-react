@@ -630,7 +630,44 @@ export function PedidoVenda() {
         ));
     }
 
+    function calcularPercentualMaximoSobra(item) {
+        const imp = item.impostos || {};
+        const indSubsMercadoria = Number(imp.indSubsMercadoria || 0);
+        let percentualSobreVenda = [
+            imp.perIcms,
+            imp.perPis,
+            imp.perCofins,
+            imp.perIpi,
+            imp.perFcp
+        ].reduce((total, percentual) => total + Number(percentual || 0), 0) / 100;
+
+        if (indSubsMercadoria === 1) {
+            if (imp.difal && imp.difal.toUpperCase().includes('DIF')) {
+                percentualSobreVenda += Number(imp.perDifal || 0) / 100;
+            } else if (!item.baseST && imp.idxSubsTrib) {
+                percentualSobreVenda += Number(imp.idxSubsTrib) * (Number(imp.perSubstTrib || 0) / 100);
+            } else if (!item.baseST) {
+                percentualSobreVenda += Number(imp.perSubstTrib || 0) / 100;
+            }
+        }
+
+        return (1 - percentualSobreVenda) * 100;
+    }
+
     function aplicarSobraPercentual(item, valor) {
+        const sobraInformada = Number(String(valor).replace(',', '.'));
+        const percentualMaximo = calcularPercentualMaximoSobra(item);
+
+        if (Number.isFinite(sobraInformada) && sobraInformada >= percentualMaximo) {
+            setModalErro({
+                aberto: true,
+                mensagem: `A sobra informada excede o limite deste item. Informe um valor menor que ${percentualMaximo.toFixed(2).replace('.', ',')}%.`,
+                seqItem: null,
+                focusSelector: null
+            });
+            return;
+        }
+
         const novoValorLista = calcularValorListaPorSobra(item, valor);
         if (novoValorLista === null || !Number.isFinite(novoValorLista)) return;
 
@@ -1393,7 +1430,7 @@ export function PedidoVenda() {
             return valorTexto.replace(/[^\d,]/g, '');
         }
 
-        return Number(valor || 0).toFixed(2).replace('.', ',');
+        return Number(valor || 0).toFixed(4).replace('.', ',');
     }
 
     function getUsuarioIntegracao() {
@@ -2147,7 +2184,7 @@ export function PedidoVenda() {
                                                     <td><input type="checkbox" checked={Boolean(item.selecionado)} onChange={(e) => handleCheckboxChange(item.seq, e.target.checked)} aria-label={`Enviar item ${item.cod_item} pela unidade ${item.unidade}`} /></td>
                                                     <td><input className="item-table-input" data-field="quantidade-unidade" data-unidade={item.unidade} data-seq={item.seq} value={item.quantidade} disabled={!item.selecionado} onChange={(e) => handleQuantidadeChange(item.seq, e.target.value)} onBlur={() => validarMultiplo(item.seq)} onKeyDown={(e) => navegarQuantidadeUnidade(e, item.unidade)} /></td>
                                                     <td>{item.estoque}</td>
-                                                    <td><input className="item-table-input item-table-money" value={item.valorLista} onFocus={e => e.target.select()} onChange={(e) => handleValorListaChange(item.seq, maskMoneyBR(e.target.value))} /></td>
+                                                    <td><input className="item-table-input item-table-money" value={item.valorLista} onFocus={e => e.target.select()} onChange={(e) => handleValorListaChange(item.seq, maskMoneyBR(e.target.value, 4))} /></td>
                                                     <td>{format.moeda(valores.valorVendaTotal ?? 0)}</td>
                                                     <td>
                                                         <input

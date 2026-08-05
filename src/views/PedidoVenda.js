@@ -13,7 +13,7 @@ import { LovEnderecos } from '../components/LovEnderecos.js';
 import { getCepsByFilter } from '../services/ceps.js';
 import { getEnderecosPadraoByFilter } from '../services/enderecosPadrao.js';
 import { getRepresentantesByCliente, getRepresentantesByIdCliente } from '../services/representantes.js';
-import { getClienteByFilter, getClienteDetalhado, getClientesComentarios, getClientesHistorico } from '../services/clientes.js';
+import { getClienteByFilter, getAllClientesCached, getClienteDetalhado, getClientesComentarios, getClientesHistorico } from '../services/clientes.js';
 import { getCidadesByFilter } from '../services/cidades.js';
 import { getUfByFilter } from '../services/uf.js';
 import { getTipLogradouro } from '../services/tipLogradouro.js';
@@ -90,6 +90,7 @@ export function PedidoVenda() {
         mensagem: ''
     });
     const nextId = useRef(1);
+    const nextNumItem = useRef(1);
     const [freteSelecionado, setFreteSelecionado] = useState({
         201: null,
         203: null
@@ -106,6 +107,7 @@ export function PedidoVenda() {
     const [obsEditando, setObsEditando] = useState(null);
     const [ordemCompra, setOrdemCompra] = useState('');
     const [menuSelecaoItensOpen, setMenuSelecaoItensOpen] = useState(null);
+    const [ordenacaoItens, setOrdenacaoItens] = useState({ coluna: null, direcao: null });
     const [openLovUnidadesPedido, setOpenLovUnidadesPedido] = useState(false);
     const dadosClienteCache = useRef(new Map());
     const representanteClienteCache = useRef(new Map());
@@ -208,6 +210,7 @@ export function PedidoVenda() {
             mensagem: ''
         });
         nextId.current = 1;
+        nextNumItem.current = 1;
         limparEnderecoCep();
     }
 
@@ -360,7 +363,7 @@ export function PedidoVenda() {
         const qtdMultiplo = detalheItem.qtd_multiplo ?? item.qtdMultiplo;
         const quantidade = item.quantidade !== '' && item.quantidade !== null && item.quantidade !== undefined
             ? item.quantidade
-            : Number(qtdMultiplo) > 0 ? qtdMultiplo : '';
+            : Number(qtdMultiplo) > 0 ? qtdMultiplo : 1;
 
         return {
             estoque,
@@ -457,9 +460,11 @@ export function PedidoVenda() {
     }
 
     function criarItensPedido(itemLov) {
-        const grupoId = nextId.current; 
+        const grupoId = nextId.current;
+        const numItem = nextNumItem.current;
         const itemBase = {
             grupoId,
+            numItem,
             cod_item: itemLov.cod_item,
             descricao: itemLov.des_item,
             principiosAtivos: itemLov.principios_ativos,
@@ -487,6 +492,8 @@ export function PedidoVenda() {
         const item201 = { ...itemBase, seq: nextId.current, unidade: 201, estoque: itemLov.estoque_matriz };
         const item203 = { ...itemBase, seq: nextId.current + 1, unidade: 203, estoque: itemLov.estoque_filial };
         nextId.current += 2; // avança o contador
+
+        nextNumItem.current += 1;
 
         return [item201, item203];
     }
@@ -630,7 +637,44 @@ export function PedidoVenda() {
         ));
     }
 
+    function calcularPercentualMaximoSobra(item) {
+        const imp = item.impostos || {};
+        const indSubsMercadoria = Number(imp.indSubsMercadoria || 0);
+        let percentualSobreVenda = [
+            imp.perIcms,
+            imp.perPis,
+            imp.perCofins,
+            imp.perIpi,
+            imp.perFcp
+        ].reduce((total, percentual) => total + Number(percentual || 0), 0) / 100;
+
+        if (indSubsMercadoria === 1) {
+            if (imp.difal && imp.difal.toUpperCase().includes('DIF')) {
+                percentualSobreVenda += Number(imp.perDifal || 0) / 100;
+            } else if (!item.baseST && imp.idxSubsTrib) {
+                percentualSobreVenda += Number(imp.idxSubsTrib) * (Number(imp.perSubstTrib || 0) / 100);
+            } else if (!item.baseST) {
+                percentualSobreVenda += Number(imp.perSubstTrib || 0) / 100;
+            }
+        }
+
+        return (1 - percentualSobreVenda) * 100;
+    }
+
     function aplicarSobraPercentual(item, valor) {
+        const sobraInformada = Number(String(valor).replace(',', '.'));
+        const percentualMaximo = calcularPercentualMaximoSobra(item);
+
+        if (Number.isFinite(sobraInformada) && sobraInformada >= percentualMaximo) {
+            setModalErro({
+                aberto: true,
+                mensagem: `A sobra informada excede o limite deste item. Informe um valor menor que ${percentualMaximo.toFixed(2).replace('.', ',')}%.`,
+                seqItem: null,
+                focusSelector: null
+            });
+            return;
+        }
+
         const novoValorLista = calcularValorListaPorSobra(item, valor);
         if (novoValorLista === null || !Number.isFinite(novoValorLista)) return;
 
@@ -853,21 +897,19 @@ export function PedidoVenda() {
         setLoadingDadosCliente(true);
 
         try {
-            const response = await getClienteByFilter({
-                filtro: codigoCliente,
-                offset: 0,
-                limit: 1
-            });
-            const cli = response.data.items[0];
+            const response = await getClienteByFilter({ filtro: codigoCliente });
+            const cli = response.data.items?.[0];
+
             if (!cli) {
                 setModalErro({
                     aberto: true,
-                    mensagem: 'Cliente não encontrato com o código digitado!'
+                    mensagem: 'Cliente não encontrado com o código digitado!'
                 });
                 atualizarCliente(null);
                 setLoadingDadosCliente(false);
                 return;
             }
+
             atualizarCliente(cli);
         } catch (error) {
             setLoadingDadosCliente(false);
@@ -878,12 +920,8 @@ export function PedidoVenda() {
     async function buscarClienteTriangulacaoPorCodigo() {
         if (!codClienteTriangulacaoDigitado) return;
         try {
-            const response = await getClienteByFilter({
-                filtro: codClienteTriangulacaoDigitado,
-                offset: 0,
-                limit: 1
-            });
-            const cli = response.data.items[0];
+            const clientes = await getAllClientesCached();
+            const cli = (clientes || []).find(c => String(c.cod_pessoa) === String(codClienteTriangulacaoDigitado));
             if (!cli) {
                 setModalErro({
                     aberto: true,
@@ -914,9 +952,9 @@ export function PedidoVenda() {
                     mensagem: 'Representante não encontrado!'
                 });
                 setRepresentante(null)
-                return ;
+                return;
             }
-             
+
             setRepresentante(rep);
         } catch (error) {
             alert('Erro ao buscar representante');
@@ -1194,8 +1232,8 @@ export function PedidoVenda() {
     }
 
     async function cotar() {
-        setLoading(true); 
-        try{
+        setLoading(true);
+        try {
             const itensSelecionados = itensPedido.filter(item => item.selecionado);
 
             setFreteSelecionado({ 201: null, 203: null });
@@ -1249,9 +1287,9 @@ export function PedidoVenda() {
 
             setFreteSelecionado(selecaoAuto);
             aplicarRateioFrete(selecaoAuto);
-        }catch (err){
+        } catch (err) {
             alert(err.message || 'Erro ao cotar frete');
-        }finally{
+        } finally {
             setLoading(false);
         }
     }
@@ -1261,53 +1299,53 @@ export function PedidoVenda() {
         setItensPedido(prev => {
             let novosItens = prev.map(item => ({ ...item, valorFrete: 0 }));
 
-        Object.entries(selecionados).forEach(([unidade, frete]) => {
+            Object.entries(selecionados).forEach(([unidade, frete]) => {
 
-            const valorFrete = Number(frete.valor);
-            if (isNaN(valorFrete) || valorFrete <= 0) {
-                return;
-            }
-
-            const indicesItensUnidade = [];
-            novosItens.forEach((item, index) => {
-                if (Number(item.unidade) === Number(unidade) && item.selecionado) {
-                    indicesItensUnidade.push(index);
-                }
-            });
-
-            if (indicesItensUnidade.length === 0) {
-                return;
-            }
-
-            const pesosCobranca = indicesItensUnidade.map(index => {
-                const item = novosItens[index];
-                const qtd = Number(item.quantidade) || 0;
-                const pesoReal = (Number(item.pesoBruto) || 0) * qtd;
-                const volumeTotal = (Number(item.qtdM3) || 0) * qtd;
-                const pesoCubado = volumeTotal * FATOR_CUBAGEM;
-                const peso = Math.max(pesoReal, pesoCubado);
-                return peso;
-            });
-
-            const totalPesoCobranca = pesosCobranca.reduce((soma, peso) => soma + peso, 0);
-
-            if (totalPesoCobranca === 0) {
-                const quantidades = indicesItensUnidade.map(index => Number(novosItens[index].quantidade) || 0);
-                const totalQuantidade = quantidades.reduce((soma, q) => soma + q, 0);
-                if (totalQuantidade === 0) {
+                const valorFrete = Number(frete.valor);
+                if (isNaN(valorFrete) || valorFrete <= 0) {
                     return;
                 }
-                indicesItensUnidade.forEach((itemIndex, i) => {
-                    const proporcao = quantidades[i] / totalQuantidade;
-                    novosItens[itemIndex].valorFrete = Number((proporcao * valorFrete).toFixed(2));
+
+                const indicesItensUnidade = [];
+                novosItens.forEach((item, index) => {
+                    if (Number(item.unidade) === Number(unidade) && item.selecionado) {
+                        indicesItensUnidade.push(index);
+                    }
                 });
-            } else {
-                indicesItensUnidade.forEach((itemIndex, i) => {
-                    const proporcao = pesosCobranca[i] / totalPesoCobranca;
-                    novosItens[itemIndex].valorFrete = Number((proporcao * valorFrete).toFixed(2));
+
+                if (indicesItensUnidade.length === 0) {
+                    return;
+                }
+
+                const pesosCobranca = indicesItensUnidade.map(index => {
+                    const item = novosItens[index];
+                    const qtd = Number(item.quantidade) || 0;
+                    const pesoReal = (Number(item.pesoBruto) || 0) * qtd;
+                    const volumeTotal = (Number(item.qtdM3) || 0) * qtd;
+                    const pesoCubado = volumeTotal * FATOR_CUBAGEM;
+                    const peso = Math.max(pesoReal, pesoCubado);
+                    return peso;
                 });
-            }
-        });
+
+                const totalPesoCobranca = pesosCobranca.reduce((soma, peso) => soma + peso, 0);
+
+                if (totalPesoCobranca === 0) {
+                    const quantidades = indicesItensUnidade.map(index => Number(novosItens[index].quantidade) || 0);
+                    const totalQuantidade = quantidades.reduce((soma, q) => soma + q, 0);
+                    if (totalQuantidade === 0) {
+                        return;
+                    }
+                    indicesItensUnidade.forEach((itemIndex, i) => {
+                        const proporcao = quantidades[i] / totalQuantidade;
+                        novosItens[itemIndex].valorFrete = Number((proporcao * valorFrete).toFixed(2));
+                    });
+                } else {
+                    indicesItensUnidade.forEach((itemIndex, i) => {
+                        const proporcao = pesosCobranca[i] / totalPesoCobranca;
+                        novosItens[itemIndex].valorFrete = Number((proporcao * valorFrete).toFixed(2));
+                    });
+                }
+            });
 
             return novosItens;
         });
@@ -1393,7 +1431,7 @@ export function PedidoVenda() {
             return valorTexto.replace(/[^\d,]/g, '');
         }
 
-        return Number(valor || 0).toFixed(2).replace('.', ',');
+        return Number(valor || 0).toFixed(4).replace('.', ',');
     }
 
     function getUsuarioIntegracao() {
@@ -1444,6 +1482,13 @@ export function PedidoVenda() {
         if (!CondPgto?.cod_cond_pgto) {
             return {
                 mensagem: 'Selecione uma condicao de pagamento antes de enviar o pedido.'
+            };
+        }
+
+        if (!ordemCompra.trim()) {
+            return {
+                mensagem: 'Informe a ordem de compra antes de enviar o pedido.',
+                focusSelector: 'input[data-field="ordem-compra"]'
             };
         }
 
@@ -1525,8 +1570,9 @@ export function PedidoVenda() {
             indConsumidor: Number(clienteDetalhado?.ind_consumidor) === 1 ? 1 : 0,
             codCliente: String(cliente.cod_pessoa),
             codClienteRemessa: clienteTriangulacao?.cod_pessoa ? String(clienteTriangulacao.cod_pessoa) : null,
+            codRepresentante: representante?.cod_pessoa_rep ? String(representante.cod_pessoa_rep) : null,
             tipTransacao: 1,
-            peItens: itensUnidade.map((item, index) => ({
+            peItens: itensUnidade.map(item => ({
                 codItem: String(item.cod_item),
                 codReserva: 7,
                 qtdNegociada: Number(item.quantidade),
@@ -1535,7 +1581,7 @@ export function PedidoVenda() {
                 tipTransacao: 1,
                 qtdReservada: Number(item.quantidade),
                 indVlrAlterado: 0,
-                numItem: index + 1
+                numItem: item.numItem
             }))
         };
 
@@ -1604,7 +1650,7 @@ export function PedidoVenda() {
 
             const responses = await Promise.all(payloads.map(async payload => {
                 const response = await enviarPedidoErp(payload);
-
+                console.log(payload)
                 return {
                     unidade: payload.pePedidos.codUnidade,
                     data: response.data
@@ -1822,7 +1868,52 @@ export function PedidoVenda() {
             return grupos;
         }, new Map()).values()
     );
-    
+
+    const itensAgrupadosOrdenados = !ordenacaoItens.coluna || !ordenacaoItens.direcao
+        ? itensAgrupados
+        : [...itensAgrupados].sort((grupoA, grupoB) => {
+            const itemA = grupoA[201] || grupoA[203];
+            const itemB = grupoB[201] || grupoB[203];
+            const resultado = String(itemA?.[ordenacaoItens.coluna] ?? '').localeCompare(
+                String(itemB?.[ordenacaoItens.coluna] ?? ''),
+                'pt-BR',
+                { numeric: true, sensitivity: 'base' }
+            );
+
+            return ordenacaoItens.direcao === 'asc' ? resultado : -resultado;
+        });
+
+    function alternarOrdenacaoItens(coluna) {
+        setOrdenacaoItens(prev => {
+            if (prev.coluna !== coluna) {
+                return { coluna, direcao: 'asc' };
+            }
+
+            if (prev.direcao === 'asc') {
+                return { coluna, direcao: 'desc' };
+            }
+
+            return { coluna: null, direcao: null };
+        });
+    }
+
+    function cabecalhoOrdenavelItens(coluna, texto) {
+        const indicador = ordenacaoItens.coluna === coluna
+            ? ordenacaoItens.direcao === 'asc' ? '↑' : '↓'
+            : '';
+
+        return (
+            <button
+                type="button"
+                className="itens-sort-button"
+                onClick={() => alternarOrdenacaoItens(coluna)}
+            >
+                <span>{texto}</span>
+                <span className="itens-sort-indicator">{indicador}</span>
+            </button>
+        );
+    }
+
     const unidadesComItensSelecionados = [...new Set(
         itensPedido.filter(item => item.selecionado).map(item => Number(item.unidade))
     )].sort((a, b) => a - b);
@@ -2101,9 +2192,9 @@ export function PedidoVenda() {
                                 <span>Dados do item</span>
                             </div>
                             <table className="itens-grid itens-grid-selecao">
-                                <thead><tr><th>Cód.</th><th>Item</th><th>Princ. ativo</th><th>Marca</th><th></th></tr></thead>
+                                <thead><tr><th>Cód.</th><th>{cabecalhoOrdenavelItens('descricao', 'Item')}</th><th>{cabecalhoOrdenavelItens('principiosAtivos', 'Princ. ativo')}</th><th>{cabecalhoOrdenavelItens('marca', 'Marca')}</th><th></th></tr></thead>
                                 <tbody>
-                                    {itensAgrupados.map(grupo => {
+                                    {itensAgrupadosOrdenados.map(grupo => {
                                         const itemBase = grupo[201] || grupo[203];
                                         const possuiAcordo = [grupo[201], grupo[203]].some(item => item && itemPossuiAcordo(item));
                                         return (
@@ -2137,7 +2228,7 @@ export function PedidoVenda() {
                                 <table className="itens-grid itens-grid-unidade">
                                     <thead><tr><th>Enviar</th><th>Qtd.</th><th>Estoque</th><th>Vlr Lista</th><th>Vlr Total</th><th>Sobra %</th><th>Info</th></tr></thead>
                                     <tbody>
-                                        {itensAgrupados.map(grupo => {
+                                        {itensAgrupadosOrdenados.map(grupo => {
                                             const item = grupo[config.unidade];
                                             const possuiAcordo = item && itemPossuiAcordo(item);
                                             if (!item) return <tr key={grupo.grupoId}><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>;
@@ -2147,7 +2238,7 @@ export function PedidoVenda() {
                                                     <td><input type="checkbox" checked={Boolean(item.selecionado)} onChange={(e) => handleCheckboxChange(item.seq, e.target.checked)} aria-label={`Enviar item ${item.cod_item} pela unidade ${item.unidade}`} /></td>
                                                     <td><input className="item-table-input" data-field="quantidade-unidade" data-unidade={item.unidade} data-seq={item.seq} value={item.quantidade} disabled={!item.selecionado} onChange={(e) => handleQuantidadeChange(item.seq, e.target.value)} onBlur={() => validarMultiplo(item.seq)} onKeyDown={(e) => navegarQuantidadeUnidade(e, item.unidade)} /></td>
                                                     <td>{item.estoque}</td>
-                                                    <td><input className="item-table-input item-table-money" value={item.valorLista} onFocus={e => e.target.select()} onChange={(e) => handleValorListaChange(item.seq, maskMoneyBR(e.target.value))} /></td>
+                                                    <td><input className="item-table-input item-table-money" value={item.valorLista} onFocus={e => e.target.select()} onChange={(e) => handleValorListaChange(item.seq, maskMoneyBR(e.target.value, 4))} /></td>
                                                     <td>{format.moeda(valores.valorVendaTotal ?? 0)}</td>
                                                     <td>
                                                         <input
@@ -2177,31 +2268,31 @@ export function PedidoVenda() {
                     </div>
                 </div>
                 <div className="item-card-container">
-                    <button className="btn-adicionar-item" onClick={() => 
-                        {
-                            if(!cliente){
-                                setModalErro({
-                                    aberto: true,
-                                    mensagem: `Selecione um cliente antes de adicionar item!`
-                                });
-                                return;
-                            }
-                            if(!operacao.cod_oper){
-                                setModalErro({
-                                    aberto: true,
-                                    mensagem: `Selecione uma operação antes de adicionar item!`
-                                });
-                                return;
-                            }
-                            if(!CondPgto.cod_cond_pgto){
-                                setModalErro({
-                                    aberto: true,
-                                    mensagem: `Selecione uma condição de pagamento antes de adicionar item!`
-                                });
-                                return;
-                            }
-                            setOpenLovItens(true)}   
-                        }>+ Item</button>
+                    <button className="btn-adicionar-item" onClick={() => {
+                        if (!cliente) {
+                            setModalErro({
+                                aberto: true,
+                                mensagem: `Selecione um cliente antes de adicionar item!`
+                            });
+                            return;
+                        }
+                        if (!operacao.cod_oper) {
+                            setModalErro({
+                                aberto: true,
+                                mensagem: `Selecione uma operação antes de adicionar item!`
+                            });
+                            return;
+                        }
+                        if (!CondPgto.cod_cond_pgto) {
+                            setModalErro({
+                                aberto: true,
+                                mensagem: `Selecione uma condição de pagamento antes de adicionar item!`
+                            });
+                            return;
+                        }
+                        setOpenLovItens(true)
+                    }
+                    }>+ Item</button>
                     <button className="btn-cotar-simfrete" onClick={cotar}>Cotar SimFrete</button>
                 </div>
 
@@ -2209,6 +2300,7 @@ export function PedidoVenda() {
                     isOpen={openLovItens}
                     setLovOpen={() => setOpenLovItens(!openLovItens)}
                     itensExistentes={itensPedido}
+                    codCliente={cliente?.cod_pessoa}
                     onSelect={(item) => adicionarItem(item)}
                 />
                 <LoadingOverlay isOpen={loading || loadingDadosCliente} />
@@ -2241,7 +2333,7 @@ export function PedidoVenda() {
                 }}
             />
             <div className="obs-card">
-               <h2 className="pedido-title">Observações</h2>
+                <h2 className="pedido-title">Observações</h2>
 
                 <table className="obs-grid">
                     <thead>
@@ -2261,10 +2353,10 @@ export function PedidoVenda() {
 
                                 <td className='obs-grid-desc'>{obs.descricao}</td>
 
-                                <td><input type="checkbox"checked={obs.pedido} disabled/></td>
-                                <td><input type="checkbox"checked={obs.nota} disabled/></td>
-                                <td><input type="checkbox"checked={obs.registro} disabled/></td>
-                                <td><input type="checkbox"checked={obs.financeiro} disabled/></td>
+                                <td><input type="checkbox" checked={obs.pedido} disabled /></td>
+                                <td><input type="checkbox" checked={obs.nota} disabled /></td>
+                                <td><input type="checkbox" checked={obs.registro} disabled /></td>
+                                <td><input type="checkbox" checked={obs.financeiro} disabled /></td>
 
                                 <td onClick={(e) => e.stopPropagation()}>
                                     <FaTrash onClick={() => removerObs(obs.num_seq)} />
@@ -2282,31 +2374,31 @@ export function PedidoVenda() {
                 />
 
                 <div className="obs-footer">
-                    <button className="btn-adicionar" onClick={() => 
-                        {
-                            if(!cliente){
-                                setModalErro({
-                                    aberto: true,
-                                    mensagem: `Selecione um cliente antes de adicionar uma observação!`
-                                });
-                                return;
-                            }
-                            if(!operacao.cod_oper){
-                                setModalErro({
-                                    aberto: true,
-                                    mensagem: `Selecione uma operação antes de adicionar uma observação!`
-                                });
-                                return;
-                            }
-                            if(!CondPgto.cod_cond_pgto){
-                                setModalErro({
-                                    aberto: true,
-                                    mensagem: `Selecione uma condição de pagamento antes de adicionar uma observação!`
-                                });
-                                return;
-                            }
-                        abrirNovaObs()}   
-                        }>+ Adicionar</button>
+                    <button className="btn-adicionar" onClick={() => {
+                        if (!cliente) {
+                            setModalErro({
+                                aberto: true,
+                                mensagem: `Selecione um cliente antes de adicionar uma observação!`
+                            });
+                            return;
+                        }
+                        if (!operacao.cod_oper) {
+                            setModalErro({
+                                aberto: true,
+                                mensagem: `Selecione uma operação antes de adicionar uma observação!`
+                            });
+                            return;
+                        }
+                        if (!CondPgto.cod_cond_pgto) {
+                            setModalErro({
+                                aberto: true,
+                                mensagem: `Selecione uma condição de pagamento antes de adicionar uma observação!`
+                            });
+                            return;
+                        }
+                        abrirNovaObs()
+                    }
+                    }>+ Adicionar</button>
                 </div>
 
             </div>
@@ -2332,7 +2424,7 @@ export function PedidoVenda() {
                             value={codClienteTriangulacaoDigitado}
                             onChange={(e) => { setCodClienteTriangulacaoDigitado(e.target.value); }}
                             onBlur={buscarClienteTriangulacaoPorCodigo}
-                            />
+                        />
                         <input type="text" className='input-desc' value={clienteTriangulacao?.des_pessoa || ''} readOnly />
                         <FaSearch className="icon" onClick={() => setOpenLovTriangulacao(true)} />
                         <LovClientes
@@ -2342,13 +2434,13 @@ export function PedidoVenda() {
                                 setClienteTriangulacao(cli);
                                 setCodClienteTriangulacaoDigitado(cli.cod_pessoa);
                             }}
-                            />
+                        />
                         <FaEraser className="icon"
                             onClick={() => {
                                 setClienteTriangulacao(null);
                                 setCodClienteTriangulacaoDigitado('');
                             }}
-                            />
+                        />
                     </div>
                     <label>Operação:</label>
                     <div className="field-group full">
@@ -2400,7 +2492,7 @@ export function PedidoVenda() {
                             onChange={(e) => setCodCepDigitado(e.target.value)}
                             onBlur={buscarCepPorCodigo}
                         />
-                        <FaSearch className="info-icon" onClick={() => setOpenLovCep(true)}/>
+                        <FaSearch className="info-icon" onClick={() => setOpenLovCep(true)} />
                         <LovCep
                             isOpen={openLovCep}
                             setLovOpen={() => setOpenLovCep(!openLovCep)}

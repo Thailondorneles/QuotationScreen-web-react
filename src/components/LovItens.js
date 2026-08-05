@@ -2,13 +2,14 @@ import '../style/lovStyle.css';
 import { FaX, FaChevronLeft, FaChevronRight } from "react-icons/fa6";
 import { FaStar } from "react-icons/fa";
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { getItens } from '../services/itens';
+import { getItens, getItensAcordos } from '../services/itens';
 
 const ITENS_POR_PAGINA = 25;
 const CACHE_TTL = 5 * 60 * 1000;
 const FILTRO_PADRAO = 'POLIMAX';
 let cacheItens = null;
 let requisicaoItens = null;
+let acordosCache = new Map();
 
 function normalizarTextoBusca(valor) {
     return String(valor ?? '')
@@ -46,7 +47,7 @@ function correspondeAoLike(valor, filtro) {
     return new RegExp(`^${regexLike}$`).test(texto);
 }
 
-export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] }) {
+export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], codCliente = null }) {
     const [filtro, setFiltro] = useState(FILTRO_PADRAO);
     const [itensSelecionados, setItensSelecionados] = useState({});
     const [menuSelecionarOpen, setMenuSelecionarOpen] = useState(false);
@@ -55,6 +56,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
     const [filtroAplicado, setFiltroAplicado] = useState(FILTRO_PADRAO);
     const [offset, setOffset] = useState(0);
     const [loading, setLoading] = useState(false);
+    const [acordosMap, setAcordosMap] = useState({});
     const [atualizadoEm, setAtualizadoEm] = useState(0);
     const ultimaRequisicao = useRef(0);
 
@@ -122,7 +124,8 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
                     des_item: item.des_item,
                     principios_ativos: item.principios_ativos,
                     estoque_matriz: Number(item.qtd_estoque_matriz ?? 0),
-                    estoque_filial: Number(item.qtd_estoque_filial ?? 0)
+                    estoque_filial: Number(item.qtd_estoque_filial ?? 0),
+                    txt_observacao: item.txt_observacao || null
                 };
             }
 
@@ -132,6 +135,10 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
 
             if (!acc[item.cod_item].principios_ativos && item.principios_ativos) {
                 acc[item.cod_item].principios_ativos = item.principios_ativos;
+            }
+
+            if (!acc[item.cod_item].txt_observacao && item.txt_observacao) {
+                acc[item.cod_item].txt_observacao = item.txt_observacao;
             }
 
             return acc;
@@ -201,8 +208,60 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
             if (precisaAtualizar) {
                 buscar({ filtro, novoOffset: offset }).catch(() => {});
             }
+            // limpar acordos quando abrir sem cliente
+            setAcordosMap({});
         }
     }, [isOpen]);
+
+    useEffect(() => {
+        // quando a página de itens ou cliente mudar, buscar acordos para os itens mostrados
+        if (!isOpen) return;
+        if (!codCliente) {
+            setAcordosMap({});
+            return;
+        }
+
+        let ativo = true;
+
+        (async () => {
+            const map = {};
+            const itensParaBuscar = itensPaginados.map(i => i.cod_item);
+
+            // marca como loading inicialmente
+            itensParaBuscar.forEach(cod => { map[cod] = null; });
+            setAcordosMap(map);
+
+            const promessas = itensParaBuscar.map(async codItem => {
+                const chave = `${codCliente}-${codItem}`;
+
+                if (acordosCache.has(chave)) {
+                    const cached = acordosCache.get(chave);
+                    const acordos = (cached && typeof cached.then === 'function') ? await cached : cached;
+                    return { codItem, acordos: acordos || [] };
+                }
+
+                const p = getItensAcordos({ codItem, codCliente, offset: 0, limit: 25 })
+                    .then(resp => resp.data.items || [])
+                    .catch(() => []);
+
+                acordosCache.set(chave, p);
+
+                const acordos = await p;
+                acordosCache.set(chave, acordos);
+                return { codItem, acordos };
+            });
+
+            const resultados = await Promise.all(promessas);
+
+            if (!ativo) return;
+
+            resultados.forEach(r => { map[r.codItem] = r.acordos; });
+
+            setAcordosMap({ ...map });
+        })();
+
+        return () => { ativo = false; };
+    }, [isOpen, itensPaginados, codCliente]);
 
     if (!isOpen) return null;
 
@@ -362,7 +421,8 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
                     )}
                     <table>
                         <thead>
-                            <tr>
+                                <tr>
+                                    
                                 <th className="lov-check-col"></th>
                                 <th>{cabecalhoOrdenavel('cod_item', 'Código')}</th>
                                 <th>{cabecalhoOrdenavel('des_item', 'Descrição')}</th>
@@ -370,6 +430,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
                                 <th>{cabecalhoOrdenavel('cod_completo', 'Marca')}</th>
                                 <th>{cabecalhoOrdenavel('estoque_matriz', 'Estoque Matriz')}</th>
                                 <th>{cabecalhoOrdenavel('estoque_filial', 'Estoque Filial')}</th>
+                                <th style={{width: '38px', textAlign: 'center'}}>Info</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -377,27 +438,29 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
                                 const existe = itemJaExiste(item.cod_item);
                                 const selecionado = itemEstaSelecionado(item.cod_item);
                                 const marcaPropria = itemEhMarcaPropria(item);
+                                const temAcordos = Array.isArray(acordosMap[item.cod_item]) && acordosMap[item.cod_item].length;
 
                                 return (
                                     <tr
-                                        key={item.cod_item}
-                                        className={[
-                                            existe ? 'lov-row-disabled' : selecionado ? 'lov-row-selected' : '',
-                                            marcaPropria ? 'lov-row-marca-propria' : ''
-                                        ].filter(Boolean).join(' ')}
-                                        onClick={() => !existe && alternarItem(item.cod_item, item)}
-                                    >
-                                        <td className="lov-check-col">
-                                            <input
-                                                type="checkbox"
-                                                checked={selecionado}
-                                                disabled={existe}
-                                                onChange={() => !existe && alternarItem(item.cod_item, item)}
-                                                onClick={e => e.stopPropagation()}
-                                            />
-                                        </td>
-                                        <td>{item.cod_item}</td>
-                                        <td>{item.des_item}</td>
+                                                key={item.cod_item}
+                                                className={[
+                                                    existe ? 'lov-row-disabled' : selecionado ? 'lov-row-selected' : '',
+                                                    marcaPropria ? 'lov-row-marca-propria' : '',
+                                                    temAcordos ? 'lov-row-acordo' : ''
+                                                ].filter(Boolean).join(' ')}
+                                                onClick={() => !existe && alternarItem(item.cod_item, item)}
+                                            >
+                                            <td className="lov-check-col">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selecionado}
+                                                        disabled={existe}
+                                                        onChange={() => !existe && alternarItem(item.cod_item, item)}
+                                                        onClick={e => e.stopPropagation()}
+                                                    />
+                                                </td>                                                                                              
+                                                <td>{item.cod_item}</td>
+                                                <td>{item.des_item}</td>
                                         <td>{item.principios_ativos || '-'}</td>
                                         <td>
                                             {marcaPropria && (
@@ -411,6 +474,36 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [] })
                                         </td>
                                         <td>{item.estoque_matriz}</td>
                                         <td>{item.estoque_filial}</td>
+                                        <td className="lov-info-cell">
+                                            {acordosMap[item.cod_item] === null ? (
+                                                <span className="lov-spinner" style={{width:16, height:16, borderWidth:2}}></span>
+                                            ) : temAcordos || item.txt_observacao ? (
+                                                <div className="lov-info-wrap">
+                                                    <span className={[
+                                                        'lov-info-icon',
+                                                        temAcordos ? 'lov-info-icon-acordo' : ''
+                                                    ].filter(Boolean).join(' ')}>i</span>
+                                                    <div className="lov-tooltip-info">
+                                                        {item.txt_observacao ? (
+                                                            <div className="lov-tooltip-acordo">
+                                                                <div className="tip-linha"><span className="tip-nome">Observação:</span><span className="tip-valor">{item.txt_observacao}</span></div>
+                                                            </div>
+                                                        ) : null}
+                                                        {Array.isArray(acordosMap[item.cod_item]) && acordosMap[item.cod_item].length ? (
+                                                            <> 
+                                                                <strong>Acordo(s) comercial(is)</strong>
+                                                                {acordosMap[item.cod_item].map((ac, idx) => (
+                                                                    <div key={idx} className="lov-tooltip-acordo">
+                                                                        <div className="tip-linha"><span className="tip-nome">Pedido:</span><span className="tip-valor">{ac.num_pedido || '-'}</span></div>
+                                                                    </div>
+                                                                ))}
+                                                            </>
+                                                        ) : null}
+                                                    </div>
+                                                </div>
+                                            ) : null}
+                                        </td>
+                                        
                                     </tr>
                                 )
                             })}

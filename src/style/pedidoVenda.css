@@ -416,6 +416,27 @@ label {
     line-height: 1.1;
 }
 
+.itens-sort-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 700;
+}
+
+.itens-sort-indicator {
+    min-width: 10px;
+    font-size: 12px;
+    line-height: 1;
+}
+
 .itens-grid tbody td {
     padding: 4px 2px;
     border: 1px solid #cfd8dc;

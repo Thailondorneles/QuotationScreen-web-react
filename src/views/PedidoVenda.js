@@ -107,6 +107,7 @@ export function PedidoVenda() {
     const [obsEditando, setObsEditando] = useState(null);
     const [ordemCompra, setOrdemCompra] = useState('');
     const [menuSelecaoItensOpen, setMenuSelecaoItensOpen] = useState(null);
+    const [ordenacaoItens, setOrdenacaoItens] = useState({ coluna: null, direcao: null });
     const [openLovUnidadesPedido, setOpenLovUnidadesPedido] = useState(false);
     const dadosClienteCache = useRef(new Map());
     const representanteClienteCache = useRef(new Map());
@@ -1866,6 +1867,51 @@ export function PedidoVenda() {
         }, new Map()).values()
     );
 
+    const itensAgrupadosOrdenados = !ordenacaoItens.coluna || !ordenacaoItens.direcao
+        ? itensAgrupados
+        : [...itensAgrupados].sort((grupoA, grupoB) => {
+            const itemA = grupoA[201] || grupoA[203];
+            const itemB = grupoB[201] || grupoB[203];
+            const resultado = String(itemA?.[ordenacaoItens.coluna] ?? '').localeCompare(
+                String(itemB?.[ordenacaoItens.coluna] ?? ''),
+                'pt-BR',
+                { numeric: true, sensitivity: 'base' }
+            );
+
+            return ordenacaoItens.direcao === 'asc' ? resultado : -resultado;
+        });
+
+    function alternarOrdenacaoItens(coluna) {
+        setOrdenacaoItens(prev => {
+            if (prev.coluna !== coluna) {
+                return { coluna, direcao: 'asc' };
+            }
+
+            if (prev.direcao === 'asc') {
+                return { coluna, direcao: 'desc' };
+            }
+
+            return { coluna: null, direcao: null };
+        });
+    }
+
+    function cabecalhoOrdenavelItens(coluna, texto) {
+        const indicador = ordenacaoItens.coluna === coluna
+            ? ordenacaoItens.direcao === 'asc' ? '↑' : '↓'
+            : '';
+
+        return (
+            <button
+                type="button"
+                className="itens-sort-button"
+                onClick={() => alternarOrdenacaoItens(coluna)}
+            >
+                <span>{texto}</span>
+                <span className="itens-sort-indicator">{indicador}</span>
+            </button>
+        );
+    }
+
     const unidadesComItensSelecionados = [...new Set(
         itensPedido.filter(item => item.selecionado).map(item => Number(item.unidade))
     )].sort((a, b) => a - b);
@@ -2144,9 +2190,9 @@ export function PedidoVenda() {
                                 <span>Dados do item</span>
                             </div>
                             <table className="itens-grid itens-grid-selecao">
-                                <thead><tr><th>Cód.</th><th>Item</th><th>Princ. ativo</th><th>Marca</th><th></th></tr></thead>
+                                <thead><tr><th>Cód.</th><th>{cabecalhoOrdenavelItens('descricao', 'Item')}</th><th>{cabecalhoOrdenavelItens('principiosAtivos', 'Princ. ativo')}</th><th>{cabecalhoOrdenavelItens('marca', 'Marca')}</th><th></th></tr></thead>
                                 <tbody>
-                                    {itensAgrupados.map(grupo => {
+                                    {itensAgrupadosOrdenados.map(grupo => {
                                         const itemBase = grupo[201] || grupo[203];
                                         const possuiAcordo = [grupo[201], grupo[203]].some(item => item && itemPossuiAcordo(item));
                                         return (
@@ -2180,7 +2226,7 @@ export function PedidoVenda() {
                                 <table className="itens-grid itens-grid-unidade">
                                     <thead><tr><th>Enviar</th><th>Qtd.</th><th>Estoque</th><th>Vlr Lista</th><th>Vlr Total</th><th>Sobra %</th><th>Info</th></tr></thead>
                                     <tbody>
-                                        {itensAgrupados.map(grupo => {
+                                        {itensAgrupadosOrdenados.map(grupo => {
                                             const item = grupo[config.unidade];
                                             const possuiAcordo = item && itemPossuiAcordo(item);
                                             if (!item) return <tr key={grupo.grupoId}><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>;

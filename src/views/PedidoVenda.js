@@ -13,7 +13,7 @@ import { LovEnderecos } from '../components/LovEnderecos.js';
 import { getCepsByFilter } from '../services/ceps.js';
 import { getEnderecosPadraoByFilter } from '../services/enderecosPadrao.js';
 import { getRepresentantesByCliente, getRepresentantesByIdCliente } from '../services/representantes.js';
-import { getAllClientesCached, getClienteDetalhado, getClientesComentarios, getClientesHistorico } from '../services/clientes.js';
+import { getClienteByFilter, getAllClientesCached, getClienteDetalhado, getClientesComentarios, getClientesHistorico } from '../services/clientes.js';
 import { getCidadesByFilter } from '../services/cidades.js';
 import { getUfByFilter } from '../services/uf.js';
 import { getTipLogradouro } from '../services/tipLogradouro.js';
@@ -897,13 +897,13 @@ export function PedidoVenda() {
         setLoadingDadosCliente(true);
 
         try {
-            const clientes = await (await import('../services/clientes')).then(m => m.getAllClientesCached());
-            const cli = (clientes || []).find(c => String(c.cod_pessoa) === String(codigoCliente));
+            const response = await getClienteByFilter({ filtro: codigoCliente });
+            const cli = response.data.items?.[0];
 
             if (!cli) {
                 setModalErro({
                     aberto: true,
-                    mensagem: 'Cliente não encontrato com o código digitado!'
+                    mensagem: 'Cliente não encontrado com o código digitado!'
                 });
                 atualizarCliente(null);
                 setLoadingDadosCliente(false);

@@ -124,7 +124,8 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                     des_item: item.des_item,
                     principios_ativos: item.principios_ativos,
                     estoque_matriz: Number(item.qtd_estoque_matriz ?? 0),
-                    estoque_filial: Number(item.qtd_estoque_filial ?? 0)
+                    estoque_filial: Number(item.qtd_estoque_filial ?? 0),
+                    txt_observacao: item.txt_observacao || null
                 };
             }
 
@@ -134,6 +135,10 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
 
             if (!acc[item.cod_item].principios_ativos && item.principios_ativos) {
                 acc[item.cod_item].principios_ativos = item.principios_ativos;
+            }
+
+            if (!acc[item.cod_item].txt_observacao && item.txt_observacao) {
+                acc[item.cod_item].txt_observacao = item.txt_observacao;
             }
 
             return acc;
@@ -433,6 +438,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                 const existe = itemJaExiste(item.cod_item);
                                 const selecionado = itemEstaSelecionado(item.cod_item);
                                 const marcaPropria = itemEhMarcaPropria(item);
+                                const temAcordos = Array.isArray(acordosMap[item.cod_item]) && acordosMap[item.cod_item].length;
 
                                 return (
                                     <tr
@@ -440,7 +446,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                                 className={[
                                                     existe ? 'lov-row-disabled' : selecionado ? 'lov-row-selected' : '',
                                                     marcaPropria ? 'lov-row-marca-propria' : '',
-                                                    (acordosMap[item.cod_item] && acordosMap[item.cod_item].length) ? 'lov-row-acordo' : ''
+                                                    temAcordos ? 'lov-row-acordo' : ''
                                                 ].filter(Boolean).join(' ')}
                                                 onClick={() => !existe && alternarItem(item.cod_item, item)}
                                             >
@@ -471,17 +477,28 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                         <td className="lov-info-cell">
                                             {acordosMap[item.cod_item] === null ? (
                                                 <span className="lov-spinner" style={{width:16, height:16, borderWidth:2}}></span>
-                                            ) : (Array.isArray(acordosMap[item.cod_item]) && acordosMap[item.cod_item].length) ? (
+                                            ) : temAcordos || item.txt_observacao ? (
                                                 <div className="lov-info-wrap">
-                                                    <span className="lov-info-icon">i</span>
+                                                    <span className={[
+                                                        'lov-info-icon',
+                                                        temAcordos ? 'lov-info-icon-acordo' : ''
+                                                    ].filter(Boolean).join(' ')}>i</span>
                                                     <div className="lov-tooltip-info">
-                                                        <strong>Acordo(s) comercial(is)</strong>
-                                                        {acordosMap[item.cod_item].map((ac, idx) => (
-                                                            <div key={idx} className="lov-tooltip-acordo">
-                                                                <div className="tip-linha"><span className="tip-nome">Pedido:</span><span className="tip-valor">{ac.num_pedido || '-'}</span></div>
-                                                                <div className="tip-linha"><span className="tip-nome">Preço:</span><span className="tip-valor">{ac.vlr_item ? ac.vlr_item : '-'}</span></div>
+                                                        {item.txt_observacao ? (
+                                                            <div className="lov-tooltip-acordo">
+                                                                <div className="tip-linha"><span className="tip-nome">Observação:</span><span className="tip-valor">{item.txt_observacao}</span></div>
                                                             </div>
-                                                        ))}
+                                                        ) : null}
+                                                        {Array.isArray(acordosMap[item.cod_item]) && acordosMap[item.cod_item].length ? (
+                                                            <> 
+                                                                <strong>Acordo(s) comercial(is)</strong>
+                                                                {acordosMap[item.cod_item].map((ac, idx) => (
+                                                                    <div key={idx} className="lov-tooltip-acordo">
+                                                                        <div className="tip-linha"><span className="tip-nome">Pedido:</span><span className="tip-valor">{ac.num_pedido || '-'}</span></div>
+                                                                    </div>
+                                                                ))}
+                                                            </>
+                                                        ) : null}
                                                     </div>
                                                 </div>
                                             ) : null}

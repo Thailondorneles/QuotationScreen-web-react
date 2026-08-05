@@ -2306,6 +2306,7 @@ export function PedidoVenda() {
                     isOpen={openLovItens}
                     setLovOpen={() => setOpenLovItens(!openLovItens)}
                     itensExistentes={itensPedido}
+                    codCliente={cliente?.cod_pessoa}
                     onSelect={(item) => adicionarItem(item)}
                 />
                 <LoadingOverlay isOpen={loading || loadingDadosCliente} />

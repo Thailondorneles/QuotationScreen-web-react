@@ -251,6 +251,71 @@
     opacity: 0.85;
 }
 
+.lov-list tr.lov-row-acordo td {
+        background: #f1e8ff;
+}
+
+.lov-list tr.lov-row-acordo:hover td {
+        background: #e2d0fb;
+}
+
+.lov-info-cell {
+    position: relative;
+    text-align: center;
+}
+
+.lov-info-wrap { position: relative; display: inline-block; }
+
+.lov-info-icon {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+    border-radius: 50%;
+    background: #6f35b5;
+    color: #fff;
+    font-size: 12px;
+    text-align: center;
+    cursor: pointer;
+}
+
+.lov-tooltip-info {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 320px;
+    max-width: calc(100vw - 48px);
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    padding: 8px;
+    font-size: 12px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.12);
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.15s ease;
+    text-align: left;
+}
+
+.lov-info-wrap:hover .lov-tooltip-info {
+    opacity: 1;
+    visibility: visible;
+}
+
+.lov-tooltip-acordo {
+    margin: 6px 0;
+    padding: 6px 0;
+    border-top: 1px solid #e0d3f4;
+    border-bottom: 1px solid #e0d3f4;
+    color: #4c2378;
+}
+
+.tip-linha { display:flex; align-items:center; }
+.tip-nome { width: 110px; flex: 0 0 110px; font-weight:700; }
+.tip-valor { margin-left:8px; }
+
 .lov-list tr.lov-row-disabled:hover td {
     background: #e6e6e6;
 }

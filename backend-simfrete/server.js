@@ -186,7 +186,6 @@ app.post('/api/cotacao', async (req, res) => {
       payload,
       { timeout: 20000 }
     );
-
     res.json(response.data);
   } catch (err) {
     console.error('Erro ao cotar frete:', err?.response?.data || err.message);

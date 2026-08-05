@@ -95,6 +95,7 @@ export function PedidoVenda() {
         201: null,
         203: null
     });
+    const [cotacoesFrete, setCotacoesFrete] = useState({ 201: [], 203: [] });
     const [loading, setLoading] = useState(false);
     const [loadingDadosCliente, setLoadingDadosCliente] = useState(false);
     const [observacoes, setObservacoes] = useState([]);
@@ -1263,11 +1264,16 @@ export function PedidoVenda() {
                 ...cliente,
                 ...clienteDetalhado
             });
+
             const selecaoAuto = {};
             const unidadesSemCotacao = [];
+            const cotacoesMap = {};
 
             retorno.forEach(r => {
-                const primeiraTransportadora = r.transportadoras?.[0];
+                const lista = Array.isArray(r.transportadoras) ? r.transportadoras : [];
+                cotacoesMap[r.unidade] = lista;
+
+                const primeiraTransportadora = lista[0];
 
                 if (primeiraTransportadora) {
                     selecaoAuto[r.unidade] = primeiraTransportadora;
@@ -1285,6 +1291,7 @@ export function PedidoVenda() {
                 return;
             }
 
+            setCotacoesFrete(cotacoesMap);
             setFreteSelecionado(selecaoAuto);
             aplicarRateioFrete(selecaoAuto);
         } catch (err) {
@@ -1349,6 +1356,13 @@ export function PedidoVenda() {
 
             return novosItens;
         });
+    }
+
+    function selecionarTransportadora(unidade, transporte) {
+        if (!unidade) return;
+        const novaSelecao = { ...freteSelecionado, [unidade]: transporte };
+        setFreteSelecionado(novaSelecao);
+        aplicarRateioFrete(novaSelecao);
     }
 
     function abrirNovaObs() {
@@ -1962,8 +1976,39 @@ export function PedidoVenda() {
                     <span className="pedido-total-label">Frete</span>
                     {freteFoiCotado ? (
                         <>
-                            <strong>{format.percentual(percentualFrete)}</strong>
-                            <small>{format.moeda(totais.frete)}</small>
+                            <div className="frete-valor-row">
+                                <div className="frete-valor">
+                                    <strong>{format.percentual(percentualFrete)}</strong>
+                                    <small>{format.moeda(totais.frete)}</small>
+                                </div>
+                                <div className="lov-info-wrap frete-info-inline">
+                                    <span className="lov-info-icon">i</span>
+                                    <div className="lov-tooltip-info frete-tooltip">
+                                        <strong style={{display: 'block', marginBottom: 8}}>Cotações de frete</strong>
+                                        { (cotacoesFrete[unidade] || []).length === 0 ? (
+                                            <div className="lov-tooltip-acordo">Nenhuma cotação disponível</div>
+                                        ) : (
+                                            (cotacoesFrete[unidade] || []).map((t, idx) => {
+                                                const isSel = freteSelecionado[unidade] && String(freteSelecionado[unidade].cnpj) === String(t.cnpj) && Number(freteSelecionado[unidade].valor) === Number(t.valor);
+                                                return (
+                                                    <div key={idx} className={['frete-tooltip-item', isSel ? 'frete-tooltip-item-selected' : ''].filter(Boolean).join(' ')} onClick={(e) => { e.stopPropagation(); selecionarTransportadora(unidade, t); }}>
+                                                        <label className="frete-tooltip-row">
+                                                            <input type="checkbox" className="frete-checkbox" checked={isSel} readOnly />
+                                                            <div className="frete-tooltip-main">
+                                                                <div className="tip-linha">
+                                                                    <span className="tip-nome" style={{flex: '1 1 auto'}}>{t.nome}</span>
+                                                                    <span className="tip-valor">{t.prazo ? `${t.prazo} dias` : '-'}</span>
+                                                                    <span className="tip-valor" style={{marginLeft: 12}}>{format.moeda(t.valor)}</span>
+                                                                </div>
+                                                            </div>
+                                                        </label>
+                                                    </div>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
                         </>
                     ) : (
                         <strong className="pedido-total-pendente">Não cotado</strong>

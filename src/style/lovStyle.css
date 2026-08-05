@@ -306,6 +306,27 @@
     overflow-wrap: anywhere;
 }
 
+/* Frete tooltip specific styles */
+.frete-valor-row { display: flex; align-items: center; gap: 8px; }
+.frete-valor { display: flex; flex-direction: column; }
+.frete-info-inline { display: inline-flex; align-items: center; }
+.frete-tooltip {
+    width: min(360px, calc(100vw - 48px));
+    padding: 10px;
+    border-radius: 10px;
+    background: linear-gradient(180deg, #ffffff, #fbfbff);
+    box-shadow: 0 8px 24px rgba(18,20,35,0.08);
+    border: 1px solid rgba(111,53,181,0.08);
+}
+.frete-tooltip-item { padding: 8px; border-radius: 8px; margin-bottom: 6px; cursor: pointer; display: flex; align-items: center; }
+.frete-tooltip-item:hover { background: rgba(111,53,181,0.04); }
+.frete-tooltip-item-selected { background: rgba(46,125,50,0.06); border: 1px solid rgba(46,125,50,0.12); }
+.frete-tooltip-row { display:flex; align-items:center; gap:8px; width:100%; cursor:pointer; }
+.frete-checkbox { width: 16px; height: 16px; accent-color: #2e7d32; }
+.frete-tooltip-main { flex: 1; }
+.frete-tooltip .tip-nome { font-weight: 700; }
+.frete-tooltip .tip-valor { color: #333; }
+
 .lov-info-wrap:hover .lov-tooltip-info {
     opacity: 1;
     visibility: visible;

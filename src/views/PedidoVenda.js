@@ -13,7 +13,7 @@ import { LovEnderecos } from '../components/LovEnderecos.js';
 import { getCepsByFilter } from '../services/ceps.js';
 import { getEnderecosPadraoByFilter } from '../services/enderecosPadrao.js';
 import { getRepresentantesByCliente, getRepresentantesByIdCliente } from '../services/representantes.js';
-import { getClienteByFilter, getClienteDetalhado, getClientesComentarios, getClientesHistorico } from '../services/clientes.js';
+import { getAllClientesCached, getClienteDetalhado, getClientesComentarios, getClientesHistorico } from '../services/clientes.js';
 import { getCidadesByFilter } from '../services/cidades.js';
 import { getUfByFilter } from '../services/uf.js';
 import { getTipLogradouro } from '../services/tipLogradouro.js';
@@ -897,12 +897,9 @@ export function PedidoVenda() {
         setLoadingDadosCliente(true);
 
         try {
-            const response = await getClienteByFilter({
-                filtro: codigoCliente,
-                offset: 0,
-                limit: 1
-            });
-            const cli = response.data.items[0];
+            const clientes = await (await import('../services/clientes')).then(m => m.getAllClientesCached());
+            const cli = (clientes || []).find(c => String(c.cod_pessoa) === String(codigoCliente));
+
             if (!cli) {
                 setModalErro({
                     aberto: true,
@@ -912,6 +909,7 @@ export function PedidoVenda() {
                 setLoadingDadosCliente(false);
                 return;
             }
+
             atualizarCliente(cli);
         } catch (error) {
             setLoadingDadosCliente(false);
@@ -922,12 +920,8 @@ export function PedidoVenda() {
     async function buscarClienteTriangulacaoPorCodigo() {
         if (!codClienteTriangulacaoDigitado) return;
         try {
-            const response = await getClienteByFilter({
-                filtro: codClienteTriangulacaoDigitado,
-                offset: 0,
-                limit: 1
-            });
-            const cli = response.data.items[0];
+            const clientes = await getAllClientesCached();
+            const cli = (clientes || []).find(c => String(c.cod_pessoa) === String(codClienteTriangulacaoDigitado));
             if (!cli) {
                 setModalErro({
                     aberto: true,

@@ -1,12 +1,10 @@
 import '../style/lovStyle.css';
 import { FaX, FaChevronLeft, FaChevronRight } from "react-icons/fa6";
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { getClientes } from '../services/clientes';
+import { getAllClientesCached } from '../services/clientes';
 
 const CLIENTES_POR_PAGINA = 25;
 const CACHE_TTL = 5 * 60 * 1000;
-let cacheClientes = null;
-let requisicaoClientes = null;
 
 function normalizarTextoBusca(valor) {
     return String(valor ?? '')
@@ -14,6 +12,32 @@ function normalizarTextoBusca(valor) {
         .replace(/[\u0300-\u036f]/g, '')
         .trim()
         .toUpperCase();
+}
+
+function escaparRegex(valor) {
+    return String(valor ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function correspondeAoLike(valor, filtro) {
+    const texto = normalizarTextoBusca(valor);
+    let padrao = normalizarTextoBusca(filtro).replace(/\s+/g, '%');
+
+    if (!padrao.includes('%')) {
+        return texto.includes(padrao);
+    }
+
+    if (!padrao.endsWith('%')) padrao += '%';
+
+    const regexLike = padrao
+        .split('%')
+        .map(escaparRegex)
+        .join('.*');
+
+    return new RegExp(`^${regexLike}$`).test(texto);
+}
+
+function normalizarFiltroItem(valor) {
+    return String(valor ?? '').trim();
 }
 
 export function LovClientes({ isOpen, setLovOpen, onSelect }) {
@@ -26,19 +50,7 @@ export function LovClientes({ isOpen, setLovOpen, onSelect }) {
     const ultimaRequisicao = useRef(0);
 
     async function carregarTodosClientes() {
-        if (cacheClientes && cacheClientes.expiraEm > Date.now()) return cacheClientes.clientes;
-        if (requisicaoClientes) return requisicaoClientes;
-
-        requisicaoClientes = getClientes()
-            .then(response => {
-                const resposta = response.data || {};
-                const clientes = Array.isArray(resposta) ? resposta : (resposta.items || []);
-                cacheClientes = { clientes, expiraEm: Date.now() + CACHE_TTL };
-                return clientes;
-            })
-            .finally(() => { requisicaoClientes = null; });
-
-        return requisicaoClientes;
+        return getAllClientesCached();
     }
 
     async function buscar({ filtro: valorFiltro, novoOffset = 0 }) {
@@ -60,11 +72,20 @@ export function LovClientes({ isOpen, setLovOpen, onSelect }) {
     }
 
     const clientesFiltrados = useMemo(() => {
-        const termo = normalizarTextoBusca(filtroAplicado);
-        if (!termo) return todosClientes;
-        return todosClientes.filter(cliente => normalizarTextoBusca(
-            `${cliente.cod_pessoa ?? ''} ${cliente.des_pessoa ?? ''}`
-        ).includes(termo));
+        const termoRaw = normalizarFiltroItem(filtroAplicado);
+        if (!termoRaw) return todosClientes;
+
+        return todosClientes.filter(cliente => {
+            const campos = [
+                String(cliente.cod_pessoa ?? ''),
+                cliente.des_pessoa ?? '',
+                cliente.cnpj ?? '',
+                cliente.cod_uf ?? '',
+                cliente.des_cidade ?? ''
+            ];
+
+            return campos.some(campo => correspondeAoLike(campo, termoRaw));
+        });
     }, [todosClientes, filtroAplicado]);
 
     const clientesPaginados = useMemo(
@@ -116,11 +137,23 @@ export function LovClientes({ isOpen, setLovOpen, onSelect }) {
                 <div className="lov-list">
                     {loading && <div className="lov-loading"><span className="lov-spinner"></span></div>}
                     <table>
+                        <thead>
+                            <tr>
+                                <th>Cód.</th>
+                                <th>Nome</th>
+                                <th>CNPJ</th>
+                                <th>UF</th>
+                                <th>Cidade</th>
+                            </tr>
+                        </thead>
                         <tbody>
-                            {clientesPaginados.map(clientes => (
-                                <tr key={clientes.cod_pessoa} onClick={() => { onSelect(clientes); setLovOpen(false); }}>
-                                    <td>{clientes.cod_pessoa}</td>
-                                    <td>{clientes.des_pessoa}</td>
+                            {clientesPaginados.map(cli => (
+                                <tr key={cli.cod_pessoa} onClick={() => { onSelect(cli); setLovOpen(false); }}>
+                                    <td>{cli.cod_pessoa}</td>
+                                    <td>{cli.des_pessoa}</td>
+                                    <td>{cli.cnpj || '-'}</td>
+                                    <td>{cli.cod_uf || '-'}</td>
+                                    <td>{cli.des_cidade || '-'}</td>
                                 </tr>
                             ))}
                         </tbody>

@@ -1491,6 +1491,13 @@ export function PedidoVenda() {
             };
         }
 
+        if (!ordemCompra.trim()) {
+            return {
+                mensagem: 'Informe a ordem de compra antes de enviar o pedido.',
+                focusSelector: 'input[data-field="ordem-compra"]'
+            };
+        }
+
         return null;
     }
 
@@ -1569,6 +1576,7 @@ export function PedidoVenda() {
             indConsumidor: Number(clienteDetalhado?.ind_consumidor) === 1 ? 1 : 0,
             codCliente: String(cliente.cod_pessoa),
             codClienteRemessa: clienteTriangulacao?.cod_pessoa ? String(clienteTriangulacao.cod_pessoa) : null,
+            codRepresentante: representante?.cod_pessoa_rep ? String(representante.cod_pessoa_rep) : null,
             tipTransacao: 1,
             peItens: itensUnidade.map(item => ({
                 codItem: String(item.cod_item),

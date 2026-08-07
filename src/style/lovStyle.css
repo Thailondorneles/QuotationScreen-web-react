@@ -10,7 +10,7 @@
 
 .lov-modal {
     background: #fff;
-    width: min(1050px, calc(100vw - 48px));
+    width: min(1400px, calc(100vw - 48px));
     height: 550px;
     display: flex;
     flex-direction: column;
@@ -141,14 +141,20 @@
 
 .lov-list table {
     width: 100%;
+    min-width: 1280px;
     border-collapse: collapse;
 }
 
 .lov-list th {
     text-align: left;
-    padding: 10px;
-    background: #f5f5f5;
-    border-bottom: 1px solid #ddd;
+    padding: 8px 10px;
+    background: #f7f8f7;
+    border-bottom: 1px solid #dfe4df;
+    color: #4c554c;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
 }
 
 .lov-sort-button {
@@ -162,7 +168,7 @@
     color: inherit;
     cursor: pointer;
     font: inherit;
-    font-weight: 700;
+    font-weight: 600;
     text-align: left;
 }
 
@@ -181,7 +187,7 @@
 .lov-loading {
     position: absolute;
     inset: 0;
-    z-index: 3;
+    z-index: 10000;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -216,6 +222,15 @@
     padding: 10px;
     border-bottom: 1px solid #eee;
     cursor: pointer;
+}
+
+.lov-value-col {
+    text-align: right !important;
+    white-space: nowrap;
+}
+
+.lov-date-col {
+    white-space: nowrap;
 }
 
 .lov-list tr:hover td {

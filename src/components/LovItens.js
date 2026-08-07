@@ -23,28 +23,15 @@ function normalizarFiltroItem(valor) {
     return String(valor ?? '').trim();
 }
 
-function escaparRegex(valor) {
-    return valor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 function correspondeAoLike(valor, filtro) {
     const texto = normalizarTextoBusca(valor);
-    let padrao = normalizarTextoBusca(filtro).replace(/\s+/g, '%');
+    const termos = normalizarTextoBusca(filtro)
+        .split(/[\s%]+/)
+        .filter(Boolean);
 
-    if (!padrao.includes('%')) {
-        return texto.includes(padrao);
-    }
-
-    if (!padrao.endsWith('%')) {
-        padrao += '%';
-    }
-
-    const regexLike = padrao
-        .split('%')
-        .map(escaparRegex)
-        .join('.*');
-
-    return new RegExp(`^${regexLike}$`).test(texto);
+    // A busca por termos deve localizar cada parte em qualquer posição do campo.
+    // Ex.: "crepe 10cm" encontra "ATD atadura crepe 10cmx1,8m".
+    return termos.every(termo => texto.includes(termo));
 }
 
 export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], codCliente = null }) {

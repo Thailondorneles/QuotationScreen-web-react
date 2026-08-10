@@ -13,7 +13,7 @@ import { LovEnderecos } from '../components/LovEnderecos.js';
 import { getCepsByFilter } from '../services/ceps.js';
 import { getEnderecosPadraoByFilter } from '../services/enderecosPadrao.js';
 import { getRepresentantesByCliente, getRepresentantesByIdCliente } from '../services/representantes.js';
-import { getClienteByFilter, getAllClientesCached, getClienteDetalhado, getClientesComentarios, getClientesHistorico } from '../services/clientes.js';
+import { getClienteByFilter, getAllClientesCached, getClienteDetalhado, getClientesComentarios, getClientesHistorico, getClientesUltimasCompras, agruparUltimasComprasPorItem } from '../services/clientes.js';
 import { getCidadesByFilter } from '../services/cidades.js';
 import { getUfByFilter } from '../services/uf.js';
 import { getTipLogradouro } from '../services/tipLogradouro.js';
@@ -110,12 +110,22 @@ export function PedidoVenda() {
     const [menuSelecaoItensOpen, setMenuSelecaoItensOpen] = useState(null);
     const [ordenacaoItens, setOrdenacaoItens] = useState({ coluna: null, direcao: null });
     const [openLovUnidadesPedido, setOpenLovUnidadesPedido] = useState(false);
+    const [ultimasComprasClienteMap, setUltimasComprasClienteMap] = useState({});
     const dadosClienteCache = useRef(new Map());
     const representanteClienteCache = useRef(new Map());
     const historicoClienteCache = useRef(new Map());
     const acordosItemCache = useRef(new Map());
     const ultimaCompraItemCache = useRef(new Map());
+    const ultimasComprasClienteCache = useRef(new Map());
+    const requisicaoUltimasComprasCliente = useRef(new Map());
     const recalculoClienteId = useRef(0);
+
+    useEffect(() => {
+        setItensPedido(prev => prev.map(item => ({
+            ...item,
+            ultimaCompraItemDasUltimasCompras: ultimasComprasClienteMap[item.cod_item] || null
+        })));
+    }, [ultimasComprasClienteMap]);
 
     function validarOrdemCompra() {
         const possuiCaracterEspecial = /[\|/]/.test(ordemCompra);
@@ -230,9 +240,56 @@ export function PedidoVenda() {
             setClienteConsumidor(false);
             setCreditoCliente({ atingido: null, limiteMensal: null, titulosVencidos: null });
             setFreteSelecionado({ 201: null, 203: null });
+            setUltimasComprasClienteMap({});
         }
 
         setCliente(cli);
+
+        if (mudouCliente && codigoNovo) {
+            (async () => {
+                try {
+
+                    if (ultimasComprasClienteCache.current.has(codigoNovo)) {
+                        setUltimasComprasClienteMap(ultimasComprasClienteCache.current.get(codigoNovo));
+                        return;
+                    }
+
+                    if (requisicaoUltimasComprasCliente.current.has(codigoNovo)) {
+                        const result = await requisicaoUltimasComprasCliente.current.get(codigoNovo);
+                        setUltimasComprasClienteMap(result);
+                        return;
+                    }
+
+                    const promise = getClientesUltimasCompras({ codCliente: codigoNovo })
+                        .then(response => {
+                            const items = response.data?.items || [];
+                            const ultimasComprasAgrupadas = agruparUltimasComprasPorItem(items);
+                            const mapPorItem = {};
+                            Object.keys(ultimasComprasAgrupadas).forEach(codItem => {
+                                const compras = ultimasComprasAgrupadas[codItem];
+                                if (Array.isArray(compras) && compras.length > 0) {
+                                    mapPorItem[codItem] = compras;
+                                }
+                            });
+
+                            ultimasComprasClienteCache.current.set(codigoNovo, mapPorItem);
+                            requisicaoUltimasComprasCliente.current.delete(codigoNovo);
+                            return mapPorItem;
+                        })
+                        .catch(err => {
+                            console.error('Erro ao buscar últimas compras do cliente:', err);
+                            requisicaoUltimasComprasCliente.current.delete(codigoNovo);
+                            return {};
+                        });
+
+                    requisicaoUltimasComprasCliente.current.set(codigoNovo, promise);
+                    const result = await promise;
+                    setUltimasComprasClienteMap(result);
+                } catch (e) {
+                    console.error('Erro ao carregar últimas compras:', e);
+                }
+            })();
+        }
 
         if (!mudouCliente || !codigoNovo || !itensPedido.length) {
             if (mudouCliente) setLoading(false);
@@ -382,7 +439,8 @@ export function PedidoVenda() {
             impostos,
             baseST,
             acordosComerciais,
-            ultimaCompraItem
+            ultimaCompraItem,
+            ultimaCompraItemDasUltimasCompras: ultimasComprasClienteMap[item.cod_item] || null
         };
     }
 
@@ -414,6 +472,15 @@ export function PedidoVenda() {
 
     function itemPossuiAcordo(item) {
         return Boolean(item?.acordosComerciais?.length);
+    }
+
+    function itemPossuiUltimaCompra(item) {
+        return Array.isArray(item?.ultimaCompraItemDasUltimasCompras)
+            && item.ultimaCompraItemDasUltimasCompras.length > 0;
+    }
+
+    function getCodigoUnidadeCompra(compra) {
+        return compra?.cod_unidade ?? compra?.codUnidade ?? compra?.cod_empresa ?? compra?.codEmpresa ?? compra?.unidade ?? '-';
     }
 
     function getPedidosAcordoTexto(acordos = []) {
@@ -2028,6 +2095,7 @@ export function PedidoVenda() {
 
         const freteItem = freteSelecionado[item.unidade];
         const possuiAcordo = itemPossuiAcordo(item);
+        const possuiUltimaCompra = itemPossuiUltimaCompra(item);
 
         return (
             <div className="info-cell-content">
@@ -2052,6 +2120,16 @@ export function PedidoVenda() {
                         <div className="tooltip-acordo">
                             <strong>Item possui acordo comercial</strong>
                             <div className="tip-linha"><span className="tip-nome">Pedidos:</span><span className="tip-valor">{getPedidosAcordoTexto(item.acordosComerciais)}</span></div>
+                        </div>
+                    )}
+                    {possuiUltimaCompra && (
+                        <div className="tooltip-ultima-compra">
+                            <strong>Últimas compras</strong>
+                            {item.ultimaCompraItemDasUltimasCompras.slice(0, 5).map((compra, index) => (
+                                <div className="historico-compra-linha" key={`${compra.dta_emissao}-${compra.vlr_unitario}-${index}`}>
+                                    {getCodigoUnidadeCompra(compra)} - {formatarDataHistoricoCliente(compra.dta_emissao)} - {format.moeda(compra.vlr_unitario)}
+                                </div>
+                            ))}
                         </div>
                     )}
                 </div>
@@ -2242,9 +2320,10 @@ export function PedidoVenda() {
                                     {itensAgrupadosOrdenados.map(grupo => {
                                         const itemBase = grupo[201] || grupo[203];
                                         const possuiAcordo = [grupo[201], grupo[203]].some(item => item && itemPossuiAcordo(item));
+                                        const possuiUltimaCompra = [grupo[201], grupo[203]].some(item => item && itemPossuiUltimaCompra(item)) && !possuiAcordo;
                                         return (
-                                            <tr key={grupo.grupoId} className={possuiAcordo ? 'item-row-acordo' : ''}>
-                                                <td>{itemBase.cod_item}{possuiAcordo && <span className="item-acordo-marca">©</span>}</td>
+                                            <tr key={grupo.grupoId} className={possuiAcordo ? 'item-row-acordo' : possuiUltimaCompra ? 'item-row-ultima-compra' : ''}>
+                                                <td>{itemBase.cod_item}{possuiAcordo && <span className="item-acordo-marca">©</span>}{possuiUltimaCompra && <span className="item-ultima-compra-marca">✓</span>}</td>
                                                 <td><span className="item-cell-text">{itemBase.descricao}</span></td>
                                                 <td><span className="item-cell-text">{itemBase.principiosAtivos || '-'}</span></td>
                                                 <td>{itemBase.marca || '-'}</td>
@@ -2276,10 +2355,11 @@ export function PedidoVenda() {
                                         {itensAgrupadosOrdenados.map(grupo => {
                                             const item = grupo[config.unidade];
                                             const possuiAcordo = item && itemPossuiAcordo(item);
+                                            const possuiUltimaCompra = item && itemPossuiUltimaCompra(item) && !possuiAcordo;
                                             if (!item) return <tr key={grupo.grupoId}><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>;
                                             const valores = calcularValoresItem(item);
                                             return (
-                                                <tr key={grupo.grupoId} className={possuiAcordo ? 'item-row-acordo' : ''}>
+                                                <tr key={grupo.grupoId} className={possuiAcordo ? 'item-row-acordo' : possuiUltimaCompra ? 'item-row-ultima-compra' : ''}>
                                                     <td><input type="checkbox" checked={Boolean(item.selecionado)} onChange={(e) => handleCheckboxChange(item.seq, e.target.checked)} aria-label={`Enviar item ${item.cod_item} pela unidade ${item.unidade}`} /></td>
                                                     <td><input className="item-table-input" data-field="quantidade-unidade" data-unidade={item.unidade} data-seq={item.seq} value={item.quantidade} disabled={!item.selecionado} onChange={(e) => handleQuantidadeChange(item.seq, e.target.value)} onBlur={() => validarMultiplo(item.seq)} onKeyDown={(e) => navegarQuantidadeUnidade(e, item.unidade)} /></td>
                                                     <td>{item.estoque}</td>

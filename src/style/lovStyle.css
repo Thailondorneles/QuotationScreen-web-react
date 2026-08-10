@@ -274,6 +274,14 @@
         background: #e2d0fb;
 }
 
+.lov-list tr.lov-row-ultima-compra td {
+        background: #e8f5e9;
+}
+
+.lov-list tr.lov-row-ultima-compra:hover td {
+        background: #c8e6c9;
+}
+
 .lov-info-cell {
     position: relative;
     text-align: center;
@@ -296,6 +304,10 @@
 
 .lov-info-icon-acordo {
     background: #000000;
+}
+
+.lov-info-icon-ultima-compra {
+    background: #1b5e20;
 }
 
 .lov-tooltip-info {
@@ -353,6 +365,19 @@
     border-top: 1px solid #e0d3f4;
     border-bottom: 1px solid #e0d3f4;
     color: #000000;
+}
+
+.lov-tooltip-ultima-compra {
+    margin: 6px 0;
+    padding: 6px 0;
+    border-top: 1px solid #c8e6c9;
+    border-bottom: 1px solid #c8e6c9;
+    color: #000000;
+}
+
+.lov-historico-compra-linha {
+    line-height: 1.35;
+    white-space: nowrap;
 }
 
 .tip-linha { display:flex; align-items:center; }

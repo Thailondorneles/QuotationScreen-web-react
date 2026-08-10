@@ -3,7 +3,8 @@ import { FaX, FaChevronLeft, FaChevronRight } from "react-icons/fa6";
 import { FaStar } from "react-icons/fa";
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getImpostos } from '../services/impostos.js';
-import { getItens, getItensAcordos, getItemUltimaCompra } from '../services/itens';
+import { getItens, getItensAcordos } from '../services/itens';
+import { getClientesUltimasCompras, agruparUltimasComprasPorItem } from '../services/clientes.js';
 
 const ITENS_POR_PAGINA = 25;
 const CACHE_TTL = 5 * 60 * 1000;
@@ -11,7 +12,8 @@ const FILTRO_PADRAO = 'POLIMAX';
 let cacheItens = null;
 let requisicaoItens = null;
 let acordosCache = new Map();
-let ultimasComprasCache = new Map();
+let ultimasComprasClienteCache = new Map(); // Cache por cliente
+let requisicaoUltimasComprasCliente = new Map(); // Requisições em andamento por cliente
 
 function normalizarTextoBusca(valor) {
     return String(valor ?? '')
@@ -171,6 +173,12 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                 setOffset(novoOffset);
                 setAtualizadoEm(Date.now());
             }
+        } catch (erro) {
+            console.error('Erro ao buscar itens:', erro);
+
+            if (idRequisicao === ultimaRequisicao.current) {
+                setTodosItens(cacheItens?.itens || []);
+            }
         } finally {
             if (idRequisicao === ultimaRequisicao.current) {
                 setLoading(false);
@@ -271,10 +279,80 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
             if (precisaAtualizar) {
                 buscar({ filtro, novoOffset: offset }).catch(() => {});
             }
-            // limpar acordos quando abrir sem cliente
+            // limpar acordos e últimas compras quando abrir sem cliente
             setAcordosMap({});
+            setUltimasComprasMap({});
         }
     }, [isOpen]);
+
+    // Buscar últimas compras de uma vez para o cliente
+    useEffect(() => {
+        if (!isOpen || !codCliente) {
+            setUltimasComprasMap({});
+            return;
+        }
+
+        let ativo = true;
+
+        (async () => {
+            try {
+                // Verificar cache
+                if (ultimasComprasClienteCache.has(codCliente)) {
+                    const cached = ultimasComprasClienteCache.get(codCliente);
+                    if (ativo) {
+                        setUltimasComprasMap(cached);
+                    }
+                    return;
+                }
+
+                // Verificar se já há requisição em andamento
+                if (requisicaoUltimasComprasCliente.has(codCliente)) {
+                    const promise = requisicaoUltimasComprasCliente.get(codCliente);
+                    const result = await promise;
+                    if (ativo) {
+                        setUltimasComprasMap(result);
+                    }
+                    return;
+                }
+
+                // Fazer requisição
+                const promise = getClientesUltimasCompras({ codCliente })
+                    .then(response => {
+                        const items = response.data?.items || [];
+                        const ultimasComprasAgrupadas = agruparUltimasComprasPorItem(items);
+
+                        // Guardar todas as 5 compras por item (não apenas a primeira)
+                        const mapPorItem = {};
+                        Object.keys(ultimasComprasAgrupadas).forEach(codItem => {
+                            const compras = ultimasComprasAgrupadas[codItem];
+                            if (Array.isArray(compras) && compras.length > 0) {
+                                mapPorItem[codItem] = compras; // Array completo de até 5 compras
+                            }
+                        });
+
+                        ultimasComprasClienteCache.set(codCliente, mapPorItem);
+                        requisicaoUltimasComprasCliente.delete(codCliente);
+                        return mapPorItem;
+                    })
+                    .catch(err => {
+                        console.error('Erro ao buscar últimas compras:', err);
+                        requisicaoUltimasComprasCliente.delete(codCliente);
+                        return {};
+                    });
+
+                requisicaoUltimasComprasCliente.set(codCliente, promise);
+                const result = await promise;
+
+                if (ativo) {
+                    setUltimasComprasMap(result);
+                }
+            } catch (e) {
+                console.error('Erro ao processar últimas compras:', e);
+            }
+        })();
+
+        return () => { ativo = false; };
+    }, [isOpen, codCliente]);
 
     useEffect(() => {
         // quando a página de itens ou cliente mudar, buscar acordos para os itens mostrados
@@ -342,35 +420,15 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
 
         // use obterPrecoImpostosGlobal (shared helper) to fetch prices
 
-        async function obterUltimaCompra(codItem) {
-            if (!codCliente) return null;
-
-            const chave = `${codCliente}-${codItem}`;
-            if (ultimasComprasCache.has(chave)) {
-                const cached = ultimasComprasCache.get(chave);
-                return typeof cached === 'function' ? await cached() : await cached;
-            }
-
-            const requisicao = getItemUltimaCompra({ codItem, codCliente, offset: 0, limit: 1 })
-                .then(response => response.data?.items?.[0] ?? null)
-                .catch(() => null);
-
-            ultimasComprasCache.set(chave, requisicao);
-            const ultimaCompra = await requisicao;
-            ultimasComprasCache.set(chave, ultimaCompra);
-            return ultimaCompra;
-        }
-
         (async () => {
             try {
                 const resultados = await Promise.all(itensPaginados.map(async item => {
-                    const [lista201, lista203, ultimaCompra] = await Promise.all([
+                    const [lista201, lista203] = await Promise.all([
                         obterPrecoImpostosGlobal(item.cod_item, 201),
-                        obterPrecoImpostosGlobal(item.cod_item, 203),
-                        obterUltimaCompra(item.cod_item)
+                        obterPrecoImpostosGlobal(item.cod_item, 203)
                     ]);
 
-                    return { codItem: item.cod_item, lista201, lista203, ultimaCompra };
+                    return { codItem: item.cod_item, lista201, lista203 };
                 }));
 
                 if (!ativo) return;
@@ -381,10 +439,6 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                         lista201: resultado.lista201,
                         lista203: resultado.lista203
                     }]))
-                }));
-                setUltimasComprasMap(prev => ({
-                    ...prev,
-                    ...Object.fromEntries(resultados.map(resultado => [resultado.codItem, resultado.ultimaCompra]))
                 }));
             } finally {
                 if (ativo) {
@@ -506,12 +560,12 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                         onKeyDown={e => {
                             if (e.key === 'Enter' || e.key === 'Tab') {
                                 e.preventDefault();
-                                buscar({ filtro, novoOffset: 0 });
+                                buscar({ filtro, novoOffset: 0 }).catch(() => {});
                             }
                         }}
                     />
                     <button
-                        onClick={() => buscar({ filtro, novoOffset: 0 })}
+                        onClick={() => buscar({ filtro, novoOffset: 0 }).catch(() => {})}
                         disabled={loading}
                     >
                         {loading && <span className="lov-spinner lov-spinner-button"></span>}
@@ -575,6 +629,10 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                 const selecionado = itemEstaSelecionado(item.cod_item);
                                 const marcaPropria = itemEhMarcaPropria(item);
                                 const temAcordos = Array.isArray(acordosMap[item.cod_item]) && acordosMap[item.cod_item].length;
+                                const comprasItem = Array.isArray(ultimasComprasMap[item.cod_item])
+                                    ? ultimasComprasMap[item.cod_item].slice(0, 5)
+                                    : [];
+                                const temUltimaCompra = comprasItem.length > 0;
                                 const precoItem = precosImpostosMap[item.cod_item];
                                 const loadingLista201 = loadingValores && (precoItem?.lista201 == null);
                                 const loadingLista203 = loadingValores && (precoItem?.lista203 == null);
@@ -585,7 +643,8 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                                 className={[
                                                     existe ? 'lov-row-disabled' : selecionado ? 'lov-row-selected' : '',
                                                     marcaPropria ? 'lov-row-marca-propria' : '',
-                                                    temAcordos ? 'lov-row-acordo' : ''
+                                                    temAcordos ? 'lov-row-acordo' : '',
+                                                    temUltimaCompra && !temAcordos ? 'lov-row-ultima-compra' : ''
                                                 ].filter(Boolean).join(' ')}
                                                 onClick={() => !existe && alternarItem(item.cod_item, item)}
                                             >
@@ -627,15 +686,15 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                                 formatarMoeda(precosImpostosMap[item.cod_item]?.lista203)
                                             )}
                                          </td>
-                                         <td className="lov-date-col">{formatarData(ultimasComprasMap[item.cod_item]?.dta_emissao)}</td>
+                                         <td className="lov-date-col">{formatarData(comprasItem[0]?.dta_emissao)}</td>
                                          <td className="lov-info-cell">
                                             {acordosMap[item.cod_item] === null ? (
                                                 <span className="lov-spinner" style={{width:16, height:16, borderWidth:2}}></span>
-                                            ) : temAcordos || item.txt_observacao ? (
+                                            ) : temAcordos || temUltimaCompra || item.txt_observacao ? (
                                                 <div className="lov-info-wrap">
                                                     <span className={[
                                                         'lov-info-icon',
-                                                        temAcordos ? 'lov-info-icon-acordo' : ''
+                                                        temAcordos ? 'lov-info-icon-acordo' : temUltimaCompra ? 'lov-info-icon-ultima-compra' : ''
                                                     ].filter(Boolean).join(' ')}>i</span>
                                                     <div className="lov-tooltip-info">
                                                         {item.txt_observacao ? (
@@ -651,6 +710,18 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                                                         <div className="tip-linha"><span className="tip-nome">Pedido:</span><span className="tip-valor">{ac.num_pedido || '-'}</span></div>
                                                                     </div>
                                                                 ))}
+                                                            </>
+                                                        ) : null}
+                                                        {temUltimaCompra ? (
+                                                            <>
+                                                                <strong>Última(s) compra(s)</strong>
+                                                                <div className="lov-tooltip-ultima-compra">
+                                                                    {comprasItem.map((compra, index) => (
+                                                                        <div className="lov-historico-compra-linha" key={`${compra.dta_emissao}-${compra.vlr_unitario}-${index}`}>
+                                                                            {compra.cod_unidade ?? compra.codUnidade ?? compra.cod_empresa ?? compra.codEmpresa ?? compra.unidade ?? '-'} - {formatarData(compra.dta_emissao)} - {formatarMoeda(compra.vlr_unitario)}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
                                                             </>
                                                         ) : null}
                                                     </div>

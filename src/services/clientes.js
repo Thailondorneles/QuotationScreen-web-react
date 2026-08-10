@@ -46,3 +46,35 @@ export function getClientesHistorico({ filtro, offset = 0, limit = 25 }) {
         params: { offset, limit }
     });
 }
+
+export function getClientesUltimasCompras({ codCliente }) {
+    return unimedApi.get(`clientesUltimaCompra/${codCliente}`);
+}
+
+export function agruparUltimasComprasPorItem(items) {
+    if (!Array.isArray(items)) return {};
+
+    const groupedByItem = {};
+
+    items.forEach(item => {
+        const codItem = item.cod_item;
+        if (!groupedByItem[codItem]) {
+            groupedByItem[codItem] = [];
+        }
+        groupedByItem[codItem].push(item);
+    });
+
+    return Object.fromEntries(
+        Object.entries(groupedByItem).map(([codItem, compras]) => [
+            codItem,
+            compras
+                .sort((a, b) => new Date(b.dta_emissao) - new Date(a.dta_emissao))
+                .slice(0, 5)
+        ])
+    );
+}
+
+export function obterUltimaCompraItem(ultimasComprasMap, codItem) {
+    const compras = ultimasComprasMap[codItem];
+    return Array.isArray(compras) && compras.length > 0 ? compras[0] : null;
+}

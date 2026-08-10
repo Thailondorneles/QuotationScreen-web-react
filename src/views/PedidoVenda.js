@@ -2315,7 +2315,7 @@ export function PedidoVenda() {
                                 <span>Dados do item</span>
                             </div>
                             <table className="itens-grid itens-grid-selecao">
-                                <thead><tr><th>Cód.</th><th>{cabecalhoOrdenavelItens('descricao', 'Item')}</th><th>{cabecalhoOrdenavelItens('principiosAtivos', 'Princ. ativo')}</th><th>{cabecalhoOrdenavelItens('marca', 'Marca')}</th><th></th></tr></thead>
+                                <thead><tr><th>Seq.</th><th>Cód.</th><th>{cabecalhoOrdenavelItens('descricao', 'Item')}</th><th>{cabecalhoOrdenavelItens('principiosAtivos', 'Princ. ativo')}</th><th>{cabecalhoOrdenavelItens('marca', 'Marca')}</th><th></th></tr></thead>
                                 <tbody>
                                     {itensAgrupadosOrdenados.map(grupo => {
                                         const itemBase = grupo[201] || grupo[203];
@@ -2323,6 +2323,7 @@ export function PedidoVenda() {
                                         const possuiUltimaCompra = [grupo[201], grupo[203]].some(item => item && itemPossuiUltimaCompra(item)) && !possuiAcordo;
                                         return (
                                             <tr key={grupo.grupoId} className={possuiAcordo ? 'item-row-acordo' : possuiUltimaCompra ? 'item-row-ultima-compra' : ''}>
+                                                <td>{itemBase.numItem}</td>
                                                 <td>{itemBase.cod_item}{possuiAcordo && <span className="item-acordo-marca">©</span>}{possuiUltimaCompra && <span className="item-ultima-compra-marca">✓</span>}</td>
                                                 <td><span className="item-cell-text">{itemBase.descricao}</span></td>
                                                 <td><span className="item-cell-text">{itemBase.principiosAtivos || '-'}</span></td>

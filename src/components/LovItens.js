@@ -4,7 +4,6 @@ import { FaStar } from "react-icons/fa";
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getImpostos } from '../services/impostos.js';
 import { getItens, getItensAcordos } from '../services/itens';
-import { getClientesUltimasCompras, agruparUltimasComprasPorItem } from '../services/clientes.js';
 
 const ITENS_POR_PAGINA = 25;
 const CACHE_TTL = 5 * 60 * 1000;
@@ -12,8 +11,6 @@ const FILTRO_PADRAO = 'POLIMAX';
 let cacheItens = null;
 let requisicaoItens = null;
 let acordosCache = new Map();
-let ultimasComprasClienteCache = new Map(); // Cache por cliente
-let requisicaoUltimasComprasCliente = new Map(); // Requisições em andamento por cliente
 
 function normalizarTextoBusca(valor) {
     return String(valor ?? '')
@@ -55,7 +52,13 @@ function formatarData(valor) {
         : data.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 }
 
-export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], codCliente = null, codOper = null, codCondPgto = null }) {
+function obterTimestampUltimaCompra(compras) {
+    const data = Array.isArray(compras) ? compras[0]?.dta_emissao : null;
+    const timestamp = new Date(data).getTime();
+    return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], codCliente = null, codOper = null, codCondPgto = null, ultimasComprasMap = {} }) {
     const [filtro, setFiltro] = useState(FILTRO_PADRAO);
     const [itensSelecionados, setItensSelecionados] = useState({});
     const [menuSelecionarOpen, setMenuSelecionarOpen] = useState(false);
@@ -66,11 +69,11 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
     const [loading, setLoading] = useState(false);
     const [acordosMap, setAcordosMap] = useState({});
     const [precosImpostosMap, setPrecosImpostosMap] = useState({});
-    const [ultimasComprasMap, setUltimasComprasMap] = useState({});
     const [loadingValores, setLoadingValores] = useState(false);
     const [atualizadoEm, setAtualizadoEm] = useState(0);
     const ultimaRequisicao = useRef(0);
     const precosImpostosCache = useRef(new Map());
+    const proximaOrdemSelecao = useRef(1);
 
     const itensExistentesCodigos = useMemo(
         () => new Set(itensExistentes.map(item => item.cod_item)),
@@ -243,6 +246,19 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
         }
 
         return [...itensAgrupados].sort((a, b) => {
+            if (ordenacao.coluna === 'ultima_compra') {
+                const dataA = obterTimestampUltimaCompra(ultimasComprasMap[a.cod_item]);
+                const dataB = obterTimestampUltimaCompra(ultimasComprasMap[b.cod_item]);
+
+                if (dataA === null || dataB === null) {
+                    if (dataA === dataB) return 0;
+                    return dataA === null ? 1 : -1;
+                }
+
+                const resultadoData = dataA - dataB;
+                return ordenacao.direcao === 'asc' ? resultadoData : -resultadoData;
+            }
+
             const valorA = a[ordenacao.coluna];
             const valorB = b[ordenacao.coluna];
             const numeroA = Number(valorA);
@@ -257,7 +273,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
 
             return ordenacao.direcao === 'asc' ? resultado : -resultado;
         });
-    }, [itensAgrupados, ordenacao]);
+    }, [itensAgrupados, ordenacao, ultimasComprasMap]);
 
     const itensPaginados = useMemo(
         () => itensOrdenados.slice(offset, offset + ITENS_POR_PAGINA),
@@ -275,84 +291,15 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
     useEffect(() => {
         if (isOpen) {
             setItensSelecionados({});
+            proximaOrdemSelecao.current = 1;
             setMenuSelecionarOpen(false);
             if (precisaAtualizar) {
                 buscar({ filtro, novoOffset: offset }).catch(() => {});
             }
-            // limpar acordos e últimas compras quando abrir sem cliente
+            // limpar acordos quando abrir sem cliente
             setAcordosMap({});
-            setUltimasComprasMap({});
         }
     }, [isOpen]);
-
-    // Buscar últimas compras de uma vez para o cliente
-    useEffect(() => {
-        if (!isOpen || !codCliente) {
-            setUltimasComprasMap({});
-            return;
-        }
-
-        let ativo = true;
-
-        (async () => {
-            try {
-                // Verificar cache
-                if (ultimasComprasClienteCache.has(codCliente)) {
-                    const cached = ultimasComprasClienteCache.get(codCliente);
-                    if (ativo) {
-                        setUltimasComprasMap(cached);
-                    }
-                    return;
-                }
-
-                // Verificar se já há requisição em andamento
-                if (requisicaoUltimasComprasCliente.has(codCliente)) {
-                    const promise = requisicaoUltimasComprasCliente.get(codCliente);
-                    const result = await promise;
-                    if (ativo) {
-                        setUltimasComprasMap(result);
-                    }
-                    return;
-                }
-
-                // Fazer requisição
-                const promise = getClientesUltimasCompras({ codCliente })
-                    .then(response => {
-                        const items = response.data?.items || [];
-                        const ultimasComprasAgrupadas = agruparUltimasComprasPorItem(items);
-
-                        // Guardar todas as 5 compras por item (não apenas a primeira)
-                        const mapPorItem = {};
-                        Object.keys(ultimasComprasAgrupadas).forEach(codItem => {
-                            const compras = ultimasComprasAgrupadas[codItem];
-                            if (Array.isArray(compras) && compras.length > 0) {
-                                mapPorItem[codItem] = compras; // Array completo de até 5 compras
-                            }
-                        });
-
-                        ultimasComprasClienteCache.set(codCliente, mapPorItem);
-                        requisicaoUltimasComprasCliente.delete(codCliente);
-                        return mapPorItem;
-                    })
-                    .catch(err => {
-                        console.error('Erro ao buscar últimas compras:', err);
-                        requisicaoUltimasComprasCliente.delete(codCliente);
-                        return {};
-                    });
-
-                requisicaoUltimasComprasCliente.set(codCliente, promise);
-                const result = await promise;
-
-                if (ativo) {
-                    setUltimasComprasMap(result);
-                }
-            } catch (e) {
-                console.error('Erro ao processar últimas compras:', e);
-            }
-        })();
-
-        return () => { ativo = false; };
-    }, [isOpen, codCliente]);
 
     useEffect(() => {
         // quando a página de itens ou cliente mudar, buscar acordos para os itens mostrados
@@ -472,7 +419,10 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
 
             return {
                 ...prev,
-                [codItem]: item
+                [codItem]: {
+                    ...item,
+                    ordemSelecao: proximaOrdemSelecao.current++
+                }
             };
         });
     }
@@ -482,7 +432,10 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
             const next = { ...prev };
             itensPaginados.forEach(item => {
                 if (!itemJaExiste(item.cod_item)) {
-                    next[item.cod_item] = item;
+                    next[item.cod_item] = next[item.cod_item] || {
+                        ...item,
+                        ordemSelecao: proximaOrdemSelecao.current++
+                    };
                 }
             });
             return next;
@@ -496,9 +449,10 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
     }
 
     function adicionarSelecionados() {
-        const selecionados = Object.values(itensSelecionados).filter(
-            item => !itemJaExiste(item.cod_item)
-        );
+        const selecionados = Object.values(itensSelecionados)
+            .filter(item => !itemJaExiste(item.cod_item))
+            .sort((a, b) => Number(a.ordemSelecao || 0) - Number(b.ordemSelecao || 0))
+            .map(({ ordemSelecao, ...item }) => item);
 
         if (!selecionados.length) return;
 
@@ -619,7 +573,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                  <th>{cabecalhoOrdenavel('estoque_filial', 'Estoque Filial')}</th>
                                  <th className="lov-value-col">Lista 201</th>
                                  <th className="lov-value-col">Lista 203</th>
-                                 <th className="lov-date-col">Últ. compra</th>
+                                  <th className="lov-date-col">{cabecalhoOrdenavel('ultima_compra', 'Últ. compra')}</th>
                                  <th style={{width: '38px', textAlign: 'center'}}>Info</th>
                             </tr>
                         </thead>

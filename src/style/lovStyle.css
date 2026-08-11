@@ -408,9 +408,9 @@
 }
 
 .lov-modal-unidades-pedido {
-    width: min(520px, calc(100vw - 32px));
+    width: min(650px, calc(100vw - 32px));
     height: auto;
-    min-height: 300px;
+    min-height: 0;
 }
 
 .lov-unidades-intro {
@@ -423,6 +423,16 @@
 .lov-list-unidades-pedido {
     flex: 0 0 auto;
     overflow: visible;
+}
+
+.lov-list-unidades-pedido table {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+}
+
+.lov-list-unidades-pedido .lov-check-col {
+    width: 54px;
 }
 
 .lov-list-unidades-pedido td {

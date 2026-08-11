@@ -12,6 +12,18 @@ export function getItensDetalhados({ codItens }) {
     return unimedApi.get(`itensDetalhados/${codigos.join(',')}`);
 }
 
+export function getItensClassificacao({ codItens }) {
+    const codigos = [...new Set(codItens)]
+        .map(codigo => String(codigo ?? '').trim())
+        .filter(Boolean);
+
+    if (!codigos.length) {
+        return Promise.resolve({ data: { items: [] } });
+    }
+
+    return unimedApi.get(`itensClassificacao/${codigos.join(',')}`);
+}
+
 export function getItensAcordos({ codItem, codCliente, offset = 0, limit = 25 }) {
     return unimedApi.get(`itensAcordos/${codItem}/${codCliente}`, {
         params: { offset, limit }

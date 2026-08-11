@@ -537,11 +537,27 @@ label {
     background: #c8e6c9;
 }
 
+.itens-grid tbody tr.item-row-preco-bloqueado,
+.itens-grid tbody tr.item-row-preco-bloqueado:nth-child(even) {
+    background: #fff0dc;
+}
+
+.itens-grid tbody tr.item-row-preco-bloqueado:hover {
+    background: #ffe1b8;
+}
+
 .item-acordo-marca {
     margin-left: 3px;
     color: #6f35b5;
     font-size: 11px;
     font-weight: 700;
+}
+
+.item-preco-bloqueado-marca {
+    margin-left: 3px;
+    color: #c05a00;
+    font-size: 12px;
+    font-weight: 800;
 }
 
 .item-ultima-compra-marca {

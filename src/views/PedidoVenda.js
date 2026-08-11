@@ -23,7 +23,7 @@ import { IoInformationOutline } from "react-icons/io5";
 import { getImpostos } from '../services/impostos.js';
 import { ModalErro } from '../components/ModalErro.js';
 import { getListaPreco } from '../services/listaPreco.js';
-import { getItensAcordos, getItensDetalhados, getItemUltimaCompra } from '../services/itens.js';
+import { getItensAcordos, getItensClassificacao, getItensDetalhados, getItemUltimaCompra } from '../services/itens.js';
 import { cotarSimFrete } from '../config/simFreteService.js';
 import { format } from '../utils/format.js';
 import { maskMoneyBR } from '../utils/maskMoney.js';
@@ -118,6 +118,7 @@ export function PedidoVenda() {
     const ultimaCompraItemCache = useRef(new Map());
     const ultimasComprasClienteCache = useRef(new Map());
     const requisicaoUltimasComprasCliente = useRef(new Map());
+    const listaPrecoInfoCache = useRef(new Map());
     const recalculoClienteId = useRef(0);
 
     useEffect(() => {
@@ -250,13 +251,17 @@ export function PedidoVenda() {
                 try {
 
                     if (ultimasComprasClienteCache.current.has(codigoNovo)) {
-                        setUltimasComprasClienteMap(ultimasComprasClienteCache.current.get(codigoNovo));
+                        if (idRecalculo === recalculoClienteId.current) {
+                            setUltimasComprasClienteMap(ultimasComprasClienteCache.current.get(codigoNovo));
+                        }
                         return;
                     }
 
                     if (requisicaoUltimasComprasCliente.current.has(codigoNovo)) {
                         const result = await requisicaoUltimasComprasCliente.current.get(codigoNovo);
-                        setUltimasComprasClienteMap(result);
+                        if (idRecalculo === recalculoClienteId.current) {
+                            setUltimasComprasClienteMap(result);
+                        }
                         return;
                     }
 
@@ -284,7 +289,9 @@ export function PedidoVenda() {
 
                     requisicaoUltimasComprasCliente.current.set(codigoNovo, promise);
                     const result = await promise;
-                    setUltimasComprasClienteMap(result);
+                    if (idRecalculo === recalculoClienteId.current) {
+                        setUltimasComprasClienteMap(result);
+                    }
                 } catch (e) {
                     console.error('Erro ao carregar últimas compras:', e);
                 }
@@ -356,6 +363,44 @@ export function PedidoVenda() {
         }
     }
 
+    function valorFlagListaAtiva(valor) {
+        return String(valor ?? '').trim() === '1';
+    }
+
+    function listaPrecoBloqueiaEdicao(listaPreco) {
+        if (!listaPreco) return false;
+
+        const temPromocao = Object.entries(listaPreco).some(([campo, valor]) =>
+            campo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === 'ind_promocao'
+            && valorFlagListaAtiva(valor)
+        );
+
+        return temPromocao || valorFlagListaAtiva(listaPreco.tip_aplicacao);
+    }
+
+    async function carregarInfoListaPreco(codLista, codItem) {
+        const lista = String(codLista ?? '').trim();
+        const item = String(codItem ?? '').trim();
+
+        if (!lista || !item) return null;
+
+        const chave = `${lista}-${item}`;
+        if (listaPrecoInfoCache.current.has(chave)) {
+            return await listaPrecoInfoCache.current.get(chave);
+        }
+
+        const promise = getListaPreco({ lista, item })
+            .then(response => response.data?.items?.[0] || null)
+            .catch(() => null);
+
+        listaPrecoInfoCache.current.set(chave, promise);
+
+        const infoLista = await promise;
+        listaPrecoInfoCache.current.set(chave, infoLista);
+
+        return infoLista;
+    }
+
     async function buscarDadosItem(item, contexto = {}) {
         const clienteAtual = contexto.clienteAtual ?? cliente;
         const operacaoAtual = contexto.operacaoAtual ?? operacao;
@@ -384,6 +429,11 @@ export function PedidoVenda() {
         const imp = respImp.data || {};
         const indSubsMercadoria = Number(imp.ind_subs_mercadoria || 0);
         const valorLista = Number(imp.vlr_item || 0);
+        const codListaPreco = imp.cod_lista ?? null;
+        const infoListaPreco = codListaPreco
+            ? await carregarInfoListaPreco(codListaPreco, item.cod_item)
+            : null;
+        const precoListaBloqueado = listaPrecoBloqueiaEdicao(infoListaPreco);
 
         let perDifal = 0;
         if (indSubsMercadoria === 1 && imp.txt_refaz_bc_st && imp.txt_refaz_bc_st.toUpperCase().includes('DIF')) {
@@ -404,17 +454,15 @@ export function PedidoVenda() {
             listaST: indSubsMercadoria === 1 ? imp.cod_lista_st : null,
             // percentual de ICMS desonerado / Funrural — NÃO deve reduzir a sobra
             perFunrural: Number(imp.per_funrural || 0),
-            indSubsMercadoria
+            indSubsMercadoria,
+            codListaPreco
         };
 
         // Base de ST se houver lista
         let baseST = null;
         if (impostos.indSubsMercadoria === 1 && impostos.listaST) {
-            const respLista = await getListaPreco({
-                lista: impostos.listaST,
-                item: item.cod_item
-            });
-            const vlrListaST = respLista?.data?.items?.[0]?.vlr_item;
+            const listaST = await carregarInfoListaPreco(impostos.listaST, item.cod_item);
+            const vlrListaST = listaST?.vlr_item;
             baseST = Number(vlrListaST ?? valorLista ?? 0);
         }
 
@@ -436,6 +484,9 @@ export function PedidoVenda() {
             qtdM2: detalheItem.qtd_m2 ?? item.qtdM2,
             pesoBruto: detalheItem.qtd_peso_bruto ?? item.pesoBruto,
             valorLista,
+            codListaPreco,
+            infoListaPreco,
+            precoListaBloqueado,
             impostos,
             baseST,
             acordosComerciais,
@@ -477,6 +528,18 @@ export function PedidoVenda() {
     function itemPossuiUltimaCompra(item) {
         return Array.isArray(item?.ultimaCompraItemDasUltimasCompras)
             && item.ultimaCompraItemDasUltimasCompras.length > 0;
+    }
+
+    function itemPossuiPrecoListaBloqueado(item) {
+        return Boolean(item?.precoListaBloqueado);
+    }
+
+    function getClasseLinhaItem({ possuiPrecoBloqueado, possuiAcordo, possuiUltimaCompra }) {
+        if (possuiPrecoBloqueado) return 'item-row-preco-bloqueado';
+        if (possuiAcordo) return 'item-row-acordo';
+        if (possuiUltimaCompra) return 'item-row-ultima-compra';
+
+        return '';
     }
 
     function getCodigoUnidadeCompra(compra) {
@@ -548,6 +611,9 @@ export function PedidoVenda() {
             estoque: 0,
             vlrMedio: 0,
             valorLista: 0,
+            codListaPreco: null,
+            infoListaPreco: null,
+            precoListaBloqueado: false,
             sobraDesejada: null,
             impostos: null,
             baseST: null,
@@ -657,7 +723,9 @@ export function PedidoVenda() {
     function handleValorListaChange(seq, valor) {
         setItensPedido(prev =>
             prev.map(item =>
-                item.seq === seq ? { ...item, valorLista: valor, sobraDesejada: null } : item
+                item.seq === seq && !item.precoListaBloqueado
+                    ? { ...item, valorLista: valor, sobraDesejada: null }
+                    : item
             )
         );
     }
@@ -701,7 +769,7 @@ export function PedidoVenda() {
 
     function handleSobraPercentualChange(seq, valor) {
         setItensPedido(prev => prev.map(item =>
-            item.seq === seq ? { ...item, sobraDesejada: valor } : item
+            item.seq === seq && !item.precoListaBloqueado ? { ...item, sobraDesejada: valor } : item
         ));
     }
 
@@ -730,6 +798,8 @@ export function PedidoVenda() {
     }
 
     function aplicarSobraPercentual(item, valor) {
+        if (item?.precoListaBloqueado) return;
+
         const sobraInformada = Number(String(valor).replace(',', '.'));
         const percentualMaximo = calcularPercentualMaximoSobra(item);
 
@@ -1576,6 +1646,67 @@ export function PedidoVenda() {
         return null;
     }
 
+    function obterItensSelecionadosPorUnidades(unidadesSelecionadas = [201, 203]) {
+        const unidades = unidadesSelecionadas.map(Number);
+
+        return itensPedido.filter(item =>
+            item.selecionado && unidades.includes(Number(item.unidade))
+        );
+    }
+
+    function getPercentualMinimoSobraPorClassificacao(desGeral) {
+        const classificacao = String(desGeral ?? '').trim().toUpperCase();
+
+        if (['T', 'I'].includes(classificacao)) return 6;
+        if (['A', 'B'].includes(classificacao)) return 4;
+
+        return null;
+    }
+
+    async function validarSobraPorClassificacaoItens(unidadesSelecionadas = [201, 203]) {
+        const itensSelecionados = obterItensSelecionadosPorUnidades(unidadesSelecionadas);
+        const codItens = itensSelecionados.map(item => item.cod_item);
+
+        if (!codItens.length) return null;
+
+        const response = await getItensClassificacao({ codItens });
+        const classificacoesPorItem = (response.data.items || []).reduce((acc, item) => {
+            acc[String(item.cod_item)] = item.des_geral;
+            return acc;
+        }, {});
+
+        const itensForaRegra = itensSelecionados.reduce((erros, item) => {
+            if (item.precoListaBloqueado) return erros;
+
+            const minimoSobra = getPercentualMinimoSobraPorClassificacao(
+                classificacoesPorItem[String(item.cod_item)]
+            );
+
+            if (minimoSobra === null) return erros;
+
+            const valores = calcularValoresItem(item);
+            const sobraPercentual = Number(Number(valores.sobraPercentual || 0).toFixed(2));
+
+            if (sobraPercentual < minimoSobra) {
+                erros.push({
+                    item,
+                    minimoSobra
+                });
+            }
+
+            return erros;
+        }, []);
+
+        if (!itensForaRegra.length) return null;
+
+        return {
+            mensagem: itensForaRegra
+                .map(erro => `O item ${erro.item.cod_item} precisa ter a sobra de no minimo ${erro.minimoSobra}%.`)
+                .join('\n'),
+            seqItem: itensForaRegra[0].item.seq
+        };
+    }
+
     function temEnderecoEntrega() {
         return Boolean(
             codCepDigitado ||
@@ -1698,7 +1829,7 @@ export function PedidoVenda() {
         const gruposSelecionados = unidades
             .map(unidade => ({
                 unidade,
-                itens: itensPedido.filter(item => Number(item.unidade) === unidade && item.selecionado)
+                itens: obterItensSelecionadosPorUnidades([unidade])
             }))
             .filter(grupo => grupo.itens.length);
 
@@ -1726,6 +1857,12 @@ export function PedidoVenda() {
         try {
             setOpenLovUnidadesPedido(false);
             setLoading(true);
+
+            const erroClassificacao = await validarSobraPorClassificacaoItens(unidadesSelecionadas);
+
+            if (erroClassificacao) {
+                throw erroClassificacao;
+            }
 
             const payloads = montarPayloadsPedidoErp(unidadesSelecionadas);
 
@@ -2320,11 +2457,13 @@ export function PedidoVenda() {
                                     {itensAgrupadosOrdenados.map(grupo => {
                                         const itemBase = grupo[201] || grupo[203];
                                         const possuiAcordo = [grupo[201], grupo[203]].some(item => item && itemPossuiAcordo(item));
-                                        const possuiUltimaCompra = [grupo[201], grupo[203]].some(item => item && itemPossuiUltimaCompra(item)) && !possuiAcordo;
+                                        const possuiPrecoBloqueado = [grupo[201], grupo[203]].some(item => item && itemPossuiPrecoListaBloqueado(item));
+                                        const possuiUltimaCompra = [grupo[201], grupo[203]].some(item => item && itemPossuiUltimaCompra(item)) && !possuiAcordo && !possuiPrecoBloqueado;
+                                        const classeLinha = getClasseLinhaItem({ possuiPrecoBloqueado, possuiAcordo, possuiUltimaCompra });
                                         return (
-                                            <tr key={grupo.grupoId} className={possuiAcordo ? 'item-row-acordo' : possuiUltimaCompra ? 'item-row-ultima-compra' : ''}>
+                                            <tr key={grupo.grupoId} className={classeLinha}>
                                                 <td>{itemBase.numItem}</td>
-                                                <td>{itemBase.cod_item}{possuiAcordo && <span className="item-acordo-marca">©</span>}{possuiUltimaCompra && <span className="item-ultima-compra-marca">✓</span>}</td>
+                                                <td>{itemBase.cod_item}{possuiPrecoBloqueado && <span className="item-preco-bloqueado-marca" title="Preço de lista promocional ou contrato">$</span>}{possuiAcordo && <span className="item-acordo-marca">©</span>}{[grupo[201], grupo[203]].some(item => item && itemPossuiUltimaCompra(item)) && <span className="item-ultima-compra-marca">✓</span>}</td>
                                                 <td><span className="item-cell-text">{itemBase.descricao}</span></td>
                                                 <td><span className="item-cell-text">{itemBase.principiosAtivos || '-'}</span></td>
                                                 <td>{itemBase.marca || '-'}</td>
@@ -2356,15 +2495,17 @@ export function PedidoVenda() {
                                         {itensAgrupadosOrdenados.map(grupo => {
                                             const item = grupo[config.unidade];
                                             const possuiAcordo = item && itemPossuiAcordo(item);
-                                            const possuiUltimaCompra = item && itemPossuiUltimaCompra(item) && !possuiAcordo;
+                                            const possuiPrecoBloqueado = item && itemPossuiPrecoListaBloqueado(item);
+                                            const possuiUltimaCompra = item && itemPossuiUltimaCompra(item) && !possuiAcordo && !possuiPrecoBloqueado;
                                             if (!item) return <tr key={grupo.grupoId}><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>;
                                             const valores = calcularValoresItem(item);
+                                            const classeLinha = getClasseLinhaItem({ possuiPrecoBloqueado, possuiAcordo, possuiUltimaCompra });
                                             return (
-                                                <tr key={grupo.grupoId} className={possuiAcordo ? 'item-row-acordo' : possuiUltimaCompra ? 'item-row-ultima-compra' : ''}>
+                                                <tr key={grupo.grupoId} className={classeLinha}>
                                                     <td><input type="checkbox" checked={Boolean(item.selecionado)} onChange={(e) => handleCheckboxChange(item.seq, e.target.checked)} aria-label={`Enviar item ${item.cod_item} pela unidade ${item.unidade}`} /></td>
                                                     <td><input className="item-table-input" data-field="quantidade-unidade" data-unidade={item.unidade} data-seq={item.seq} value={item.quantidade} disabled={!item.selecionado} onChange={(e) => handleQuantidadeChange(item.seq, e.target.value)} onBlur={() => validarMultiplo(item.seq)} onKeyDown={(e) => navegarQuantidadeUnidade(e, item.unidade)} /></td>
                                                     <td>{item.estoque}</td>
-                                                    <td><input className="item-table-input item-table-money" value={item.valorLista} onFocus={e => e.target.select()} onChange={(e) => handleValorListaChange(item.seq, maskMoneyBR(e.target.value, 4))} /></td>
+                                                    <td><input className="item-table-input item-table-money" value={item.valorLista} disabled={item.precoListaBloqueado} title={item.precoListaBloqueado ? 'Preço bloqueado por lista promocional ou contrato' : undefined} onFocus={e => e.target.select()} onChange={(e) => handleValorListaChange(item.seq, maskMoneyBR(e.target.value, 4))} /></td>
                                                     <td>{format.moeda(valores.valorVendaTotal ?? 0)}</td>
                                                     <td>
                                                         <input
@@ -2372,6 +2513,8 @@ export function PedidoVenda() {
                                                             inputMode="decimal"
                                                             className="item-table-input item-table-percent"
                                                             value={item.sobraDesejada ?? Number(valores.sobraPercentual ?? 0).toFixed(2)}
+                                                            disabled={item.precoListaBloqueado}
+                                                            title={item.precoListaBloqueado ? 'Sobra bloqueada por lista promocional ou contrato' : undefined}
                                                             onFocus={e => e.target.select()}
                                                             onChange={e => handleSobraPercentualChange(item.seq, e.target.value)}
                                                             onBlur={e => aplicarSobraPercentual(item, e.target.value)}
@@ -2429,6 +2572,7 @@ export function PedidoVenda() {
                     codCliente={cliente?.cod_pessoa}
                     codOper={operacao.cod_oper}
                     codCondPgto={CondPgto.cod_cond_pgto}
+                    ultimasComprasMap={ultimasComprasClienteMap}
                     onSelect={(item) => adicionarItem(item)}
                 />
                 <LoadingOverlay isOpen={loading || loadingDadosCliente} />

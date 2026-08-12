@@ -1,9 +1,9 @@
 import '../style/lovStyle.css';
 import { FaX, FaChevronLeft, FaChevronRight } from "react-icons/fa6";
-import { FaStar } from "react-icons/fa";
+import { FaStar, FaHourglassHalf } from "react-icons/fa";
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { getImpostos } from '../services/impostos.js';
-import { getItens, getItensAcordos } from '../services/itens';
+import { getImpostosCached } from '../services/impostos.js';
+import { getItens, getItensAcordos, getItensLotesCached } from '../services/itens';
 
 const ITENS_POR_PAGINA = 25;
 const CACHE_TTL = 5 * 60 * 1000;
@@ -58,6 +58,21 @@ function obterTimestampUltimaCompra(compras) {
     return Number.isNaN(timestamp) ? null : timestamp;
 }
 
+async function mapComConcorrencia(itens, limite, processar) {
+    const resultados = Array(itens.length);
+    let proximoIndice = 0;
+
+    async function worker() {
+        while (proximoIndice < itens.length) {
+            const indice = proximoIndice++;
+            resultados[indice] = await processar(itens[indice]);
+        }
+    }
+
+    await Promise.all(Array.from({ length: Math.min(limite, itens.length) }, worker));
+    return resultados;
+}
+
 export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], codCliente = null, codOper = null, codCondPgto = null, ultimasComprasMap = {} }) {
     const [filtro, setFiltro] = useState(FILTRO_PADRAO);
     const [itensSelecionados, setItensSelecionados] = useState({});
@@ -71,6 +86,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
     const [precosImpostosMap, setPrecosImpostosMap] = useState({});
     const [loadingValores, setLoadingValores] = useState(false);
     const [atualizadoEm, setAtualizadoEm] = useState(0);
+    const [lotesProximosMap, setLotesProximosMap] = useState({});
     const ultimaRequisicao = useRef(0);
     const precosImpostosCache = useRef(new Map());
     const proximaOrdemSelecao = useRef(1);
@@ -99,14 +115,6 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                     expiraEm: Date.now() + CACHE_TTL
                 };
 
-                (async () => {
-                    try {
-                        if (codCliente && codOper && codCondPgto && Array.isArray(itens) && itens.length) {
-                            prefetchPrecosParaItens(itens).catch(() => {});
-                        }
-                    } catch (e) {}
-                })();
-
                 return itens;
             })
             .finally(() => {
@@ -123,7 +131,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
             return typeof cached === 'function' ? await cached() : await cached;
         }
 
-        const requisicao = getImpostos({
+        const requisicao = getImpostosCached({
             codOper,
             codUnidade: unidade,
             codPessoa: codCliente,
@@ -137,28 +145,6 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
         const preco = await requisicao;
         precosImpostosCache.current.set(chave, preco);
         return preco;
-    }
-
-    async function prefetchPrecosParaItens(itens) {
-        if (!Array.isArray(itens) || itens.length === 0) return;
-        const CHUNK = 20;
-        for (let i = 0; i < itens.length; i += CHUNK) {
-            const slice = itens.slice(i, i + CHUNK);
-            const resultados = await Promise.all(slice.map(item => Promise.all([
-                obterPrecoImpostosGlobal(item.cod_item, 201),
-                obterPrecoImpostosGlobal(item.cod_item, 203)
-            ])));
-
-            // update map incrementally
-            const atualiz = Object.fromEntries(slice.map((item, idx) => [item.cod_item, {
-                lista201: resultados[idx][0],
-                lista203: resultados[idx][1]
-            }]));
-
-            setPrecosImpostosMap(prev => ({ ...prev, ...atualiz }));
-            // small delay to avoid overwhelming backend
-            await new Promise(r => setTimeout(r, 50));
-        }
     }
 
     async function buscar({ filtro: valorFiltro, novoOffset = 0 }) {
@@ -177,8 +163,6 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                 setAtualizadoEm(Date.now());
             }
         } catch (erro) {
-            console.error('Erro ao buscar itens:', erro);
-
             if (idRequisicao === ultimaRequisicao.current) {
                 setTodosItens(cacheItens?.itens || []);
             }
@@ -289,6 +273,18 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
     }, []);
 
     useEffect(() => {
+        if (!isOpen) return;
+
+        getItensLotesCached()
+            .then(itens => setLotesProximosMap((itens || []).reduce((acc, item) => {
+                const codItem = String(item.cod_item ?? '');
+                if (codItem) acc[codItem] = item;
+                return acc;
+            }, {})))
+            .catch(() => setLotesProximosMap({}));
+    }, [isOpen]);
+
+    useEffect(() => {
         if (isOpen) {
             setItensSelecionados({});
             proximaOrdemSelecao.current = 1;
@@ -319,7 +315,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
             itensParaBuscar.forEach(cod => { map[cod] = null; });
             setAcordosMap(map);
 
-            const promessas = itensParaBuscar.map(async codItem => {
+            const buscarAcordo = async codItem => {
                 const chave = `${codCliente}-${codItem}`;
 
                 if (acordosCache.has(chave)) {
@@ -337,9 +333,9 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                 const acordos = await p;
                 acordosCache.set(chave, acordos);
                 return { codItem, acordos };
-            });
+            };
 
-            const resultados = await Promise.all(promessas);
+            const resultados = await mapComConcorrencia(itensParaBuscar, 5, buscarAcordo);
 
             if (!ativo) return;
 
@@ -362,21 +358,20 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
         }
 
         let ativo = true;
-        console.log('LovItens: iniciando fetch de preços', { codCliente, codOper, codCondPgto, itensPaginadosLength: itensPaginados.length });
         setLoadingValores(true);
 
         // use obterPrecoImpostosGlobal (shared helper) to fetch prices
 
         (async () => {
             try {
-                const resultados = await Promise.all(itensPaginados.map(async item => {
+                const resultados = await mapComConcorrencia(itensPaginados, 4, async item => {
                     const [lista201, lista203] = await Promise.all([
                         obterPrecoImpostosGlobal(item.cod_item, 201),
                         obterPrecoImpostosGlobal(item.cod_item, 203)
                     ]);
 
                     return { codItem: item.cod_item, lista201, lista203 };
-                }));
+                });
 
                 if (!ativo) return;
 
@@ -587,6 +582,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                     ? ultimasComprasMap[item.cod_item].slice(0, 5)
                                     : [];
                                 const temUltimaCompra = comprasItem.length > 0;
+                                const loteProximo = lotesProximosMap[String(item.cod_item)];
                                 const precoItem = precosImpostosMap[item.cod_item];
                                 const loadingLista201 = loadingValores && (precoItem?.lista201 == null);
                                 const loadingLista203 = loadingValores && (precoItem?.lista203 == null);
@@ -598,7 +594,8 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                                     existe ? 'lov-row-disabled' : selecionado ? 'lov-row-selected' : '',
                                                     marcaPropria ? 'lov-row-marca-propria' : '',
                                                     temAcordos ? 'lov-row-acordo' : '',
-                                                    temUltimaCompra && !temAcordos ? 'lov-row-ultima-compra' : ''
+                                                    temUltimaCompra && !temAcordos ? 'lov-row-ultima-compra' : '',
+                                                    loteProximo ? 'lov-row-lote-proximo' : ''
                                                 ].filter(Boolean).join(' ')}
                                                 onClick={() => !existe && alternarItem(item.cod_item, item)}
                                             >
@@ -611,7 +608,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                                         onClick={e => e.stopPropagation()}
                                                     />
                                                 </td>                                                                                              
-                                                <td>{item.cod_item}</td>
+                                                <td>{item.cod_item}{loteProximo && <FaHourglassHalf className="lov-lote-proximo-marca" title={`Lote com validade próxima: ${formatarData(loteProximo.dta_validade)}`} aria-label="Lote com validade próxima" />}</td>
                                                 <td>{item.des_item}</td>
                                         <td>{item.principios_ativos || '-'}</td>
                                         <td>

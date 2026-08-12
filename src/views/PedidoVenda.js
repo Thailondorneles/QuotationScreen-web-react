@@ -326,7 +326,11 @@ export function PedidoVenda() {
             if (idRecalculo === recalculoClienteId.current) {
                 setItensPedido(prev => prev.map(item =>
                     dadosPorSeq.has(item.seq)
-                        ? { ...item, ...dadosPorSeq.get(item.seq) }
+                        ? {
+                            ...item,
+                            ...dadosPorSeq.get(item.seq),
+                            selecionado: dadosPorSeq.get(item.seq).semTributacao ? false : item.selecionado
+                        }
                         : item
                 ));
             }
@@ -427,6 +431,9 @@ export function PedidoVenda() {
             : (detalheItem.vlr_medio_unitario_filial ?? item.vlrMedio ?? 0);
         // Busca impostos
         const imp = respImp.data || {};
+        // O ERP sempre informa num_seq_busca quando encontrou tributacao, inclusive
+        // quando seu valor e 0. Nulo/ausente identifica item sem tributacao.
+        const semTributacao = imp.num_seq_busca == null;
         const indSubsMercadoria = Number(imp.ind_subs_mercadoria || 0);
         const valorLista = Number(imp.vlr_item || 0);
         const codListaPreco = imp.cod_lista ?? null;
@@ -487,6 +494,7 @@ export function PedidoVenda() {
             codListaPreco,
             infoListaPreco,
             precoListaBloqueado,
+            semTributacao,
             impostos,
             baseST,
             acordosComerciais,
@@ -534,7 +542,12 @@ export function PedidoVenda() {
         return Boolean(item?.precoListaBloqueado);
     }
 
-    function getClasseLinhaItem({ possuiPrecoBloqueado, possuiAcordo, possuiUltimaCompra }) {
+    function itemSemTributacao(item) {
+        return Boolean(item?.semTributacao);
+    }
+
+    function getClasseLinhaItem({ semTributacao, possuiPrecoBloqueado, possuiAcordo, possuiUltimaCompra }) {
+        if (semTributacao) return 'item-row-sem-tributacao';
         if (possuiPrecoBloqueado) return 'item-row-preco-bloqueado';
         if (possuiAcordo) return 'item-row-acordo';
         if (possuiUltimaCompra) return 'item-row-ultima-compra';
@@ -614,6 +627,7 @@ export function PedidoVenda() {
             codListaPreco: null,
             infoListaPreco: null,
             precoListaBloqueado: false,
+            semTributacao: false,
             sobraDesejada: null,
             impostos: null,
             baseST: null,
@@ -671,7 +685,11 @@ export function PedidoVenda() {
             setItensPedido(prev =>
                 prev.map(item =>
                     dadosPorSeq.has(item.seq)
-                        ? { ...item, ...dadosPorSeq.get(item.seq) }
+                        ? {
+                            ...item,
+                            ...dadosPorSeq.get(item.seq),
+                            selecionado: dadosPorSeq.get(item.seq).semTributacao ? false : item.selecionado
+                        }
                         : item
                 )
             );
@@ -854,7 +872,7 @@ export function PedidoVenda() {
     function handleCheckboxChange(seq, checked) {
         setItensPedido(prev =>
             prev.map(item =>
-                item.seq === seq ? { ...item, selecionado: checked } : item
+                item.seq === seq && !itemSemTributacao(item) ? { ...item, selecionado: checked } : item
             )
         );
     }
@@ -863,7 +881,7 @@ export function PedidoVenda() {
         setItensPedido(prev =>
             prev.map(item =>
                 Number(item.unidade) === Number(unidade)
-                    ? { ...item, selecionado }
+                    ? { ...item, selecionado: itemSemTributacao(item) ? false : selecionado }
                     : item
             )
         );
@@ -1603,6 +1621,15 @@ export function PedidoVenda() {
         if (!itensSelecionados.length) {
             return {
                 mensagem: 'Selecione ao menos um item de uma unidade antes de enviar o pedido.'
+            };
+        }
+
+        const itemSemTributacaoSelecionado = itensSelecionados.find(item => itemSemTributacao(item));
+
+        if (itemSemTributacaoSelecionado) {
+            return {
+                mensagem: `Item sem tributação: ${itemSemTributacaoSelecionado.cod_item} da unidade ${itemSemTributacaoSelecionado.unidade}. Remova-o da seleção antes de enviar ao ERP.`,
+                seqItem: itemSemTributacaoSelecionado.seq
             };
         }
 
@@ -2459,12 +2486,13 @@ export function PedidoVenda() {
                                         const possuiAcordo = [grupo[201], grupo[203]].some(item => item && itemPossuiAcordo(item));
                                         const possuiPrecoBloqueado = [grupo[201], grupo[203]].some(item => item && itemPossuiPrecoListaBloqueado(item));
                                         const possuiUltimaCompra = [grupo[201], grupo[203]].some(item => item && itemPossuiUltimaCompra(item)) && !possuiAcordo && !possuiPrecoBloqueado;
-                                        const classeLinha = getClasseLinhaItem({ possuiPrecoBloqueado, possuiAcordo, possuiUltimaCompra });
+                                        const semTributacao = [grupo[201], grupo[203]].some(item => item && itemSemTributacao(item));
+                                        const classeLinha = getClasseLinhaItem({ semTributacao, possuiPrecoBloqueado, possuiAcordo, possuiUltimaCompra });
                                         return (
                                             <tr key={grupo.grupoId} className={classeLinha}>
                                                 <td>{itemBase.numItem}</td>
                                                 <td>{itemBase.cod_item}{possuiPrecoBloqueado && <span className="item-preco-bloqueado-marca" title="Preço de lista promocional ou contrato">$</span>}{possuiAcordo && <span className="item-acordo-marca">©</span>}{[grupo[201], grupo[203]].some(item => item && itemPossuiUltimaCompra(item)) && <span className="item-ultima-compra-marca">✓</span>}</td>
-                                                <td><span className="item-cell-text">{itemBase.descricao}</span></td>
+                                                <td><span className="item-cell-text">{itemBase.descricao}</span>{semTributacao && <span className="item-sem-tributacao-marca">Item sem tributação</span>}</td>
                                                 <td><span className="item-cell-text">{itemBase.principiosAtivos || '-'}</span></td>
                                                 <td>{itemBase.marca || '-'}</td>
                                                 <td><button type="button" className="btn-remover-item" onClick={() => removerItem(grupo.grupoId)} title="Remover item"><FaTrash /></button></td>
@@ -2499,11 +2527,12 @@ export function PedidoVenda() {
                                             const possuiUltimaCompra = item && itemPossuiUltimaCompra(item) && !possuiAcordo && !possuiPrecoBloqueado;
                                             if (!item) return <tr key={grupo.grupoId}><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>;
                                             const valores = calcularValoresItem(item);
-                                            const classeLinha = getClasseLinhaItem({ possuiPrecoBloqueado, possuiAcordo, possuiUltimaCompra });
+                                            const semTributacao = itemSemTributacao(item);
+                                            const classeLinha = getClasseLinhaItem({ semTributacao, possuiPrecoBloqueado, possuiAcordo, possuiUltimaCompra });
                                             return (
                                                 <tr key={grupo.grupoId} className={classeLinha}>
-                                                    <td><input type="checkbox" checked={Boolean(item.selecionado)} onChange={(e) => handleCheckboxChange(item.seq, e.target.checked)} aria-label={`Enviar item ${item.cod_item} pela unidade ${item.unidade}`} /></td>
-                                                    <td><input className="item-table-input" data-field="quantidade-unidade" data-unidade={item.unidade} data-seq={item.seq} value={item.quantidade} disabled={!item.selecionado} onChange={(e) => handleQuantidadeChange(item.seq, e.target.value)} onBlur={() => validarMultiplo(item.seq)} onKeyDown={(e) => navegarQuantidadeUnidade(e, item.unidade)} /></td>
+                                                    <td><input type="checkbox" checked={Boolean(item.selecionado)} disabled={semTributacao} title={semTributacao ? 'Item sem tributação: envio ao ERP bloqueado' : undefined} onChange={(e) => handleCheckboxChange(item.seq, e.target.checked)} aria-label={`Enviar item ${item.cod_item} pela unidade ${item.unidade}`} /></td>
+                                                    <td><input className="item-table-input" data-field="quantidade-unidade" data-unidade={item.unidade} data-seq={item.seq} value={item.quantidade} disabled={!item.selecionado || semTributacao} onChange={(e) => handleQuantidadeChange(item.seq, e.target.value)} onBlur={() => validarMultiplo(item.seq)} onKeyDown={(e) => navegarQuantidadeUnidade(e, item.unidade)} /></td>
                                                     <td>{item.estoque}</td>
                                                     <td><input className="item-table-input item-table-money" value={item.valorLista} disabled={item.precoListaBloqueado} title={item.precoListaBloqueado ? 'Preço bloqueado por lista promocional ou contrato' : undefined} onFocus={e => e.target.select()} onChange={(e) => handleValorListaChange(item.seq, maskMoneyBR(e.target.value, 4))} /></td>
                                                     <td>{format.moeda(valores.valorVendaTotal ?? 0)}</td>

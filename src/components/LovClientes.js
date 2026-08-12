@@ -40,6 +40,10 @@ function normalizarFiltroItem(valor) {
     return String(valor ?? '').trim();
 }
 
+function normalizarCnpjBusca(valor) {
+    return String(valor ?? '').replace(/\D/g, '');
+}
+
 export function LovClientes({ isOpen, setLovOpen, onSelect }) {
     const [filtro, setFiltro] = useState('');
     const [todosClientes, setTodosClientes] = useState([]);
@@ -79,12 +83,17 @@ export function LovClientes({ isOpen, setLovOpen, onSelect }) {
             const campos = [
                 String(cliente.cod_pessoa ?? ''),
                 cliente.des_pessoa ?? '',
-                cliente.cnpj ?? '',
                 cliente.cod_uf ?? '',
                 cliente.des_cidade ?? ''
             ];
 
-            return campos.some(campo => correspondeAoLike(campo, termoRaw));
+            if (campos.some(campo => correspondeAoLike(campo, termoRaw))) {
+                return true;
+            }
+
+            const cnpjInformado = normalizarCnpjBusca(termoRaw);
+            return cnpjInformado.length > 0
+                && correspondeAoLike(normalizarCnpjBusca(cliente.cnpj), cnpjInformado);
         });
     }, [todosClientes, filtroAplicado]);
 

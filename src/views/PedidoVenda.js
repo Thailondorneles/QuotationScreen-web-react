@@ -1,6 +1,6 @@
 import '../style/pedidoVenda.css';
-import { FaCalendarAlt, FaEdit, FaEraser, FaSearch, FaTrash } from "react-icons/fa";
-import { useState, useEffect, useRef } from 'react';
+import { FaCalendarAlt, FaEdit, FaEraser, FaSearch, FaTrash, FaHourglassHalf } from "react-icons/fa";
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { LovItens } from '../components/LovItens.js';
 import { LovClientes } from '../components/LovClientes.js';
 import { LovRepresentantes } from '../components/LovRepresentantes.js';
@@ -20,10 +20,10 @@ import { getTipLogradouro } from '../services/tipLogradouro.js';
 import { getCondPgtoByFilter } from '../services/condPgto.js';
 import { getOperacoesByFilter } from '../services/operacoes.js';
 import { IoInformationOutline } from "react-icons/io5";
-import { getImpostos } from '../services/impostos.js';
+import { getImpostosCached } from '../services/impostos.js';
 import { ModalErro } from '../components/ModalErro.js';
 import { getListaPreco } from '../services/listaPreco.js';
-import { getItensAcordos, getItensClassificacao, getItensDetalhados, getItemUltimaCompra } from '../services/itens.js';
+import { getItensAcordos, getItensClassificacao, getItensDetalhados, getItemUltimaCompra, getItensLotesCached } from '../services/itens.js';
 import { cotarSimFrete } from '../config/simFreteService.js';
 import { format } from '../utils/format.js';
 import { maskMoneyBR } from '../utils/maskMoney.js';
@@ -79,6 +79,7 @@ export function PedidoVenda() {
     const [tiposLogradouro, setTiposLogradouro] = useState([]);
     const [tipoLogradouroSelecionado, setTipoLogradouroSelecionado] = useState('');
     const [itensPedido, setItensPedido] = useState([]);
+    const [lotesProximosMap, setLotesProximosMap] = useState({});
     const [modalErro, setModalErro] = useState({
         aberto: false,
         mensagem: '',
@@ -119,7 +120,35 @@ export function PedidoVenda() {
     const ultimasComprasClienteCache = useRef(new Map());
     const requisicaoUltimasComprasCliente = useRef(new Map());
     const listaPrecoInfoCache = useRef(new Map());
+    const classificacoesItemCache = useRef(new Map());
     const recalculoClienteId = useRef(0);
+
+    async function mapComConcorrencia(itens, limite, processar) {
+        const resultados = Array(itens.length);
+        let proximoIndice = 0;
+
+        async function worker() {
+            while (proximoIndice < itens.length) {
+                const indice = proximoIndice++;
+                try {
+                    resultados[indice] = {
+                        status: 'fulfilled',
+                        value: await processar(itens[indice])
+                    };
+                } catch (reason) {
+                    resultados[indice] = { status: 'rejected', reason };
+                }
+            }
+        }
+
+        await Promise.all(Array.from({ length: Math.min(limite, itens.length) }, worker));
+        return resultados;
+    }
+
+    const codigosItensPedido = useMemo(
+        () => [...new Set(itensPedido.map(item => String(item.cod_item)).filter(Boolean))].sort().join(','),
+        [itensPedido]
+    );
 
     useEffect(() => {
         setItensPedido(prev => prev.map(item => ({
@@ -127,6 +156,48 @@ export function PedidoVenda() {
             ultimaCompraItemDasUltimasCompras: ultimasComprasClienteMap[item.cod_item] || null
         })));
     }, [ultimasComprasClienteMap]);
+
+    useEffect(() => {
+        getItensLotesCached()
+            .then(itens => setLotesProximosMap((itens || []).reduce((acc, item) => {
+                const codItem = String(item.cod_item ?? '');
+                if (codItem) acc[codItem] = item;
+                return acc;
+            }, {})))
+            .catch(() => setLotesProximosMap({}));
+    }, []);
+
+    useEffect(() => {
+        const codItens = codigosItensPedido ? codigosItensPedido.split(',') : [];
+        const codItensSemCache = codItens.filter(codItem => !classificacoesItemCache.current.has(codItem));
+
+        if (!codItensSemCache.length) return;
+
+        let ativo = true;
+
+        getItensClassificacao({ codItens: codItensSemCache })
+            .then(response => {
+                if (!ativo) return;
+
+                (response.data.items || []).forEach(item => {
+                    classificacoesItemCache.current.set(String(item.cod_item), item.des_geral ?? null);
+                });
+
+                codItensSemCache.forEach(codItem => {
+                    if (!classificacoesItemCache.current.has(codItem)) {
+                        classificacoesItemCache.current.set(codItem, null);
+                    }
+                });
+
+                setItensPedido(prev => prev.map(item => {
+                    const classificacao = classificacoesItemCache.current.get(String(item.cod_item)) ?? null;
+                    return item.classificacao === classificacao ? item : { ...item, classificacao };
+                }));
+            })
+            .catch(() => {});
+
+        return () => { ativo = false; };
+    }, [codigosItensPedido]);
 
     function validarOrdemCompra() {
         const possuiCaracterEspecial = /[\|/]/.test(ordemCompra);
@@ -281,8 +352,7 @@ export function PedidoVenda() {
                             requisicaoUltimasComprasCliente.current.delete(codigoNovo);
                             return mapPorItem;
                         })
-                        .catch(err => {
-                            console.error('Erro ao buscar últimas compras do cliente:', err);
+                        .catch(() => {
                             requisicaoUltimasComprasCliente.current.delete(codigoNovo);
                             return {};
                         });
@@ -292,9 +362,7 @@ export function PedidoVenda() {
                     if (idRecalculo === recalculoClienteId.current) {
                         setUltimasComprasClienteMap(result);
                     }
-                } catch (e) {
-                    console.error('Erro ao carregar últimas compras:', e);
-                }
+                } catch (e) {}
             })();
         }
 
@@ -306,11 +374,10 @@ export function PedidoVenda() {
         setLoading(true);
 
         try {
-            const resultados = await Promise.allSettled(
-                itensPedido.map(async item => ({
+            const resultados = await mapComConcorrencia(itensPedido, 3, async item => ({
                     seq: item.seq,
                     dados: await buscarDadosItem(item, { clienteAtual: cli })
-                }))
+                })
             );
             const dadosPorSeq = new Map();
             const erros = [];
@@ -412,7 +479,7 @@ export function PedidoVenda() {
         // Busca estoque disponível
         const detalheItem = contexto.detalheItem || {};
         const [respImp, acordosComerciais, ultimaCompraItem] = await Promise.all([
-            getImpostos({
+            getImpostosCached({
                 codOper: operacaoAtual.cod_oper,
                 codUnidade: item.unidade,
                 codPessoa: clienteAtual.cod_pessoa,
@@ -546,8 +613,18 @@ export function PedidoVenda() {
         return Boolean(item?.semTributacao);
     }
 
-    function getClasseLinhaItem({ semTributacao, possuiPrecoBloqueado, possuiAcordo, possuiUltimaCompra }) {
+    function getDestaqueClassificacao(item) {
+        const classificacao = String(item?.classificacao ?? '').trim().toUpperCase();
+
+        if (['I', 'T'].includes(classificacao)) return '(MMT)';
+        if (['A', 'B'].includes(classificacao)) return '(AC)';
+
+        return null;
+    }
+
+    function getClasseLinhaItem({ loteProximo, semTributacao, possuiPrecoBloqueado, possuiAcordo, possuiUltimaCompra }) {
         if (semTributacao) return 'item-row-sem-tributacao';
+        if (loteProximo) return 'item-row-lote-proximo';
         if (possuiPrecoBloqueado) return 'item-row-preco-bloqueado';
         if (possuiAcordo) return 'item-row-acordo';
         if (possuiUltimaCompra) return 'item-row-ultima-compra';
@@ -662,13 +739,12 @@ export function PedidoVenda() {
             const detalhesPorCodigo = new Map(
                 (responseDetalhes.data?.items || []).map(item => [String(item.cod_item), item])
             );
-            const resultados = await Promise.allSettled(
-                novosItens.map(async item => ({
+            const resultados = await mapComConcorrencia(novosItens, 3, async item => ({
                     seq: item.seq,
                     dados: await buscarDadosItem(item, {
                         detalheItem: detalhesPorCodigo.get(String(item.cod_item))
                     })
-                }))
+                })
             );
             const dadosPorSeq = new Map();
             const erros = [];
@@ -1134,9 +1210,62 @@ export function PedidoVenda() {
                 setOperacao({ cod_oper: null, des_oper: null });
                 return;
             }
-            setOperacao(oper);
+            await atualizarOperacao(oper);
         } catch (error) {
             alert('Erro ao buscar operação');
+        }
+    }
+
+    async function atualizarOperacao(novaOperacao) {
+        const codigoAtual = String(operacao?.cod_oper ?? '').trim();
+        const codigoNovo = String(novaOperacao?.cod_oper ?? '').trim();
+        const mudouOperacao = codigoAtual !== codigoNovo;
+
+        setOperacao(novaOperacao);
+
+        if (!mudouOperacao || !codigoNovo || !cliente?.cod_pessoa || !itensPedido.length) {
+            return;
+        }
+
+        const idRecalculo = ++recalculoClienteId.current;
+        setFreteSelecionado({ 201: null, 203: null });
+        setLoading(true);
+
+        try {
+            const resultados = await mapComConcorrencia(itensPedido, 3, async item => ({
+                seq: item.seq,
+                dados: await buscarDadosItem(item, { operacaoAtual: novaOperacao })
+            }));
+            const dadosPorSeq = new Map();
+            const erros = [];
+
+            resultados.forEach(resultado => {
+                if (resultado.status === 'fulfilled') {
+                    dadosPorSeq.set(resultado.value.seq, resultado.value.dados);
+                } else {
+                    erros.push(resultado.reason);
+                }
+            });
+
+            if (idRecalculo === recalculoClienteId.current) {
+                setItensPedido(prev => prev.map(item =>
+                    dadosPorSeq.has(item.seq)
+                        ? {
+                            ...item,
+                            ...dadosPorSeq.get(item.seq),
+                            selecionado: dadosPorSeq.get(item.seq).semTributacao ? false : item.selecionado
+                        }
+                        : item
+                ));
+            }
+
+            if (erros.length && idRecalculo === recalculoClienteId.current) {
+                alert('Erro ao recalcular impostos para alguns itens na nova operação.');
+            }
+        } finally {
+            if (idRecalculo === recalculoClienteId.current) {
+                setLoading(false);
+            }
         }
     }
 
@@ -1895,7 +2024,6 @@ export function PedidoVenda() {
 
             const responses = await Promise.all(payloads.map(async payload => {
                 const response = await enviarPedidoErp(payload);
-                console.log(payload)
                 return {
                     unidade: payload.pePedidos.codUnidade,
                     data: response.data
@@ -2403,7 +2531,7 @@ export function PedidoVenda() {
                         <LovOperacoes
                             isOpen={openLovOperacoes}
                             setLovOpen={() => setOpenLovOperacoes(!openLovOperacoes)}
-                            onSelect={(op) => { setOperacao({ cod_oper: op.cod_oper, des_oper: op.des_oper }); setCodOperacaoDigitado(op.cod_oper); }}
+                            onSelect={(op) => { atualizarOperacao({ cod_oper: op.cod_oper, des_oper: op.des_oper }); setCodOperacaoDigitado(op.cod_oper); }}
                         />
                         <FaEraser className="icon" onClick={() => { setOperacao({ cod_oper: null, des_oper: null }); setCodOperacaoDigitado(''); }} />
                     </div>
@@ -2482,16 +2610,24 @@ export function PedidoVenda() {
                                 <thead><tr><th>Seq.</th><th>Cód.</th><th>{cabecalhoOrdenavelItens('descricao', 'Item')}</th><th>{cabecalhoOrdenavelItens('principiosAtivos', 'Princ. ativo')}</th><th>{cabecalhoOrdenavelItens('marca', 'Marca')}</th><th></th></tr></thead>
                                 <tbody>
                                     {itensAgrupadosOrdenados.map(grupo => {
-                                        const itemBase = grupo[201] || grupo[203];
+                                        let itemBase = grupo[201] || grupo[203];
                                         const possuiAcordo = [grupo[201], grupo[203]].some(item => item && itemPossuiAcordo(item));
                                         const possuiPrecoBloqueado = [grupo[201], grupo[203]].some(item => item && itemPossuiPrecoListaBloqueado(item));
                                         const possuiUltimaCompra = [grupo[201], grupo[203]].some(item => item && itemPossuiUltimaCompra(item)) && !possuiAcordo && !possuiPrecoBloqueado;
                                         const semTributacao = [grupo[201], grupo[203]].some(item => item && itemSemTributacao(item));
-                                        const classeLinha = getClasseLinhaItem({ semTributacao, possuiPrecoBloqueado, possuiAcordo, possuiUltimaCompra });
+                                        const loteProximo = lotesProximosMap[String(itemBase.cod_item)];
+                                        const destaqueClassificacao = getDestaqueClassificacao(itemBase);
+                                        if (destaqueClassificacao) {
+                                            itemBase = {
+                                                ...itemBase,
+                                                descricao: `${itemBase.descricao}\n${destaqueClassificacao}`
+                                            };
+                                        }
+                                        const classeLinha = getClasseLinhaItem({ loteProximo, semTributacao, possuiPrecoBloqueado, possuiAcordo, possuiUltimaCompra });
                                         return (
                                             <tr key={grupo.grupoId} className={classeLinha}>
                                                 <td>{itemBase.numItem}</td>
-                                                <td>{itemBase.cod_item}{possuiPrecoBloqueado && <span className="item-preco-bloqueado-marca" title="Preço de lista promocional ou contrato">$</span>}{possuiAcordo && <span className="item-acordo-marca">©</span>}{[grupo[201], grupo[203]].some(item => item && itemPossuiUltimaCompra(item)) && <span className="item-ultima-compra-marca">✓</span>}</td>
+                                                <td>{itemBase.cod_item}{loteProximo && <FaHourglassHalf className="item-lote-proximo-marca" title="Lote com validade próxima" aria-label="Lote com validade próxima" />}{possuiPrecoBloqueado && <span className="item-preco-bloqueado-marca" title="Preço de lista promocional ou contrato">$</span>}{possuiAcordo && <span className="item-acordo-marca">©</span>}{[grupo[201], grupo[203]].some(item => item && itemPossuiUltimaCompra(item)) && <span className="item-ultima-compra-marca">✓</span>}</td>
                                                 <td><span className="item-cell-text">{itemBase.descricao}</span>{semTributacao && <span className="item-sem-tributacao-marca">Item sem tributação</span>}</td>
                                                 <td><span className="item-cell-text">{itemBase.principiosAtivos || '-'}</span></td>
                                                 <td>{itemBase.marca || '-'}</td>
@@ -2528,7 +2664,8 @@ export function PedidoVenda() {
                                             if (!item) return <tr key={grupo.grupoId}><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>;
                                             const valores = calcularValoresItem(item);
                                             const semTributacao = itemSemTributacao(item);
-                                            const classeLinha = getClasseLinhaItem({ semTributacao, possuiPrecoBloqueado, possuiAcordo, possuiUltimaCompra });
+                                            const loteProximo = lotesProximosMap[String(item.cod_item)];
+                                            const classeLinha = getClasseLinhaItem({ loteProximo, semTributacao, possuiPrecoBloqueado, possuiAcordo, possuiUltimaCompra });
                                             return (
                                                 <tr key={grupo.grupoId} className={classeLinha}>
                                                     <td><input type="checkbox" checked={Boolean(item.selecionado)} disabled={semTributacao} title={semTributacao ? 'Item sem tributação: envio ao ERP bloqueado' : undefined} onChange={(e) => handleCheckboxChange(item.seq, e.target.checked)} aria-label={`Enviar item ${item.cod_item} pela unidade ${item.unidade}`} /></td>

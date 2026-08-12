@@ -407,11 +407,11 @@ label {
 }
 
 .itens-grid thead th {
-    background: #2e8b1c;
+    background: linear-gradient(135deg, #167a36, #239447);
     color: #fff;
     padding: 5px 2px;
     font-size: 10px;
-    border: 1px solid #cfd8dc;
+    border: 1px solid #b9d6c0;
     text-align: center;
     line-height: 1.1;
 }
@@ -439,7 +439,7 @@ label {
 
 .itens-grid tbody td {
     padding: 4px 2px;
-    border: 1px solid #cfd8dc;
+    border: 1px solid #d2e0d5;
     font-size: 10px;
     text-align: center;
     vertical-align: middle;
@@ -506,53 +506,71 @@ label {
 }
 
 .itens-grid tbody tr:nth-child(even) {
-    background: #f7f9fa;
+    background: #eaf5ef;
 }
 
 .itens-grid tbody tr:hover {
-    background: #eef7ec;
+    background: #ccefd8;
 }
 
 .itens-grid tbody tr.item-row-acordo {
-    background: #f1e8ff;
+    background: #e8d8ff;
 }
 
 .itens-grid tbody tr.item-row-acordo:nth-child(even) {
-    background: #eadcff;
+    background: #dcc5ff;
 }
 
 .itens-grid tbody tr.item-row-acordo:hover {
-    background: #e2d0fb;
+    background: #c9a5f7;
 }
 
 .itens-grid tbody tr.item-row-ultima-compra {
-    background: #e8f5e9;
+    background: #cef2d5;
 }
 
 .itens-grid tbody tr.item-row-ultima-compra:nth-child(even) {
-    background: #d4edda;
+    background: #b8e8c4;
 }
 
 .itens-grid tbody tr.item-row-ultima-compra:hover {
-    background: #c8e6c9;
+    background: #91d9a4;
 }
 
 .itens-grid tbody tr.item-row-preco-bloqueado,
 .itens-grid tbody tr.item-row-preco-bloqueado:nth-child(even) {
-    background: #fff0dc;
+    background: #ffe0b5;
 }
 
 .itens-grid tbody tr.item-row-preco-bloqueado:hover {
-    background: #ffe1b8;
+    background: #ffc978;
 }
 
 .itens-grid tbody tr.item-row-sem-tributacao,
 .itens-grid tbody tr.item-row-sem-tributacao:nth-child(even) {
-    background: #e7d1c0;
+    background: #e7c3ad;
 }
 
 .itens-grid tbody tr.item-row-sem-tributacao:hover {
-    background: #dcc0aa;
+    background: #d99f79;
+}
+
+.itens-grid tbody tr.item-row-lote-proximo,
+.itens-grid tbody tr.item-row-lote-proximo:nth-child(even) {
+    background: #f78d8d;
+    color: #4a0808;
+}
+
+.itens-grid tbody tr.item-row-lote-proximo:hover {
+    background: #ed5f5f;
+}
+
+.item-lote-proximo-marca {
+    margin-left: 4px;
+    color: #a90000;
+    filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.8));
+    font-size: 13px;
+    vertical-align: -1px;
 }
 
 .item-sem-tributacao-marca {
@@ -635,8 +653,8 @@ label {
 
 .tabelas-itens-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1.35fr) repeat(2, minmax(0, 1.2fr));
-    gap: 18px;
+    grid-template-columns: minmax(0, 1.5fr) repeat(2, minmax(0, 1fr));
+    gap: 16px;
     width: 100%;
     min-width: 0;
     align-items: start;
@@ -699,16 +717,21 @@ label {
 .itens-grid-selecao td:nth-child(1) { width: 38px; }
 
 .itens-grid-selecao th:nth-child(2),
-.itens-grid-selecao td:nth-child(2) { width: 54px; }
+.itens-grid-selecao td:nth-child(2) { width: 80px; }
 
 .itens-grid-selecao th:nth-child(3),
-.itens-grid-selecao td:nth-child(3) { width: 150px; }
+.itens-grid-selecao td:nth-child(3) {
+    width: 220px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
 
 .itens-grid-selecao th:nth-child(4),
-.itens-grid-selecao td:nth-child(4) { width: 125px; }
+.itens-grid-selecao td:nth-child(4) { width: 115px; }
 
 .itens-grid-selecao th:nth-child(5),
-.itens-grid-selecao td:nth-child(5) { width: 76px; }
+.itens-grid-selecao td:nth-child(5) { width: 85px; }
 
 .itens-grid-selecao th:nth-child(6),
 .itens-grid-selecao td:nth-child(6) { width: 28px; }
@@ -720,6 +743,11 @@ label {
     -webkit-line-clamp: 3;
     line-height: 1.15;
     overflow-wrap: anywhere;
+}
+
+.itens-grid-selecao .item-cell-text {
+    white-space: pre-line;
+    word-break: break-word;
 }
 
 .itens-grid-unidade th:nth-child(1),
@@ -756,7 +784,7 @@ label {
 @media (max-width: 1500px) {
     .tabelas-itens-layout {
         grid-template-columns: minmax(0, 1fr);
-        gap: 18px;
+        gap: 16px;
     }
 
     .tabela-itens-bloco {
@@ -773,6 +801,7 @@ label {
         align-items: flex-start;
         text-align: left;
     }
+
 }
 
 .info-cell-content {

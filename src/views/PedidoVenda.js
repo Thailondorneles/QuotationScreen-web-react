@@ -438,15 +438,17 @@ export function PedidoVenda() {
         return String(valor ?? '').trim() === '1';
     }
 
-    function listaPrecoBloqueiaEdicao(listaPreco) {
+    function listaPrecoEhPromocional(listaPreco) {
         if (!listaPreco) return false;
 
-        const temPromocao = Object.entries(listaPreco).some(([campo, valor]) =>
+        return Object.entries(listaPreco).some(([campo, valor]) =>
             campo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === 'ind_promocao'
             && valorFlagListaAtiva(valor)
         );
+    }
 
-        return temPromocao || valorFlagListaAtiva(listaPreco.tip_aplicacao);
+    function listaPrecoEhContrato(listaPreco) {
+        return valorFlagListaAtiva(listaPreco?.tip_aplicacao);
     }
 
     async function carregarInfoListaPreco(codLista, codItem) {
@@ -507,7 +509,8 @@ export function PedidoVenda() {
         const infoListaPreco = codListaPreco
             ? await carregarInfoListaPreco(codListaPreco, item.cod_item)
             : null;
-        const precoListaBloqueado = listaPrecoBloqueiaEdicao(infoListaPreco);
+        const precoListaPromocional = listaPrecoEhPromocional(infoListaPreco);
+        const precoListaBloqueado = listaPrecoEhContrato(infoListaPreco);
 
         let perDifal = 0;
         if (indSubsMercadoria === 1 && imp.txt_refaz_bc_st && imp.txt_refaz_bc_st.toUpperCase().includes('DIF')) {
@@ -560,6 +563,8 @@ export function PedidoVenda() {
             valorLista,
             codListaPreco,
             infoListaPreco,
+            precoListaPromocional,
+            valorMinimoLista: precoListaPromocional ? valorLista : null,
             precoListaBloqueado,
             semTributacao,
             impostos,
@@ -703,6 +708,8 @@ export function PedidoVenda() {
             valorLista: 0,
             codListaPreco: null,
             infoListaPreco: null,
+            precoListaPromocional: false,
+            valorMinimoLista: null,
             precoListaBloqueado: false,
             semTributacao: false,
             sobraDesejada: null,
@@ -824,6 +831,27 @@ export function PedidoVenda() {
         );
     }
 
+    function validarValorListaPromocional(seq) {
+        const item = itensPedido.find(itemAtual => itemAtual.seq === seq);
+        if (!item?.precoListaPromocional) return;
+
+        const valorInformado = Number(item.valorLista);
+        const valorMinimo = Number(item.valorMinimoLista);
+        if (Number.isFinite(valorInformado) && valorInformado >= valorMinimo) return;
+
+        setItensPedido(prev => prev.map(itemAtual =>
+            itemAtual.seq === seq
+                ? { ...itemAtual, valorLista: valorMinimo.toFixed(4), sobraDesejada: null }
+                : itemAtual
+        ));
+        setModalErro({
+            aberto: true,
+            mensagem: `O preço promocional não pode ser menor que ${format.moeda(valorMinimo)}.`,
+            seqItem: null,
+            focusSelector: `[data-field="valor-lista"][data-seq="${seq}"]`
+        });
+    }
+
     function calcularValorListaPorSobra(item, sobraPercentualDesejada) {
         const qtd = Number(item.quantidade || 0);
         const margem = Number(String(sobraPercentualDesejada).replace(',', '.')) / 100;
@@ -909,6 +937,16 @@ export function PedidoVenda() {
 
         const novoValorLista = calcularValorListaPorSobra(item, valor);
         if (novoValorLista === null || !Number.isFinite(novoValorLista)) return;
+
+        if (item.precoListaPromocional && novoValorLista < Number(item.valorMinimoLista)) {
+            setModalErro({
+                aberto: true,
+                mensagem: `O preço promocional não pode ser menor que ${format.moeda(item.valorMinimoLista)}.`,
+                seqItem: null,
+                focusSelector: `[data-field="valor-lista"][data-seq="${item.seq}"]`
+            });
+            return;
+        }
 
         setItensPedido(prev => prev.map(itemAtual => {
             if (itemAtual.seq !== item.seq) return itemAtual;
@@ -2671,7 +2709,7 @@ export function PedidoVenda() {
                                                     <td><input type="checkbox" checked={Boolean(item.selecionado)} disabled={semTributacao} title={semTributacao ? 'Item sem tributação: envio ao ERP bloqueado' : undefined} onChange={(e) => handleCheckboxChange(item.seq, e.target.checked)} aria-label={`Enviar item ${item.cod_item} pela unidade ${item.unidade}`} /></td>
                                                     <td><input className="item-table-input" data-field="quantidade-unidade" data-unidade={item.unidade} data-seq={item.seq} value={item.quantidade} disabled={!item.selecionado || semTributacao} onChange={(e) => handleQuantidadeChange(item.seq, e.target.value)} onBlur={() => validarMultiplo(item.seq)} onKeyDown={(e) => navegarQuantidadeUnidade(e, item.unidade)} /></td>
                                                     <td>{item.estoque}</td>
-                                                    <td><input className="item-table-input item-table-money" value={item.valorLista} disabled={item.precoListaBloqueado} title={item.precoListaBloqueado ? 'Preço bloqueado por lista promocional ou contrato' : undefined} onFocus={e => e.target.select()} onChange={(e) => handleValorListaChange(item.seq, maskMoneyBR(e.target.value, 4))} /></td>
+                                                    <td><input className="item-table-input item-table-money" data-field="valor-lista" data-seq={item.seq} value={item.valorLista} disabled={item.precoListaBloqueado} title={item.precoListaBloqueado ? 'Preço bloqueado por contrato' : item.precoListaPromocional ? 'Preço promocional: permitido somente aumentar' : undefined} onFocus={e => e.target.select()} onChange={(e) => handleValorListaChange(item.seq, maskMoneyBR(e.target.value, 4))} onBlur={() => validarValorListaPromocional(item.seq)} /></td>
                                                     <td>{format.moeda(valores.valorVendaTotal ?? 0)}</td>
                                                     <td>
                                                         <input
@@ -2680,7 +2718,7 @@ export function PedidoVenda() {
                                                             className="item-table-input item-table-percent"
                                                             value={item.sobraDesejada ?? Number(valores.sobraPercentual ?? 0).toFixed(2)}
                                                             disabled={item.precoListaBloqueado}
-                                                            title={item.precoListaBloqueado ? 'Sobra bloqueada por lista promocional ou contrato' : undefined}
+                                                            title={item.precoListaBloqueado ? 'Sobra bloqueada por contrato' : item.precoListaPromocional ? 'O preço resultante não pode ser menor que o promocional' : undefined}
                                                             onFocus={e => e.target.select()}
                                                             onChange={e => handleSobraPercentualChange(item.seq, e.target.value)}
                                                             onBlur={e => aplicarSobraPercentual(item, e.target.value)}

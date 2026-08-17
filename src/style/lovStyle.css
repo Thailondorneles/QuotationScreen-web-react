@@ -132,12 +132,18 @@
     font-size: 13px;
 }
 
-.lov-list {
+.lov-list-frame {
     position: relative;
     flex: 1;
-    overflow: auto;
+    min-height: 0;
+    overflow: hidden;
     border-top: 1px solid #ddd;
     border-bottom: 1px solid #ddd;
+}
+
+.lov-list {
+    height: 100%;
+    overflow: auto;
 }
 
 .lov-list table {

@@ -32,6 +32,9 @@ import { LovObservacao } from '../components/LovObservacao.js';
 import { enviarPedidoErp } from '../services/pedidosErp.js';
 import { LovUnidadesPedido } from '../components/LovUnidadesPedido.js';
 import { ModalConfirmacao } from '../components/ModalConfirmacao.js';
+import { ModalEmitirProposta } from '../components/ModalEmitirProposta.js';
+import { criarPropostasPorUnidade, validarDadosProposta } from '../services/proposta/propostaDataService.js';
+import { exportarPropostas } from '../services/proposta/propostaService.js';
 
 
 export function PedidoVenda() {
@@ -99,6 +102,8 @@ export function PedidoVenda() {
         unidadesSelecionadas: [],
         situacoesPorUnidade: {}
     });
+    const [modalEmitirProposta, setModalEmitirProposta] = useState(false);
+    const [gerandoProposta, setGerandoProposta] = useState(false);
     const nextId = useRef(1);
     const nextNumItem = useRef(1);
     const [freteSelecionado, setFreteSelecionado] = useState({
@@ -302,6 +307,8 @@ export function PedidoVenda() {
         setObsEditando(null);
         setOrdemCompra('');
         setMenuSelecaoItensOpen(null);
+        setModalEmitirProposta(false);
+        setGerandoProposta(false);
         setModalErro({
             aberto: false,
             mensagem: '',
@@ -2218,6 +2225,63 @@ export function PedidoVenda() {
         enviarPedidosAoErp(unidadesSelecionadas, situacoesPorUnidade);
     }
 
+    function obterDadosPropostaTela() {
+        return {
+            cliente,
+            clienteDetalhado,
+            representante,
+            condicaoPagamento: CondPgto,
+            ordemCompra,
+            dataCarga: dataCargaDigitada,
+            observacoes,
+            itensPedido,
+            freteSelecionado,
+            endereco: {
+                cep: codCepDigitado,
+                uf: codUfDigitado,
+                cidade: cidade?.des_cidade || '',
+                tipoLogradouro: tipoLogradouroSelecionado,
+                logradouro: logradouroDigitado,
+                numero: numeroEnderecoDigitado,
+                complemento: complementoEnderecoDigitado,
+                bairro: bairroDigitado,
+                referencia: referenciaEnderecoDigitado
+            }
+        };
+    }
+
+    function abrirEmissaoProposta() {
+        const erro = validarDadosProposta(obterDadosPropostaTela());
+        if (erro) {
+            setModalErro({ aberto: true, mensagem: erro, seqItem: null, focusSelector: null });
+            return;
+        }
+        setModalEmitirProposta(true);
+    }
+
+    async function emitirProposta(formato) {
+        try {
+            setGerandoProposta(true);
+            const responseCliente = await getClienteByFilter({ filtro: cliente.cod_pessoa }).catch(() => null);
+            const clienteContato = responseCliente?.data?.items?.[0] || {};
+            const dadosProposta = obterDadosPropostaTela();
+            dadosProposta.cliente = { ...dadosProposta.cliente, ...clienteContato };
+            const propostas = criarPropostasPorUnidade(dadosProposta);
+            await exportarPropostas(propostas, formato);
+            setModalEmitirProposta(false);
+        } catch (error) {
+            setModalEmitirProposta(false);
+            setModalErro({
+                aberto: true,
+                mensagem: error?.message || 'Não foi possível gerar a proposta.',
+                seqItem: null,
+                focusSelector: null
+            });
+        } finally {
+            setGerandoProposta(false);
+        }
+    }
+
     async function carregarObservacoesCliente(codCliente) {
         try {
             const response = await getClientesComentarios({
@@ -3286,6 +3350,9 @@ export function PedidoVenda() {
             </div>
             <div className="integracao-card">
                 <div className="obs-footer">
+                    <button type="button" className="btn-adicionar" onClick={abrirEmissaoProposta}>
+                        Emitir proposta
+                    </button>
                     <button type="button" className="btn-adicionar" onClick={abrirSelecaoUnidadesPedido}>
                         Enviar pedido ao ERP
                     </button>
@@ -3302,6 +3369,12 @@ export function PedidoVenda() {
                 mensagem={modalConfirmacaoErp.mensagem}
                 onConfirmar={confirmarEnvioPedidoErp}
                 onCancelar={cancelarEnvioPedidoErp}
+            />
+            <ModalEmitirProposta
+                aberto={modalEmitirProposta}
+                carregando={gerandoProposta}
+                onSelecionar={emitirProposta}
+                onCancelar={() => setModalEmitirProposta(false)}
             />
         </div>
     );

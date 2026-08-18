@@ -101,3 +101,65 @@
 .modal-acoes .modal-btn-sim {
     background: #218c3f;
 }
+
+.modal-proposta {
+    width: min(520px, calc(100vw - 32px));
+    overflow: hidden;
+    border-top: 4px solid #218c3f;
+    border-radius: 8px;
+}
+
+.modal-proposta .modal-conteudo p {
+    margin: 0 0 16px;
+    color: #4f5752;
+    line-height: 1.45;
+}
+
+.modal-proposta-formatos {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.modal-proposta-formatos button {
+    display: flex;
+    min-height: 92px;
+    padding: 14px;
+    flex-direction: column;
+    gap: 6px;
+    align-items: flex-start;
+    color: #26322a;
+    background: #f7faf8;
+    border: 1px solid #cbd9ce;
+    border-radius: 6px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.modal-proposta-formatos button:hover:not(:disabled) {
+    background: #eaf5ed;
+    border-color: #218c3f;
+}
+
+.modal-proposta-formatos strong {
+    color: #197035;
+    font-size: 17px;
+}
+
+.modal-proposta-formatos span {
+    color: #657069;
+    font-size: 12px;
+}
+
+.modal-proposta-status {
+    margin-top: 14px;
+    color: #197035;
+    font-weight: 600;
+    text-align: center;
+}
+
+@media (max-width: 520px) {
+    .modal-proposta-formatos {
+        grid-template-columns: 1fr;
+    }
+}

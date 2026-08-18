@@ -549,13 +549,14 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                         Adicionar selecionados
                     </button>
                 </div>
-                <div className="lov-list">
+                <div className="lov-list-frame">
                     {loading && (
                         <div className="lov-loading">
                             <span className="lov-spinner"></span>
                         </div>
                     )}
-                    <table>
+                    <div className="lov-list">
+                        <table>
                         <thead>
                                 <tr>
                                     
@@ -684,7 +685,8 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                 )
                             })}
                         </tbody>
-                    </table>
+                        </table>
+                    </div>
                 </div>
                 <div className="lov-footer">
                     <button disabled={!podeVoltar} onClick={() => setOffset(offset - ITENS_POR_PAGINA)}>

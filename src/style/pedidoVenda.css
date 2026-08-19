@@ -46,6 +46,39 @@
     margin-bottom: 12px;
 }
 
+.item-card-title-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.item-card-title-actions h2 {
+    margin: 0;
+    font: inherit;
+}
+
+.btn-recalcular-itens {
+    padding: 7px 14px;
+    color: #2e7d32;
+    background: #fff;
+    border: 1px solid #2e7d32;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.btn-recalcular-itens:hover:not(:disabled) {
+    color: #fff;
+    background: #2e7d32;
+}
+
+.btn-recalcular-itens:disabled {
+    color: #9aa3a7;
+    border-color: #cfd5d8;
+    cursor: not-allowed;
+}
+
 .pedido-card,
 .item-card,
 .obs-card,
@@ -297,6 +330,94 @@ label {
 
 .tip-percent {
     margin-left: auto; 
+}
+
+.tip-bases {
+    margin: 8px 0;
+    background: #f7f9f8;
+    border: 1px solid #e1e8e3;
+    border-radius: 5px;
+}
+
+.tip-bases-titulo {
+    display: flex;
+    padding: 7px 8px;
+    align-items: center;
+    justify-content: space-between;
+    color: #596268;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+
+.tip-bases-titulo::-webkit-details-marker {
+    display: none;
+}
+
+.tip-bases-titulo::after {
+    content: '+';
+    color: #2e7d32;
+    font-size: 15px;
+    line-height: 1;
+}
+
+.tip-bases[open] .tip-bases-titulo::after {
+    content: '−';
+}
+
+.tip-bases-conteudo {
+    padding: 0 8px 8px;
+    border-top: 1px solid #e1e8e3;
+    padding-top: 7px;
+}
+
+.tip-base-linha {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 6px;
+    align-items: start;
+}
+
+.tip-base-linha + .tip-base-linha {
+    margin-top: 5px;
+}
+
+.tip-base-nome {
+    padding-top: 3px;
+    color: #37474f;
+    font-weight: 700;
+}
+
+.tip-base-componentes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+}
+
+.tip-base-chip {
+    padding: 2px 5px;
+    border-radius: 10px;
+    font-size: 10px;
+    white-space: nowrap;
+}
+
+.tip-base-chip-base {
+    color: #455a64;
+    background: #e7ecef;
+}
+
+.tip-base-chip-soma {
+    color: #256b2b;
+    background: #e4f2e5;
+}
+
+.tip-base-chip-abate {
+    color: #a33a32;
+    background: #f8e7e5;
 }
 
 .info-cell:hover .tooltip-info {
@@ -686,7 +807,34 @@ label {
 }
 
 .modalidade-integracao-field {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+}
+
+.seletor-verde-wrap {
     position: relative;
+}
+
+.opcao-frete-inline {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.opcao-frete-inline > span {
+    white-space: nowrap;
+    color: #555;
+    font-size: 13px;
+}
+
+.btn-opcao-frete {
+    min-width: 150px;
+}
+
+.opcao-frete-menu {
+    width: 180px;
 }
 
 .btn-modalidade-integracao {

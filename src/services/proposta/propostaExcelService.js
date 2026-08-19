@@ -95,9 +95,15 @@ export async function gerarPropostaExcel(proposta) {
     totalProdutos.getCell(7).font = { bold: true };
     totalProdutos.getCell(8).numFmt = 'R$ #,##0.00';
     if (proposta.frete.cotado) {
-        const frete = sheet.addRow(['', '', '', '', proposta.frete.transportadora, proposta.frete.prazo != null ? `${proposta.frete.prazo} dia(s)` : '', 'Frete', proposta.frete.valor]);
+        const frete = sheet.addRow([
+            '', '', '', '',
+            proposta.frete.transportadora,
+            proposta.frete.prazo != null ? `${proposta.frete.prazo} dia(s)` : '',
+            proposta.frete.valorVisivel ? 'Frete' : 'Frete CIF',
+            proposta.frete.valorVisivel ? proposta.frete.valor : ''
+        ]);
         frete.getCell(7).font = { bold: true };
-        frete.getCell(8).numFmt = 'R$ #,##0.00';
+        if (proposta.frete.valorVisivel) frete.getCell(8).numFmt = 'R$ #,##0.00';
     }
     const total = sheet.addRow(['', '', '', '', '', '', 'TOTAL DA PROPOSTA', proposta.totalProposta]);
     aplicarTitulo(total.getCell(7));

@@ -109,7 +109,8 @@ export async function gerarPropostaPdf(proposta) {
     y += 6;
     if (proposta.frete.cotado) {
         const prazo = proposta.frete.prazo != null ? ` | Prazo: ${proposta.frete.prazo} dia(s)` : '';
-        doc.text(`Frete: ${moeda(proposta.frete.valor)} | Transportadora: ${textoOuTraco(proposta.frete.transportadora)}${prazo}`, 283, y, { align: 'right' });
+        const valorFrete = proposta.frete.valorVisivel ? `Frete: ${moeda(proposta.frete.valor)} | ` : '';
+        doc.text(`${valorFrete}Transportadora: ${textoOuTraco(proposta.frete.transportadora)}${prazo}`, 283, y, { align: 'right' });
         y += 6;
     }
     doc.setFont(undefined, 'bold');

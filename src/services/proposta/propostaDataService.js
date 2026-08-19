@@ -60,6 +60,7 @@ export function criarPropostasPorUnidade(dados) {
         const freteSelecionado = dados.freteSelecionado?.[unidade] || null;
         const totalProdutos = itens.reduce((total, item) => total + item.valorTotal, 0);
         const valorFrete = freteSelecionado ? numeroDecimal(freteSelecionado.valor) : 0;
+        const cobrarFreteNaNf = dados.opcaoFrete === 'COBRAR_NF';
         const configUnidade = EMPRESA_PROPOSTA.unidades[unidade] || { nome: `Unidade ${unidade}`, cnpj: '' };
 
         return {
@@ -98,10 +99,12 @@ export function criarPropostasPorUnidade(dados) {
                 cotado: true,
                 transportadora: freteSelecionado.nome || '',
                 prazo: freteSelecionado.prazo,
-                valor: valorFrete
-            } : { cotado: false, transportadora: '', prazo: null, valor: 0 },
+                valor: cobrarFreteNaNf ? valorFrete : null,
+                valorVisivel: cobrarFreteNaNf,
+                modalidade: cobrarFreteNaNf ? 'COBRAR_NF' : 'CIF'
+            } : { cotado: false, transportadora: '', prazo: null, valor: null, valorVisivel: false, modalidade: dados.opcaoFrete || 'CIF' },
             totalProdutos,
-            totalProposta: totalProdutos + valorFrete
+            totalProposta: totalProdutos + (cobrarFreteNaNf ? valorFrete : 0)
         };
     });
 }

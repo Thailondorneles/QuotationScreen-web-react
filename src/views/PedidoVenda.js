@@ -31,6 +31,10 @@ import LoadingOverlay from '../components/LoadingOverlay.js';
 import { LovObservacao } from '../components/LovObservacao.js';
 import { enviarPedidoErp } from '../services/pedidosErp.js';
 import { LovUnidadesPedido } from '../components/LovUnidadesPedido.js';
+import { ModalConfirmacao } from '../components/ModalConfirmacao.js';
+import { ModalEmitirProposta } from '../components/ModalEmitirProposta.js';
+import { criarPropostasPorUnidade, validarDadosProposta } from '../services/proposta/propostaDataService.js';
+import { exportarPropostas } from '../services/proposta/propostaService.js';
 
 
 export function PedidoVenda() {
@@ -56,6 +60,10 @@ export function PedidoVenda() {
     const [CondPgto, setCondPgto] = useState({ cod_cond_pgto: null, des_cond_pgto: null });
     const [prazoMedioVenda, setPrazoMedioVenda] = useState(null);
     const [clienteConsumidor, setClienteConsumidor] = useState(false);
+    const [modalidadeIntegracao, setModalidadeIntegracao] = useState(2);
+    const [menuModalidadeIntegracaoOpen, setMenuModalidadeIntegracaoOpen] = useState(false);
+    const [opcaoFrete, setOpcaoFrete] = useState('CIF');
+    const [menuOpcaoFreteOpen, setMenuOpcaoFreteOpen] = useState(false);
     const [creditoCliente, setCreditoCliente] = useState({
         atingido: null,
         limiteMensal: null,
@@ -88,8 +96,17 @@ export function PedidoVenda() {
     });
     const [modalSucesso, setModalSucesso] = useState({
         aberto: false,
-        mensagem: ''
+        mensagem: '',
+        limparAoFechar: false
     });
+    const [modalConfirmacaoErp, setModalConfirmacaoErp] = useState({
+        aberto: false,
+        mensagem: '',
+        unidadesSelecionadas: [],
+        situacoesPorUnidade: {}
+    });
+    const [modalEmitirProposta, setModalEmitirProposta] = useState(false);
+    const [gerandoProposta, setGerandoProposta] = useState(false);
     const nextId = useRef(1);
     const nextNumItem = useRef(1);
     const [freteSelecionado, setFreteSelecionado] = useState({
@@ -221,6 +238,15 @@ export function PedidoVenda() {
         return tipo?.des_tipo || '';
     }
 
+    function getCodigoTipoLogradouro(desTipo) {
+        const descricao = String(desTipo ?? '').trim().toUpperCase();
+        const tipo = tiposLogradouro.find(item =>
+            String(item.des_tipo ?? '').trim().toUpperCase() === descricao
+        );
+
+        return tipo?.cod_tipo ?? null;
+    }
+
     function getCodigoPessoaCliente() {
         return String(cliente?.cod_pessoa ?? codClienteDigitado ?? '').trim();
     }
@@ -266,6 +292,10 @@ export function PedidoVenda() {
         setCondPgto({ cod_cond_pgto: null, des_cond_pgto: null });
         setPrazoMedioVenda(null);
         setClienteConsumidor(false);
+        setModalidadeIntegracao(2);
+        setMenuModalidadeIntegracaoOpen(false);
+        setOpcaoFrete('CIF');
+        setMenuOpcaoFreteOpen(false);
         setCreditoCliente({ atingido: null, limiteMensal: null, titulosVencidos: null });
         setCodClienteDigitado('');
         setCodClienteTriangulacaoDigitado('');
@@ -282,6 +312,8 @@ export function PedidoVenda() {
         setObsEditando(null);
         setOrdemCompra('');
         setMenuSelecaoItensOpen(null);
+        setModalEmitirProposta(false);
+        setGerandoProposta(false);
         setModalErro({
             aberto: false,
             mensagem: '',
@@ -290,7 +322,8 @@ export function PedidoVenda() {
         });
         setModalSucesso({
             aberto: false,
-            mensagem: ''
+            mensagem: '',
+            limparAoFechar: false
         });
         nextId.current = 1;
         nextNumItem.current = 1;
@@ -374,9 +407,31 @@ export function PedidoVenda() {
         setLoading(true);
 
         try {
+            // Impostos dependem dos padrões comerciais do novo cliente. Sem esta
+            // espera, a consulta pode usar operação e condição do cliente anterior.
+            const dadosClienteNovo = await buscarDetalhesClientePedido(cli);
+            if (idRecalculo !== recalculoClienteId.current) return;
+
+            const operacaoNova = {
+                cod_oper: dadosClienteNovo?.cod_oper || null,
+                des_oper: dadosClienteNovo?.des_oper || null
+            };
+            const condPgtoNova = {
+                cod_cond_pgto: dadosClienteNovo?.cod_cond_pgto || null,
+                des_cond_pgto: dadosClienteNovo?.des_cond_pgto || null
+            };
+
+            if (!operacaoNova.cod_oper || !condPgtoNova.cod_cond_pgto) {
+                throw new Error('O novo cliente não possui operação ou condição de pagamento padrão para recalcular os itens.');
+            }
+
             const resultados = await mapComConcorrencia(itensPedido, 3, async item => ({
                     seq: item.seq,
-                    dados: await buscarDadosItem(item, { clienteAtual: cli })
+                    dados: await buscarDadosItemComTentativas(item, {
+                        clienteAtual: cli,
+                        operacaoAtual: operacaoNova,
+                        condPgtoAtual: condPgtoNova
+                    })
                 })
             );
             const dadosPorSeq = new Map();
@@ -396,19 +451,142 @@ export function PedidoVenda() {
                         ? {
                             ...item,
                             ...dadosPorSeq.get(item.seq),
+                            erroRecalculoCliente: false,
                             selecionado: dadosPorSeq.get(item.seq).semTributacao ? false : item.selecionado
                         }
-                        : item
+                        : {
+                            ...item,
+                            valorLista: 0,
+                            codListaPreco: null,
+                            infoListaPreco: null,
+                            valorMinimoLista: null,
+                            precoListaPromocional: false,
+                            precoListaBloqueado: false,
+                            impostos: null,
+                            baseST: null,
+                            semTributacao: true,
+                            selecionado: false,
+                            erroRecalculoCliente: true
+                        }
                 ));
             }
 
             if (erros.length && idRecalculo === recalculoClienteId.current) {
-                alert('Erro ao recalcular impostos, acordos ou histórico de alguns itens para o novo cliente.');
+                const itensComErro = resultados
+                    .map((resultado, index) => resultado.status === 'rejected' ? itensPedido[index]?.cod_item : null)
+                    .filter(Boolean);
+                setModalErro({
+                    aberto: true,
+                    mensagem: `Não foi possível atualizar a tributação dos itens ${itensComErro.join(', ')}. Eles foram desmarcados para evitar o uso de valores do cliente anterior. Tente novamente.`,
+                    seqItem: null,
+                    focusSelector: null
+                });
             }
+        } catch (error) {
+            if (idRecalculo !== recalculoClienteId.current) return;
+            setItensPedido(prev => prev.map(item => ({
+                ...item,
+                valorLista: 0,
+                impostos: null,
+                baseST: null,
+                semTributacao: true,
+                selecionado: false,
+                erroRecalculoCliente: true
+            })));
+            setModalErro({
+                aberto: true,
+                mensagem: error?.message || 'Não foi possível carregar os dados comerciais do novo cliente. Os itens foram desmarcados para evitar o uso de valores antigos.',
+                seqItem: null,
+                focusSelector: null
+            });
         } finally {
             if (idRecalculo === recalculoClienteId.current) {
                 setLoading(false);
             }
+        }
+    }
+
+    async function recalcularItensManualmente() {
+        if (!itensPedido.length) {
+            setModalErro({ aberto: true, mensagem: 'Não há itens para recalcular.', seqItem: null, focusSelector: null });
+            return;
+        }
+        if (!cliente?.cod_pessoa || !operacao?.cod_oper || !CondPgto?.cod_cond_pgto) {
+            setModalErro({
+                aberto: true,
+                mensagem: 'Informe cliente, operação e condição de pagamento antes de recalcular os itens.',
+                seqItem: null,
+                focusSelector: null
+            });
+            return;
+        }
+
+        const idRecalculo = ++recalculoClienteId.current;
+        const itensAtuais = itensPedido;
+        setFreteSelecionado({ 201: null, 203: null });
+        setLoading(true);
+
+        try {
+            const resultados = await mapComConcorrencia(itensAtuais, 3, async item => ({
+                seq: item.seq,
+                dados: await buscarDadosItemComTentativas(item, {
+                    clienteAtual: cliente,
+                    operacaoAtual: operacao,
+                    condPgtoAtual: CondPgto
+                })
+            }));
+            if (idRecalculo !== recalculoClienteId.current) return;
+
+            const dadosPorSeq = new Map();
+            resultados.forEach(resultado => {
+                if (resultado.status === 'fulfilled') {
+                    dadosPorSeq.set(resultado.value.seq, resultado.value.dados);
+                }
+            });
+
+            setItensPedido(prev => prev.map(item => dadosPorSeq.has(item.seq)
+                ? {
+                    ...item,
+                    ...dadosPorSeq.get(item.seq),
+                    erroRecalculoCliente: false,
+                    selecionado: dadosPorSeq.get(item.seq).semTributacao ? false : item.selecionado
+                }
+                : {
+                    ...item,
+                    valorLista: 0,
+                    codListaPreco: null,
+                    infoListaPreco: null,
+                    valorMinimoLista: null,
+                    precoListaPromocional: false,
+                    precoListaBloqueado: false,
+                    impostos: null,
+                    baseST: null,
+                    semTributacao: true,
+                    selecionado: false,
+                    erroRecalculoCliente: true
+                }
+            ));
+
+            const itensComErro = resultados
+                .map((resultado, index) => resultado.status === 'rejected' ? itensAtuais[index]?.cod_item : null)
+                .filter(Boolean);
+
+            if (itensComErro.length) {
+                setModalErro({
+                    aberto: true,
+                    mensagem: `Não foi possível recalcular os itens ${itensComErro.join(', ')}. Eles permaneceram desmarcados e sem valores antigos.`,
+                    seqItem: null,
+                    focusSelector: null
+                });
+            } else {
+                setModalSucesso({
+                    aberto: true,
+                    mensagem: 'Itens recalculados com sucesso.',
+                    limparAoFechar: false
+                });
+            }
+        } finally {
+            if (idRecalculo === recalculoClienteId.current) setLoading(false);
         }
     }
 
@@ -531,6 +709,18 @@ export function PedidoVenda() {
             listaST: indSubsMercadoria === 1 ? imp.cod_lista_st : null,
             // percentual de ICMS desonerado / Funrural — NÃO deve reduzir a sobra
             perFunrural: Number(imp.per_funrural || 0),
+            indIcmsFreteSoma: Number(imp.ind_icms_frete_soma || 0),
+            indIcmsIpiSoma: Number(imp.ind_icms_ipi_soma || 0),
+            indIcmsCofinsSoma: Number(imp.ind_icms_cofins_soma || 0),
+            indIcmsPisSoma: Number(imp.ind_icms_pis_soma || 0),
+            indSubsFreteSoma: Number(imp.ind_subs_frete_soma || 0),
+            indSubsIpiSoma: Number(imp.ind_subs_ipi_soma || 0),
+            indSubsCofinsSoma: Number(imp.ind_subs_cofins_soma || 0),
+            indSubsPisSoma: Number(imp.ind_subs_pis_soma || 0),
+            indIpiFreteSoma: Number(imp.ind_ipi_frete_soma || 0),
+            indPiscofFreteSoma: Number(imp.ind_piscof_frete_soma || 0),
+            indPiscofIpiSoma: Number(imp.ind_piscof_ipi_soma || 0),
+            indPiscofIcmsAbate: Number(imp.ind_piscof_icms_abate || 0),
             indSubsMercadoria,
             codListaPreco
         };
@@ -573,6 +763,20 @@ export function PedidoVenda() {
             ultimaCompraItem,
             ultimaCompraItemDasUltimasCompras: ultimasComprasClienteMap[item.cod_item] || null
         };
+    }
+
+    async function buscarDadosItemComTentativas(item, contexto, totalTentativas = 2) {
+        let ultimoErro;
+
+        for (let tentativa = 1; tentativa <= totalTentativas; tentativa += 1) {
+            try {
+                return await buscarDadosItem(item, contexto);
+            } catch (error) {
+                ultimoErro = error;
+            }
+        }
+
+        throw ultimoErro;
     }
 
     async function carregarAcordosItem(codItem, codCliente = getCodigoPessoaCliente()) {
@@ -799,26 +1003,36 @@ export function PedidoVenda() {
         );
     }
 
-    function navegarQuantidadeUnidade(event, unidade) {
+    function navegarCamposItens(event) {
         if (event.key !== 'Enter' && event.key !== 'Tab') return;
 
-        const campos = Array.from(document.querySelectorAll(
-            `input[data-field="quantidade-unidade"][data-unidade="${unidade}"]:not(:disabled)`
-        ));
+        const camposPorUnidade = [201, 203].flatMap(unidade =>
+            ['quantidade-unidade', 'valor-lista', 'sobra-percentual'].flatMap(campo =>
+                Array.from(document.querySelectorAll(
+                    `input[data-field="${campo}"][data-unidade="${unidade}"]:not(:disabled)`
+                ))
+            )
+        );
+        const campos = camposPorUnidade.filter(campo => campo.offsetParent !== null);
         const indiceAtual = campos.indexOf(event.currentTarget);
-        const direcao = event.shiftKey ? -1 : 1;
-        const proximoCampo = campos[indiceAtual + direcao];
+        if (indiceAtual < 0 || !campos.length) return;
 
-        if (proximoCampo) {
-            event.preventDefault();
-            proximoCampo.focus();
-            proximoCampo.select();
+        const direcao = event.shiftKey ? -1 : 1;
+        let proximoIndice = indiceAtual + direcao;
+
+        if (proximoIndice < 0 || proximoIndice >= campos.length) {
+            if (event.key === 'Tab') return;
+            proximoIndice = proximoIndice < 0 ? campos.length - 1 : 0;
+        }
+
+        const proximoCampo = campos[proximoIndice];
+        if (!proximoCampo) {
             return;
         }
 
-        if (event.key === 'Enter') {
-            event.currentTarget.blur();
-        }
+        event.preventDefault();
+        proximoCampo.focus();
+        proximoCampo.select();
     }
 
     function handleValorListaChange(seq, valor) {
@@ -835,8 +1049,8 @@ export function PedidoVenda() {
         const item = itensPedido.find(itemAtual => itemAtual.seq === seq);
         if (!item?.precoListaPromocional) return;
 
-        const valorInformado = Number(item.valorLista);
-        const valorMinimo = Number(item.valorMinimoLista);
+        const valorInformado = numeroDecimalBR(item.valorLista);
+        const valorMinimo = numeroDecimalBR(item.valorMinimoLista);
         if (Number.isFinite(valorInformado) && valorInformado >= valorMinimo) return;
 
         setItensPedido(prev => prev.map(itemAtual =>
@@ -852,41 +1066,79 @@ export function PedidoVenda() {
         });
     }
 
+    function resolverSistemaLinear(matriz, termos) {
+        const sistema = matriz.map((linha, indice) => [...linha, termos[indice]]);
+        const tamanho = sistema.length;
+
+        for (let coluna = 0; coluna < tamanho; coluna += 1) {
+            let pivo = coluna;
+            for (let linha = coluna + 1; linha < tamanho; linha += 1) {
+                if (Math.abs(sistema[linha][coluna]) > Math.abs(sistema[pivo][coluna])) pivo = linha;
+            }
+            if (Math.abs(sistema[pivo][coluna]) < 1e-12) return null;
+            [sistema[coluna], sistema[pivo]] = [sistema[pivo], sistema[coluna]];
+
+            const divisor = sistema[coluna][coluna];
+            for (let j = coluna; j <= tamanho; j += 1) sistema[coluna][j] /= divisor;
+            for (let linha = 0; linha < tamanho; linha += 1) {
+                if (linha === coluna) continue;
+                const fator = sistema[linha][coluna];
+                for (let j = coluna; j <= tamanho; j += 1) sistema[linha][j] -= fator * sistema[coluna][j];
+            }
+        }
+        return sistema.map(linha => linha[tamanho]);
+    }
+
+    function calcularTributosItem(item, valorVendaTotal) {
+        const imp = item.impostos || {};
+        const frete = Number(item.valorFrete || 0);
+        const ativo = indicador => Number(indicador) === 1 ? 1 : 0;
+        const rIpi = Number(imp.perIpi || 0) / 100;
+        const rIcms = Number(imp.perIcms || 0) / 100;
+        const rPis = Number(imp.perPis || 0) / 100;
+        const rCofins = Number(imp.perCofins || 0) / 100;
+        const baseIpiFixa = valorVendaTotal + ativo(imp.indIpiFreteSoma) * frete;
+        const baseIcmsFixa = valorVendaTotal + ativo(imp.indIcmsFreteSoma) * frete;
+        const basePiscofFixa = valorVendaTotal + ativo(imp.indPiscofFreteSoma) * frete;
+
+        // Variáveis: IPI, ICMS, PIS e COFINS. A solução simultânea cobre
+        // inclusive ICMS somando PIS/COFINS e PIS/COFINS abatendo ICMS.
+        const matriz = [
+            [1, 0, 0, 0],
+            [-rIcms * ativo(imp.indIcmsIpiSoma), 1, -rIcms * ativo(imp.indIcmsPisSoma), -rIcms * ativo(imp.indIcmsCofinsSoma)],
+            [-rPis * ativo(imp.indPiscofIpiSoma), rPis * ativo(imp.indPiscofIcmsAbate), 1, 0],
+            [-rCofins * ativo(imp.indPiscofIpiSoma), rCofins * ativo(imp.indPiscofIcmsAbate), 0, 1]
+        ];
+        const termos = [rIpi * baseIpiFixa, rIcms * baseIcmsFixa, rPis * basePiscofFixa, rCofins * basePiscofFixa];
+        const [ipi, icms, pis, cofins] = resolverSistemaLinear(matriz, termos) || [0, 0, 0, 0];
+        const baseIpi = baseIpiFixa;
+        const baseIcms = baseIcmsFixa
+            + ativo(imp.indIcmsIpiSoma) * ipi
+            + ativo(imp.indIcmsPisSoma) * pis
+            + ativo(imp.indIcmsCofinsSoma) * cofins;
+        const basePiscof = basePiscofFixa
+            + ativo(imp.indPiscofIpiSoma) * ipi
+            - ativo(imp.indPiscofIcmsAbate) * icms;
+
+        return { ipi, icms, pis, cofins, baseIpi, baseIcms, basePiscof };
+    }
+
     function calcularValorListaPorSobra(item, sobraPercentualDesejada) {
         const qtd = Number(item.quantidade || 0);
         const margem = Number(String(sobraPercentualDesejada).replace(',', '.')) / 100;
 
         if (!qtd || !Number.isFinite(margem)) return null;
 
-        const imp = item.impostos || {};
-        const indSubsMercadoria = Number(imp.indSubsMercadoria || 0);
-        let percentualSobreVenda = [
-            imp.perIcms,
-            imp.perPis,
-            imp.perCofins,
-            imp.perIpi,
-            imp.perFcp
-        ].reduce((total, percentual) => total + Number(percentual || 0), 0) / 100;
-        let impostoFixo = 0;
-
-        if (indSubsMercadoria === 1) {
-            if (imp.difal && imp.difal.toUpperCase().includes('DIF')) {
-                percentualSobreVenda += Number(imp.perDifal || 0) / 100;
-            } else if (item.baseST) {
-                impostoFixo = Number(item.baseST) * qtd * (Number(imp.perSubstTrib || 0) / 100);
-            } else if (imp.idxSubsTrib) {
-                percentualSobreVenda += Number(imp.idxSubsTrib) * (Number(imp.perSubstTrib || 0) / 100);
-            } else {
-                percentualSobreVenda += Number(imp.perSubstTrib || 0) / 100;
-            }
-        }
-
-        const divisor = 1 - percentualSobreVenda - margem;
+        const itemSemPreco = { ...item, valorLista: 0 };
+        const impostosFixos = calcularValoresItem(itemSemPreco, 0).totalImpostos;
+        const impostosUmaUnidadeVenda = calcularValoresItem(itemSemPreco, 1).totalImpostos;
+        const impostoVariavelPorReal = impostosUmaUnidadeVenda - impostosFixos;
+        const divisor = 1 - impostoVariavelPorReal - margem;
         if (divisor <= 0) return null;
 
         const custoTotal = Number(item.vlrMedio || 0) * qtd;
         const frete = Number(item.valorFrete || 0);
-        return (custoTotal + frete + impostoFixo) / divisor / qtd;
+        return (custoTotal + frete + impostosFixos) / divisor / qtd;
     }
 
     function handleSobraPercentualChange(seq, valor) {
@@ -896,31 +1148,17 @@ export function PedidoVenda() {
     }
 
     function calcularPercentualMaximoSobra(item) {
-        const imp = item.impostos || {};
-        const indSubsMercadoria = Number(imp.indSubsMercadoria || 0);
-        let percentualSobreVenda = [
-            imp.perIcms,
-            imp.perPis,
-            imp.perCofins,
-            imp.perIpi,
-            imp.perFcp
-        ].reduce((total, percentual) => total + Number(percentual || 0), 0) / 100;
-
-        if (indSubsMercadoria === 1) {
-            if (imp.difal && imp.difal.toUpperCase().includes('DIF')) {
-                percentualSobreVenda += Number(imp.perDifal || 0) / 100;
-            } else if (!item.baseST && imp.idxSubsTrib) {
-                percentualSobreVenda += Number(imp.idxSubsTrib) * (Number(imp.perSubstTrib || 0) / 100);
-            } else if (!item.baseST) {
-                percentualSobreVenda += Number(imp.perSubstTrib || 0) / 100;
-            }
-        }
-
-        return (1 - percentualSobreVenda) * 100;
+        const itemSemPreco = { ...item, valorLista: 0 };
+        const impostosFixos = calcularValoresItem(itemSemPreco, 0).totalImpostos;
+        const impostosUmaUnidadeVenda = calcularValoresItem(itemSemPreco, 1).totalImpostos;
+        return (1 - (impostosUmaUnidadeVenda - impostosFixos)) * 100;
     }
 
     function aplicarSobraPercentual(item, valor) {
         if (item?.precoListaBloqueado) return;
+        // Apenas navegar pelo campo não deve recalcular o preço com a sobra
+        // exibida em 2 casas, pois o preço de origem possui até 4 casas.
+        if (item?.sobraDesejada === null || item?.sobraDesejada === undefined) return;
 
         const sobraInformada = Number(String(valor).replace(',', '.'));
         const percentualMaximo = calcularPercentualMaximoSobra(item);
@@ -937,11 +1175,13 @@ export function PedidoVenda() {
 
         const novoValorLista = calcularValorListaPorSobra(item, valor);
         if (novoValorLista === null || !Number.isFinite(novoValorLista)) return;
+        const novoValorListaArredondado = Number(novoValorLista.toFixed(4));
+        const valorMinimoLista = numeroDecimalBR(item.valorMinimoLista);
 
-        if (item.precoListaPromocional && novoValorLista < Number(item.valorMinimoLista)) {
+        if (item.precoListaPromocional && novoValorListaArredondado < valorMinimoLista) {
             setModalErro({
                 aberto: true,
-                mensagem: `O preço promocional não pode ser menor que ${format.moeda(item.valorMinimoLista)}.`,
+                mensagem: `O preço promocional não pode ser menor que ${format.moeda(valorMinimoLista)}.`,
                 seqItem: null,
                 focusSelector: `[data-field="valor-lista"][data-seq="${item.seq}"]`
             });
@@ -954,7 +1194,7 @@ export function PedidoVenda() {
             return {
                 ...itemAtual,
                 sobraDesejada: null,
-                valorLista: novoValorLista.toFixed(4)
+                valorLista: novoValorListaArredondado.toFixed(4)
             };
         }));
     }
@@ -1002,12 +1242,12 @@ export function PedidoVenda() {
         setMenuSelecaoItensOpen(null);
     }
 
-    function calcularValoresItem(item) {
+    function calcularValoresItem(item, valorVendaTotalForcado = null) {
         const qtd = Number(item.quantidade || 0);
-        const vlrLista = Number(item.valorLista || 0);
+        const vlrLista = numeroDecimalBR(item.valorLista);
         const vlrMedio = Number(item.vlrMedio || 0);
 
-        if (!qtd || !vlrLista) {
+        if (!qtd || (!vlrLista && valorVendaTotalForcado === null)) {
             return {
                 valorVendaTotal: 0,
                 sobraReal: 0,
@@ -1022,39 +1262,43 @@ export function PedidoVenda() {
             };
         }
 
-        const valorVendaTotal = qtd * vlrLista;
+        const valorVendaTotal = valorVendaTotalForcado === null ? qtd * vlrLista : valorVendaTotalForcado;
         const valorCustoTotal = qtd * vlrMedio;
 
         const imp = item.impostos || {};
         const indSubsMercadoria = Number(imp.indSubsMercadoria || 0)
-        // ===== IMPOSTOS BÁSICOS =====
-        const icms = valorVendaTotal * (Number(imp.perIcms || 0) / 100);
-        const pis = valorVendaTotal * (Number(imp.perPis || 0) / 100);
-        const cofins = valorVendaTotal * (Number(imp.perCofins || 0) / 100);
-        const ipi = valorVendaTotal * (Number(imp.perIpi || 0) / 100);
+        const { icms, pis, cofins, ipi, baseIcms, basePiscof, baseIpi } = calcularTributosItem(item, valorVendaTotal);
         const fcp = valorVendaTotal * (Number(imp.perFcp || 0) / 100);
 
         let difal = 0;
         let st = 0;
+        let baseSubs = 0;
 
         if (indSubsMercadoria === 1) {
             if (imp.difal && imp.difal.toUpperCase().includes('DIF')) {
                 const perDifal = Number(imp.perDifal || 0);
-                difal = valorVendaTotal * (perDifal / 100);
+                baseSubs = valorVendaTotal;
+                baseSubs += Number(imp.indSubsFreteSoma) === 1 ? Number(item.valorFrete || 0) : 0;
+                baseSubs += Number(imp.indSubsIpiSoma) === 1 ? ipi : 0;
+                baseSubs += Number(imp.indSubsPisSoma) === 1 ? pis : 0;
+                baseSubs += Number(imp.indSubsCofinsSoma) === 1 ? cofins : 0;
+                difal = baseSubs * (perDifal / 100);
             } else {
                 // 2.1 — ST por LISTA (prioridade maior que índice)
                 if (item.baseST) {
-                    const baseTotal = item.baseST * qtd;
-                    st = baseTotal * (Number(imp.perSubstTrib || 0) / 100);
+                    baseSubs = item.baseST * qtd;
                 }
                 // 2.2 — ST por ÍNDICE
                 else if (imp.idxSubsTrib) {
-                    const baseTotal = (vlrLista * imp.idxSubsTrib) * qtd;
-                    st = baseTotal * (Number(imp.perSubstTrib || 0) / 100);
+                    baseSubs = (valorVendaTotal * imp.idxSubsTrib);
                 } else {
-                    const baseTotal = vlrLista * qtd;
-                    st = baseTotal * (Number(imp.perSubstTrib || 0) / 100);
+                    baseSubs = valorVendaTotal;
                 }
+                baseSubs += Number(imp.indSubsFreteSoma) === 1 ? Number(item.valorFrete || 0) : 0;
+                baseSubs += Number(imp.indSubsIpiSoma) === 1 ? ipi : 0;
+                baseSubs += Number(imp.indSubsPisSoma) === 1 ? pis : 0;
+                baseSubs += Number(imp.indSubsCofinsSoma) === 1 ? cofins : 0;
+                st = baseSubs * (Number(imp.perSubstTrib || 0) / 100);
             }
         }
 
@@ -1078,6 +1322,10 @@ export function PedidoVenda() {
             difal,
             st,
             fcp,
+            baseIcms,
+            basePiscof,
+            baseIpi,
+            baseSubs,
             valorFunrural,
             totalImpostos,
             sobraBruta,
@@ -1125,12 +1373,20 @@ export function PedidoVenda() {
             return dadosClienteCache.current.get(codCliente);
         }
 
-        const response = await getClienteDetalhado({ codPessoa: cli.cod_pessoa });
+        const requisicao = getClienteDetalhado({ codPessoa: cli.cod_pessoa })
+            .then(response => response.data.items?.[0] || cli)
+            .then(dadosCliente => {
+                dadosClienteCache.current.set(codCliente, dadosCliente);
+                return dadosCliente;
+            })
+            .catch(error => {
+                dadosClienteCache.current.delete(codCliente);
+                throw error;
+            });
 
-        const dadosCliente = response.data.items?.[0] || cli;
-        dadosClienteCache.current.set(codCliente, dadosCliente);
-
-        return dadosCliente;
+        // O recálculo e o preenchimento dos campos compartilham a mesma chamada.
+        dadosClienteCache.current.set(codCliente, requisicao);
+        return requisicao;
     }
 
     async function carregarRepresentanteCliente(codCliente) {
@@ -1760,14 +2016,18 @@ export function PedidoVenda() {
         return valor;
     }
 
+    function numeroDecimalBR(valor) {
+        const texto = String(valor ?? '').trim();
+        const normalizado = texto.includes(',')
+            ? texto.replace(/\./g, '').replace(',', '.')
+            : texto;
+        const numero = Number(normalizado);
+
+        return Number.isFinite(numero) ? numero : 0;
+    }
+
     function valorDecimalErp(valor) {
-        const valorTexto = String(valor ?? '0').trim();
-
-        if (valorTexto.includes(',')) {
-            return valorTexto.replace(/[^\d,]/g, '');
-        }
-
-        return Number(valor || 0).toFixed(4).replace('.', ',');
+        return numeroDecimalBR(valor).toFixed(4).replace('.', ',');
     }
 
     function getUsuarioIntegracao() {
@@ -1857,48 +2117,84 @@ export function PedidoVenda() {
         return null;
     }
 
-    async function validarSobraPorClassificacaoItens(unidadesSelecionadas = [201, 203]) {
+    function getNomeClassificacaoSobra(desGeral) {
+        const classificacao = String(desGeral ?? '').trim().toUpperCase();
+
+        if (['T', 'I'].includes(classificacao)) return 'MMT';
+        if (['A', 'B'].includes(classificacao)) return 'AC';
+
+        return classificacao;
+    }
+
+    async function avaliarSituacoesPedidoErp(unidadesSelecionadas = [201, 203]) {
         const itensSelecionados = obterItensSelecionadosPorUnidades(unidadesSelecionadas);
         const codItens = itensSelecionados.map(item => item.cod_item);
 
-        if (!codItens.length) return null;
+        if (!codItens.length) return { situacoesPorUnidade: {}, mensagens: [] };
 
         const response = await getItensClassificacao({ codItens });
         const classificacoesPorItem = (response.data.items || []).reduce((acc, item) => {
             acc[String(item.cod_item)] = item.des_geral;
             return acc;
         }, {});
+        const situacoesPorUnidade = {};
+        const mensagens = [];
 
-        const itensForaRegra = itensSelecionados.reduce((erros, item) => {
-            if (item.precoListaBloqueado) return erros;
+        unidadesSelecionadas.map(Number).forEach(unidade => {
+            const itensUnidade = itensSelecionados.filter(item => Number(item.unidade) === unidade);
+            if (!itensUnidade.length) return;
 
-            const minimoSobra = getPercentualMinimoSobraPorClassificacao(
-                classificacoesPorItem[String(item.cod_item)]
-            );
+            const totais = itensUnidade.reduce((acc, item) => {
+                const valores = calcularValoresItem(item);
+                acc.valorVenda += Number(valores.valorVendaTotal || 0);
+                acc.sobra += Number(valores.sobraReal || 0);
+                return acc;
+            }, { valorVenda: 0, sobra: 0 });
+            const sobraTotal = Number((totais.valorVenda > 0
+                ? (totais.sobra / totais.valorVenda) * 100
+                : 0).toFixed(2));
+            const itensForaRegra = itensUnidade.reduce((erros, item) => {
+                if (item.precoListaBloqueado) return erros;
 
-            if (minimoSobra === null) return erros;
+                const classificacao = classificacoesPorItem[String(item.cod_item)];
+                const minimoSobra = getPercentualMinimoSobraPorClassificacao(classificacao);
+                if (minimoSobra === null) return erros;
 
-            const valores = calcularValoresItem(item);
-            const sobraPercentual = Number(Number(valores.sobraPercentual || 0).toFixed(2));
+                const sobraPercentual = Number(Number(
+                    calcularValoresItem(item).sobraPercentual || 0
+                ).toFixed(2));
+                if (sobraPercentual < minimoSobra) {
+                    erros.push({ item, classificacao, minimoSobra, sobraPercentual });
+                }
+                return erros;
+            }, []);
 
-            if (sobraPercentual < minimoSobra) {
-                erros.push({
-                    item,
-                    minimoSobra
-                });
+            const requerAprovacao = sobraTotal < 6 || itensForaRegra.length > 0;
+            situacoesPorUnidade[unidade] = requerAprovacao
+                ? 70
+                : modalidadeIntegracao === 7 ? 32 : 6;
+
+            if (sobraTotal < 6) {
+                mensagens.push(
+                    `UNIDADE ${unidade}\n` +
+                    `Sobra total: ${sobraTotal.toFixed(2).replace('.', ',')}% (mínima: 6%)\n` +
+                    'A sobra total está abaixo da mínima. O pedido irá para aprovação no NL em situação 70.'
+                );
+            } else if (itensForaRegra.length) {
+                const detalhes = itensForaRegra.map(({ item, classificacao, minimoSobra, sobraPercentual }) =>
+                    `• Item seq. ${item.seq} - ${item.cod_item} (${getNomeClassificacaoSobra(classificacao)}) — ` +
+                    `sobra ${sobraPercentual.toFixed(2).replace('.', ',')}% < mínima ${minimoSobra}%`
+                ).join('\n');
+                mensagens.push(
+                    `UNIDADE ${unidade}\n` +
+                    `Sobra total: ${sobraTotal.toFixed(2).replace('.', ',')}% (mínima atingida)\n\n` +
+                    `Itens abaixo da sobra exigida:\n${detalhes}\n\n` +
+                    'O pedido irá para aprovação no NL em situação 70.'
+                );
             }
+        });
 
-            return erros;
-        }, []);
-
-        if (!itensForaRegra.length) return null;
-
-        return {
-            mensagem: itensForaRegra
-                .map(erro => `O item ${erro.item.cod_item} precisa ter a sobra de no minimo ${erro.minimoSobra}%.`)
-                .join('\n'),
-            seqItem: itensForaRegra[0].item.seq
-        };
+        return { situacoesPorUnidade, mensagens };
     }
 
     function temEnderecoEntrega() {
@@ -1945,7 +2241,12 @@ export function PedidoVenda() {
             codUnidade: unidadePedido,
             codCompl: 99,
             desEndereco: endereco || logradouroDigitado,
+            desLogradouro: logradouroDigitado,
+            codLogradouro: getCodigoTipoLogradouro(tipoLogradouroSelecionado),
             desBairro: bairroDigitado,
+            codCidade: apenasNumeros(codCidadeDigitado)
+                ? Number(apenasNumeros(codCidadeDigitado))
+                : null,
             numCep: Number(apenasNumeros(codCepDigitado)),
             numLogradouro: Number(apenasNumeros(numeroEnderecoDigitado) || 0),
             dtaTransacao: dataTransacao,
@@ -1953,7 +2254,7 @@ export function PedidoVenda() {
         });
     }
 
-    function montarPayloadPedidoErpPorUnidade(unidadePedido, itensUnidade) {
+    function montarPayloadPedidoErpPorUnidade(unidadePedido, itensUnidade, codSituacao = 6) {
         const dataErp = dataAtualErp();
         const dataTransacao = dataCargaDigitada || dataErp;
         const peObservacoes = montarPeObservacoes();
@@ -1963,10 +2264,10 @@ export function PedidoVenda() {
             codEmp: '01',
             codUnidade: unidadePedido,
             numPedido: '0',
-            numSeqConf: 2,
+            numSeqConf: modalidadeIntegracao,
             codCompl: 99,
             desNumOcCliente: ordemCompra || null,
-            codSituacao: 6,
+            codSituacao,
             dtaEmissao: dataErp,
             dtaDigitacao: dataErp,
             tipFrete: 1,
@@ -1980,6 +2281,7 @@ export function PedidoVenda() {
             tipTransacao: 1,
             peItens: itensUnidade.map(item => ({
                 codItem: String(item.cod_item),
+                codLista: item.codListaPreco != null ? String(item.codListaPreco) : null,
                 codReserva: 7,
                 qtdNegociada: Number(item.quantidade),
                 vlrUniBruto: valorDecimalErp(item.valorLista),
@@ -2007,7 +2309,7 @@ export function PedidoVenda() {
         });
     }
 
-    function montarPayloadsPedidoErp(unidadesSelecionadas = [201, 203]) {
+    function montarPayloadsPedidoErp(unidadesSelecionadas = [201, 203], situacoesPorUnidade = {}) {
         const erroValidacao = validarPedidoErp();
 
         if (erroValidacao) {
@@ -2032,7 +2334,11 @@ export function PedidoVenda() {
         }
 
         return gruposSelecionados.map(grupo =>
-            montarPayloadPedidoErpPorUnidade(grupo.unidade, grupo.itens)
+            montarPayloadPedidoErpPorUnidade(
+                grupo.unidade,
+                grupo.itens,
+                situacoesPorUnidade[grupo.unidade] ?? 6
+            )
         );
     }
 
@@ -2047,18 +2353,27 @@ export function PedidoVenda() {
         setOpenLovUnidadesPedido(true);
     }
 
-    async function finalizarPedidoErp(unidadesSelecionadas) {
+    function exibirErroEnvioPedidoErp(error) {
+        const erroBackend = error?.response?.data;
+        const detalheErro = erroBackend?.detalhe
+            ? JSON.stringify(erroBackend.detalhe)
+            : error.message;
+        const etapaErro = erroBackend?.etapa ? ` Etapa: ${erroBackend.etapa}.` : '';
+        const pedidoErro = erroBackend?.numPedido ? ` Pedido: ${erroBackend.numPedido}.` : '';
+
+        setModalErro({
+            aberto: true,
+            seqItem: error?.seqItem || null,
+            mensagem: erroBackend
+                ? `${erroBackend.erro}.${etapaErro}${pedidoErro} Detalhe: ${detalheErro}`
+                : error.mensagem || error.message || 'Erro ao integrar pedido com o ERP.'
+        });
+    }
+
+    async function enviarPedidosAoErp(unidadesSelecionadas, situacoesPorUnidade) {
         try {
-            setOpenLovUnidadesPedido(false);
             setLoading(true);
-
-            const erroClassificacao = await validarSobraPorClassificacaoItens(unidadesSelecionadas);
-
-            if (erroClassificacao) {
-                throw erroClassificacao;
-            }
-
-            const payloads = montarPayloadsPedidoErp(unidadesSelecionadas);
+            const payloads = montarPayloadsPedidoErp(unidadesSelecionadas, situacoesPorUnidade);
 
             const responses = await Promise.all(payloads.map(async payload => {
                 const response = await enviarPedidoErp(payload);
@@ -2075,26 +2390,111 @@ export function PedidoVenda() {
 
             setModalSucesso({
                 aberto: true,
-                mensagem: pedidos
+                mensagem: pedidos,
+                limparAoFechar: true
             });
         } catch (error) {
-
-            const erroBackend = error?.response?.data;
-            const detalheErro = erroBackend?.detalhe
-                ? JSON.stringify(erroBackend.detalhe)
-                : error.message;
-            const etapaErro = erroBackend?.etapa ? ` Etapa: ${erroBackend.etapa}.` : '';
-            const pedidoErro = erroBackend?.numPedido ? ` Pedido: ${erroBackend.numPedido}.` : '';
-
-            setModalErro({
-                aberto: true,
-                seqItem: error?.seqItem || null,
-                mensagem: erroBackend
-                    ? `${erroBackend.erro}.${etapaErro}${pedidoErro} Detalhe: ${detalheErro}`
-                    : error.mensagem || error.message || 'Erro ao integrar pedido com o ERP.'
-            });
+            exibirErroEnvioPedidoErp(error);
         } finally {
             setLoading(false);
+        }
+    }
+
+    async function finalizarPedidoErp(unidadesSelecionadas) {
+        try {
+            setOpenLovUnidadesPedido(false);
+            setLoading(true);
+
+            const avaliacao = await avaliarSituacoesPedidoErp(unidadesSelecionadas);
+
+            if (avaliacao.mensagens.length) {
+                setModalConfirmacaoErp({
+                    aberto: true,
+                    mensagem: `${avaliacao.mensagens.join('\n\n')}\n\nDeseja prosseguir?`,
+                    unidadesSelecionadas,
+                    situacoesPorUnidade: avaliacao.situacoesPorUnidade
+                });
+                return;
+            }
+
+            await enviarPedidosAoErp(unidadesSelecionadas, avaliacao.situacoesPorUnidade);
+        } catch (error) {
+            exibirErroEnvioPedidoErp(error);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    function cancelarEnvioPedidoErp() {
+        setModalConfirmacaoErp({
+            aberto: false,
+            mensagem: '',
+            unidadesSelecionadas: [],
+            situacoesPorUnidade: {}
+        });
+    }
+
+    function confirmarEnvioPedidoErp() {
+        const { unidadesSelecionadas, situacoesPorUnidade } = modalConfirmacaoErp;
+        cancelarEnvioPedidoErp();
+        enviarPedidosAoErp(unidadesSelecionadas, situacoesPorUnidade);
+    }
+
+    function obterDadosPropostaTela() {
+        return {
+            cliente,
+            clienteDetalhado,
+            representante,
+            condicaoPagamento: CondPgto,
+            ordemCompra,
+            dataCarga: dataCargaDigitada,
+            observacoes,
+            itensPedido,
+            freteSelecionado,
+            opcaoFrete,
+            endereco: {
+                cep: codCepDigitado,
+                uf: codUfDigitado,
+                cidade: cidade?.des_cidade || '',
+                tipoLogradouro: tipoLogradouroSelecionado,
+                logradouro: logradouroDigitado,
+                numero: numeroEnderecoDigitado,
+                complemento: complementoEnderecoDigitado,
+                bairro: bairroDigitado,
+                referencia: referenciaEnderecoDigitado
+            }
+        };
+    }
+
+    function abrirEmissaoProposta() {
+        const erro = validarDadosProposta(obterDadosPropostaTela());
+        if (erro) {
+            setModalErro({ aberto: true, mensagem: erro, seqItem: null, focusSelector: null });
+            return;
+        }
+        setModalEmitirProposta(true);
+    }
+
+    async function emitirProposta(formato) {
+        try {
+            setGerandoProposta(true);
+            const responseCliente = await getClienteByFilter({ filtro: cliente.cod_pessoa }).catch(() => null);
+            const clienteContato = responseCliente?.data?.items?.[0] || {};
+            const dadosProposta = obterDadosPropostaTela();
+            dadosProposta.cliente = { ...dadosProposta.cliente, ...clienteContato };
+            const propostas = criarPropostasPorUnidade(dadosProposta);
+            await exportarPropostas(propostas, formato);
+            setModalEmitirProposta(false);
+        } catch (error) {
+            setModalEmitirProposta(false);
+            setModalErro({
+                aberto: true,
+                mensagem: error?.message || 'Não foi possível gerar a proposta.',
+                seqItem: null,
+                focusSelector: null
+            });
+        } finally {
+            setGerandoProposta(false);
         }
     }
 
@@ -2426,6 +2826,38 @@ export function PedidoVenda() {
         const freteItem = freteSelecionado[item.unidade];
         const possuiAcordo = itemPossuiAcordo(item);
         const possuiUltimaCompra = itemPossuiUltimaCompra(item);
+        const imp = item.impostos || {};
+        const componente = (nome, tipo = 'soma') => ({ nome, tipo });
+        const componentesAtivos = (...entradas) => entradas.filter(Boolean);
+        const composicoesBases = [
+            { nome: 'ICMS', componentes: componentesAtivos(
+                componente('Venda', 'base'),
+                Number(imp.indIcmsFreteSoma) === 1 && componente('Frete'),
+                Number(imp.indIcmsIpiSoma) === 1 && componente('IPI'),
+                Number(imp.indIcmsPisSoma) === 1 && componente('PIS'),
+                Number(imp.indIcmsCofinsSoma) === 1 && componente('COFINS')
+            )},
+            { nome: 'PIS/COFINS', componentes: componentesAtivos(
+                componente('Venda', 'base'),
+                Number(imp.indPiscofFreteSoma) === 1 && componente('Frete'),
+                Number(imp.indPiscofIpiSoma) === 1 && componente('IPI'),
+                Number(imp.indPiscofIcmsAbate) === 1 && componente('ICMS', 'abate')
+            )},
+            { nome: 'IPI', componentes: componentesAtivos(
+                componente('Venda', 'base'),
+                Number(imp.indIpiFreteSoma) === 1 && componente('Frete')
+            )},
+            Number(imp.indSubsMercadoria) === 1 && {
+                nome: imp.difal?.toUpperCase().includes('DIF') ? 'DIFAL' : 'ICMS ST',
+                componentes: componentesAtivos(
+                    componente(item.baseST ? 'Lista ST' : imp.idxSubsTrib ? 'Venda × índice' : 'Venda', 'base'),
+                    Number(imp.indSubsFreteSoma) === 1 && componente('Frete'),
+                    Number(imp.indSubsIpiSoma) === 1 && componente('IPI'),
+                    Number(imp.indSubsPisSoma) === 1 && componente('PIS'),
+                    Number(imp.indSubsCofinsSoma) === 1 && componente('COFINS')
+                )
+            }
+        ].filter(Boolean);
 
         return (
             <div className="info-cell-content">
@@ -2440,6 +2872,23 @@ export function PedidoVenda() {
                     <div className="tip-linha"><span className="tip-nome">IPI:</span><span className="tip-valor">{format.moeda(valores.ipi ?? 0)}</span><span className="tip-percent">{format.percentual(item.impostos?.perIpi)}</span></div>
                     <div className="tip-linha"><span className="tip-nome">FCP:</span><span className="tip-valor">{format.moeda(valores.fcp ?? 0)}</span><span className="tip-percent">{format.percentual(item.impostos?.perFcp)}</span></div>
                     <div className="tip-linha"><span className="tip-nome">ICMS deson (Funrural):</span><span className="tip-valor">{format.moeda(valores.valorFunrural ?? 0)}</span><span className="tip-percent">{format.percentual(item.impostos?.perFunrural)}</span></div>
+                    <details className="tip-bases">
+                        <summary className="tip-bases-titulo">Composição das bases</summary>
+                        <div className="tip-bases-conteudo">
+                            {composicoesBases.map(base => (
+                                <div className="tip-base-linha" key={base.nome}>
+                                    <span className="tip-base-nome">{base.nome}</span>
+                                    <div className="tip-base-componentes">
+                                        {base.componentes.map((itemBase, index) => (
+                                            <span className={`tip-base-chip tip-base-chip-${itemBase.tipo}`} key={`${itemBase.nome}-${index}`}>
+                                                {itemBase.tipo === 'soma' ? '+ ' : itemBase.tipo === 'abate' ? '− ' : ''}{itemBase.nome}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </details>
                     <div className="tip-linha"><span className="tip-nome">Frete rateado:</span><span className="tip-valor">{format.moeda(item.valorFrete ?? 0)}</span></div>
                     <div className="tip-linha"><span className="tip-nome">Sobra:</span><span className="tip-valor">{format.moeda(valores.sobraReal ?? 0)}</span></div>
                     <div className="tip-linha"><span className="tip-nome">Transportadora:</span><span className="tip-valor">{freteItem?.nome || '-'}</span></div>
@@ -2632,16 +3081,108 @@ export function PedidoVenda() {
                     <div className="field-group consumidor-field">
                         <input type="checkbox" checked={clienteConsumidor} readOnly aria-label="Cliente consumidor" />
                     </div>
+                    <label>Modalidade de Integração:</label>
+                    <div className="field-group modalidade-integracao-field">
+                        <div className="seletor-verde-wrap">
+                            <button
+                                type="button"
+                                className="btn-modalidade-integracao"
+                                aria-haspopup="listbox"
+                                aria-expanded={menuModalidadeIntegracaoOpen}
+                                onClick={() => {
+                                    setMenuModalidadeIntegracaoOpen(aberto => !aberto);
+                                    setMenuOpcaoFreteOpen(false);
+                                }}
+                            >
+                                {modalidadeIntegracao === 7 ? '7 - Orçamento/Contrato' : '2 - Orçamento'}
+                            </button>
+                            {menuModalidadeIntegracaoOpen && (
+                                <div className="modalidade-integracao-menu" role="listbox" aria-label="Modalidade de Integração">
+                                    <button type="button" role="option" aria-selected={modalidadeIntegracao === 2} onClick={() => { setModalidadeIntegracao(2); setMenuModalidadeIntegracaoOpen(false); }}>
+                                        2 - Orçamento
+                                    </button>
+                                    <button type="button" role="option" aria-selected={modalidadeIntegracao === 7} onClick={() => { setModalidadeIntegracao(7); setMenuModalidadeIntegracaoOpen(false); }}>
+                                        7 - Orçamento/Contrato
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                        <div className="opcao-frete-inline">
+                            <span>Opções de frete:</span>
+                            <div className="seletor-verde-wrap">
+                                <button
+                                    type="button"
+                                    className="btn-modalidade-integracao btn-opcao-frete"
+                                    aria-haspopup="listbox"
+                                    aria-expanded={menuOpcaoFreteOpen}
+                                    onClick={() => {
+                                        setMenuOpcaoFreteOpen(aberto => !aberto);
+                                        setMenuModalidadeIntegracaoOpen(false);
+                                    }}
+                                >
+                                    {opcaoFrete === 'COBRAR_NF' ? 'Cobrar na NF' : 'CIF'}
+                                </button>
+                                {menuOpcaoFreteOpen && (
+                                    <div className="modalidade-integracao-menu opcao-frete-menu" role="listbox" aria-label="Opções de frete">
+                                        <button type="button" role="option" aria-selected={opcaoFrete === 'CIF'} onClick={() => { setOpcaoFrete('CIF'); setMenuOpcaoFreteOpen(false); }}>
+                                            CIF
+                                        </button>
+                                        <button type="button" role="option" aria-selected={opcaoFrete === 'COBRAR_NF'} onClick={() => { setOpcaoFrete('COBRAR_NF'); setMenuOpcaoFreteOpen(false); }}>
+                                            Cobrar na NF
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <div className="item-card">
-                <h2 className="pedido-title">Itens do Pedido</h2>
+                <div className="pedido-title item-card-title-actions">
+                    <h2>Itens do Pedido</h2>
+                    <button
+                        type="button"
+                        className="btn-recalcular-itens"
+                        onClick={recalcularItensManualmente}
+                        disabled={loading || loadingDadosCliente || !itensPedido.length}
+                    >
+                        Recalcular itens
+                    </button>
+                </div>
                 <div className="itens-table-wrapper">
                     <div className="tabelas-itens-layout">
                         <section className="tabela-itens-bloco tabela-itens-principal">
                             <div className="tabela-bloco-cabecalho">
-                                <h3>Itens</h3>
+                                <div className="itens-legenda-titulo">
+                                    <h3>Itens</h3>
+                                    <div className="itens-legenda-info">
+                                        <button type="button" className="itens-legenda-trigger" aria-label="Ver legenda dos itens">
+                                            <IoInformationOutline />
+                                        </button>
+                                        <div className="itens-legenda-tooltip" role="tooltip">
+                                            <strong>Legenda dos itens</strong>
+
+                                            <div className="itens-legenda-secao">
+                                                <span className="itens-legenda-subtitulo">Cores e símbolos</span>
+                                                <div className="itens-legenda-linha"><span className="itens-legenda-cor legenda-cor-acordo" /><b>©</b><span>Acordo comercial</span></div>
+                                                <div className="itens-legenda-linha"><span className="itens-legenda-cor legenda-cor-ultima-compra" /><b>✓</b><span>Item da última compra</span></div>
+                                                <div className="itens-legenda-linha"><span className="itens-legenda-cor legenda-cor-preco-bloqueado" /><b>$</b><span>Preço promocional ou contrato</span></div>
+                                                <div className="itens-legenda-linha"><span className="itens-legenda-cor legenda-cor-sem-tributacao" /><b>!</b><span>Item sem tributação</span></div>
+                                                <div className="itens-legenda-linha"><span className="itens-legenda-cor legenda-cor-lote-proximo" /><FaHourglassHalf /><span>Lote com validade próxima</span></div>
+                                            </div>
+
+                                            <div className="itens-legenda-secao itens-legenda-margens">
+                                                <span className="itens-legenda-subtitulo">Margens mínimas</span>
+                                                <div><span className="itens-legenda-segmento">AC</span><strong>4%</strong></div>
+                                                <div><span className="itens-legenda-segmento">MMT</span><strong>6%</strong></div>
+                                                <div><span className="itens-legenda-segmento">Total da unidade</span><strong>6%</strong></div>
+                                            </div>
+
+                                            <small>Valores abaixo da margem seguem para aprovação em situação 70.</small>
+                                        </div>
+                                    </div>
+                                </div>
                                 <span>Dados do item</span>
                             </div>
                             <table className="itens-grid itens-grid-selecao">
@@ -2707,24 +3248,25 @@ export function PedidoVenda() {
                                             return (
                                                 <tr key={grupo.grupoId} className={classeLinha}>
                                                     <td><input type="checkbox" checked={Boolean(item.selecionado)} disabled={semTributacao} title={semTributacao ? 'Item sem tributação: envio ao ERP bloqueado' : undefined} onChange={(e) => handleCheckboxChange(item.seq, e.target.checked)} aria-label={`Enviar item ${item.cod_item} pela unidade ${item.unidade}`} /></td>
-                                                    <td><input className="item-table-input" data-field="quantidade-unidade" data-unidade={item.unidade} data-seq={item.seq} value={item.quantidade} disabled={!item.selecionado || semTributacao} onChange={(e) => handleQuantidadeChange(item.seq, e.target.value)} onBlur={() => validarMultiplo(item.seq)} onKeyDown={(e) => navegarQuantidadeUnidade(e, item.unidade)} /></td>
+                                                    <td><input className="item-table-input" data-field="quantidade-unidade" data-unidade={item.unidade} data-seq={item.seq} value={item.quantidade} disabled={!item.selecionado || semTributacao} onChange={(e) => handleQuantidadeChange(item.seq, e.target.value)} onBlur={() => validarMultiplo(item.seq)} onKeyDown={navegarCamposItens} /></td>
                                                     <td>{item.estoque}</td>
-                                                    <td><input className="item-table-input item-table-money" data-field="valor-lista" data-seq={item.seq} value={item.valorLista} disabled={item.precoListaBloqueado} title={item.precoListaBloqueado ? 'Preço bloqueado por contrato' : item.precoListaPromocional ? 'Preço promocional: permitido somente aumentar' : undefined} onFocus={e => e.target.select()} onChange={(e) => handleValorListaChange(item.seq, maskMoneyBR(e.target.value, 4))} onBlur={() => validarValorListaPromocional(item.seq)} /></td>
+                                                    <td><input className="item-table-input item-table-money" data-field="valor-lista" data-unidade={item.unidade} data-seq={item.seq} value={item.valorLista} disabled={item.precoListaBloqueado} title={item.precoListaBloqueado ? 'Preço bloqueado por contrato' : item.precoListaPromocional ? 'Preço promocional: permitido somente aumentar' : undefined} onFocus={e => e.target.select()} onChange={(e) => handleValorListaChange(item.seq, maskMoneyBR(e.target.value, 4))} onBlur={() => validarValorListaPromocional(item.seq)} onKeyDown={navegarCamposItens} /></td>
                                                     <td>{format.moeda(valores.valorVendaTotal ?? 0)}</td>
                                                     <td>
                                                         <input
                                                             type="text"
                                                             inputMode="decimal"
                                                             className="item-table-input item-table-percent"
+                                                            data-field="sobra-percentual"
+                                                            data-unidade={item.unidade}
+                                                            data-seq={item.seq}
                                                             value={item.sobraDesejada ?? Number(valores.sobraPercentual ?? 0).toFixed(2)}
                                                             disabled={item.precoListaBloqueado}
                                                             title={item.precoListaBloqueado ? 'Sobra bloqueada por contrato' : item.precoListaPromocional ? 'O preço resultante não pode ser menor que o promocional' : undefined}
                                                             onFocus={e => e.target.select()}
                                                             onChange={e => handleSobraPercentualChange(item.seq, e.target.value)}
                                                             onBlur={e => aplicarSobraPercentual(item, e.target.value)}
-                                                            onKeyDown={e => {
-                                                                if (e.key === 'Enter') e.target.blur();
-                                                            }}
+                                                            onKeyDown={navegarCamposItens}
                                                             style={{ color: valores.sobraReal >= 0 ? 'green' : 'red', fontWeight: 'bold' }}
                                                             aria-label={`Sobra percentual do item ${item.cod_item} na unidade ${item.unidade}`}
                                                         />
@@ -2804,8 +3346,9 @@ export function PedidoVenda() {
                 aberto={modalSucesso.aberto}
                 mensagem={modalSucesso.mensagem}
                 onClose={() => {
-                    setModalSucesso({ aberto: false, mensagem: '' });
-                    limparTelaPedidoVenda();
+                    const deveLimparTela = modalSucesso.limparAoFechar;
+                    setModalSucesso({ aberto: false, mensagem: '', limparAoFechar: false });
+                    if (deveLimparTela) limparTelaPedidoVenda();
                 }}
             />
             <div className="obs-card">
@@ -3099,6 +3642,9 @@ export function PedidoVenda() {
             </div>
             <div className="integracao-card">
                 <div className="obs-footer">
+                    <button type="button" className="btn-adicionar" onClick={abrirEmissaoProposta}>
+                        Emitir proposta
+                    </button>
                     <button type="button" className="btn-adicionar" onClick={abrirSelecaoUnidadesPedido}>
                         Enviar pedido ao ERP
                     </button>
@@ -3109,6 +3655,18 @@ export function PedidoVenda() {
                 onClose={() => setOpenLovUnidadesPedido(false)}
                 onConfirm={finalizarPedidoErp}
                 unidadesDisponiveis={unidadesComItensSelecionados}
+            />
+            <ModalConfirmacao
+                aberto={modalConfirmacaoErp.aberto}
+                mensagem={modalConfirmacaoErp.mensagem}
+                onConfirmar={confirmarEnvioPedidoErp}
+                onCancelar={cancelarEnvioPedidoErp}
+            />
+            <ModalEmitirProposta
+                aberto={modalEmitirProposta}
+                carregando={gerandoProposta}
+                onSelecionar={emitirProposta}
+                onCancelar={() => setModalEmitirProposta(false)}
             />
         </div>
     );

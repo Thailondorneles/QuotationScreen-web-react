@@ -1,5 +1,9 @@
 # Projeto Tela Cotacao
 
+## Documentação funcional e técnica
+
+A documentação completa do simulador está disponível em [`docs/README.md`](docs/README.md), incluindo fluxo da tela, regras de cálculo, APIs, payload ERP, propostas, suporte e matriz de testes.
+
 Aplicacao com:
 - frontend React
 - backend Node/Express em `backend-simfrete`

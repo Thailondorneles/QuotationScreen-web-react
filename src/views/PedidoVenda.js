@@ -690,11 +690,12 @@ export function PedidoVenda() {
         const precoListaPromocional = listaPrecoEhPromocional(infoListaPreco);
         const precoListaBloqueado = listaPrecoEhContrato(infoListaPreco);
 
-        let perDifal = 0;
-        if (indSubsMercadoria === 1 && imp.txt_refaz_bc_st && imp.txt_refaz_bc_st.toUpperCase().includes('DIF')) {
-            perDifal = Number(imp.per_subst_trib || 0) - Number(imp.per_icms || 0);
-            imp.per_subst_trib = 0;
-        }
+        const perSubstTribOriginal = Number(imp.per_subst_trib || 0);
+        const possuiDifal = indSubsMercadoria === 1
+            && imp.txt_refaz_bc_st?.toUpperCase().includes('DIF');
+        const perDifal = possuiDifal
+            ? perSubstTribOriginal - Number(imp.per_icms || 0)
+            : 0;
 
         const impostos = {
             perIcms: imp.per_icms,
@@ -702,7 +703,7 @@ export function PedidoVenda() {
             perCofins: imp.per_aliq_cofins,
             perIpi: imp.per_ipi,
             perFcp: imp.per_fcp,
-            perSubstTrib: indSubsMercadoria === 1 ? imp.per_subst_trib : 0,
+            perSubstTrib: indSubsMercadoria === 1 && !possuiDifal ? perSubstTribOriginal : 0,
             perDifal: indSubsMercadoria === 1 ? perDifal : 0,
             difal: indSubsMercadoria === 1 ? imp.txt_refaz_bc_st : null,
             idxSubsTrib: indSubsMercadoria === 1 ? imp.idx_subs_trib : null,

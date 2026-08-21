@@ -2154,6 +2154,15 @@ export function PedidoVenda() {
             const sobraTotal = Number((totais.valorVenda > 0
                 ? (totais.sobra / totais.valorVenda) * 100
                 : 0).toFixed(2));
+            const minimosSobraItens = itensUnidade.map(item =>
+                getPercentualMinimoSobraPorClassificacao(
+                    classificacoesPorItem[String(item.cod_item)]
+                )
+            );
+            // Somente itens AC: 4%. Se houver MMT ou item sem classificação: 6%.
+            const minimoSobraTotal = minimosSobraItens.every(minimo => minimo === 4)
+                ? 4
+                : 6;
             const itensForaRegra = itensUnidade.reduce((erros, item) => {
                 if (item.precoListaBloqueado) return erros;
 
@@ -2170,15 +2179,15 @@ export function PedidoVenda() {
                 return erros;
             }, []);
 
-            const requerAprovacao = sobraTotal < 6 || itensForaRegra.length > 0;
+            const requerAprovacao = sobraTotal < minimoSobraTotal || itensForaRegra.length > 0;
             situacoesPorUnidade[unidade] = requerAprovacao
                 ? 70
                 : modalidadeIntegracao === 7 ? 32 : 6;
 
-            if (sobraTotal < 6) {
+            if (sobraTotal < minimoSobraTotal) {
                 mensagens.push(
                     `UNIDADE ${unidade}\n` +
-                    `Sobra total: ${sobraTotal.toFixed(2).replace('.', ',')}% (mínima: 6%)\n` +
+                    `Sobra total: ${sobraTotal.toFixed(2).replace('.', ',')}% (mínima: ${minimoSobraTotal}%)\n` +
                     'A sobra total está abaixo da mínima. O pedido irá para aprovação no NL em situação 70.'
                 );
             } else if (itensForaRegra.length) {

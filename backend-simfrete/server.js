@@ -176,6 +176,7 @@ app.post('/api/cotacao', async (req, res) => {
   try {
     const payload = {
       ...req.body,
+      tipoOperacao: 0,
       wsEmp: 'central unimed',
       wsUsr: process.env.SIMFRETE_USER,
       wsPwd: process.env.SIMFRETE_PASS

@@ -1839,10 +1839,28 @@ export function PedidoVenda() {
                 return;
             }
 
-            const retorno = await cotarSimFrete(itensSelecionados, {
-                ...cliente,
-                ...clienteDetalhado
-            });
+            let clienteDestino;
+
+            if (temEnderecoEntrega()) {
+                clienteDestino = {
+                    ...cliente,
+                    ...clienteDetalhado,
+                    cod_cidade: apenasNumeros(codCidadeDigitado)
+                };
+            } else if (clienteTriangulacao) {
+                const clienteTriangulacaoDetalhado = await buscarDetalhesClientePedido(clienteTriangulacao);
+                clienteDestino = {
+                    ...clienteTriangulacao,
+                    ...clienteTriangulacaoDetalhado
+                };
+            } else {
+                clienteDestino = {
+                    ...cliente,
+                    ...clienteDetalhado
+                };
+            }
+
+            const retorno = await cotarSimFrete(itensSelecionados, clienteDestino);
 
             const selecaoAuto = {};
             const unidadesSemCotacao = [];

@@ -22,6 +22,16 @@ const UNIDADES = {
     }
 };
 
+function numeroDecimalBR(valor) {
+    const texto = String(valor ?? '').trim();
+    const normalizado = texto.includes(',')
+        ? texto.replace(/\./g, '').replace(',', '.')
+        : texto;
+    const numero = Number(normalizado);
+
+    return Number.isFinite(numero) ? numero : 0;
+}
+
 
 function montarPayload({ unidade, cliente, itens }) {
 
@@ -38,7 +48,7 @@ function montarPayload({ unidade, cliente, itens }) {
         acc + (Number(item.pesoBruto || 0) * Number(item.quantidade || 0)), 0);
 
     const valorTotal = itens.reduce((acc, item) =>
-        acc + (Number(item.valorLista || 0) * Number(item.quantidade || 0)), 0);
+        acc + (numeroDecimalBR(item.valorLista) * Number(item.quantidade || 0)), 0);
 
     const quantidadeTotal = itens.reduce((acc, item) =>
         acc + Number(item.quantidade || 0), 0);
@@ -46,6 +56,10 @@ function montarPayload({ unidade, cliente, itens }) {
 
     if (!Number.isFinite(destino) || destino <= 0) {
         throw new Error('Cidade do cliente não encontrada para cotação do frete');
+    }
+
+    if (!Number.isFinite(valorTotal) || valorTotal <= 0) {
+        throw new Error(`Valor total inválido para cotação da unidade ${unidade}`);
     }
 
     return {

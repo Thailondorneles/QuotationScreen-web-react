@@ -2299,6 +2299,8 @@ export function PedidoVenda() {
             dtaEmissao: dataErp,
             dtaDigitacao: dataErp,
             tipFrete: 1,
+            codPortador: Number(unidadePedido) === 201 ? '156' : '203',
+            codPosicao: '22',
             codCondPgto: String(CondPgto.cod_cond_pgto),
             codOper: String(operacao.cod_oper),
             codOperRemessa: operacaoTriangulacao.cod_oper ? String(operacaoTriangulacao.cod_oper) : null,

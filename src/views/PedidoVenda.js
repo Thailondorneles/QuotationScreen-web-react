@@ -1092,7 +1092,7 @@ export function PedidoVenda() {
 
     function calcularTributosItem(item, valorVendaTotal) {
         const imp = item.impostos || {};
-        const frete = Number(item.valorFrete || 0);
+        const frete = opcaoFrete === 'COBRAR_NF' ? Number(item.valorFrete || 0) : 0;
         const ativo = indicador => Number(indicador) === 1 ? 1 : 0;
         const rIpi = Number(imp.perIpi || 0) / 100;
         const rIcms = Number(imp.perIcms || 0) / 100;
@@ -1101,9 +1101,6 @@ export function PedidoVenda() {
         const baseIpiFixa = valorVendaTotal + ativo(imp.indIpiFreteSoma) * frete;
         const baseIcmsFixa = valorVendaTotal + ativo(imp.indIcmsFreteSoma) * frete;
         const basePiscofFixa = valorVendaTotal + ativo(imp.indPiscofFreteSoma) * frete;
-
-        // Variáveis: IPI, ICMS, PIS e COFINS. A solução simultânea cobre
-        // inclusive ICMS somando PIS/COFINS e PIS/COFINS abatendo ICMS.
         const matriz = [
             [1, 0, 0, 0],
             [-rIcms * ativo(imp.indIcmsIpiSoma), 1, -rIcms * ativo(imp.indIcmsPisSoma), -rIcms * ativo(imp.indIcmsCofinsSoma)],
@@ -1279,7 +1276,7 @@ export function PedidoVenda() {
             if (imp.difal && imp.difal.toUpperCase().includes('DIF')) {
                 const perDifal = Number(imp.perDifal || 0);
                 baseSubs = valorVendaTotal;
-                baseSubs += Number(imp.indSubsFreteSoma) === 1 ? Number(item.valorFrete || 0) : 0;
+                baseSubs += opcaoFrete === 'COBRAR_NF' && Number(imp.indSubsFreteSoma) === 1 ? Number(item.valorFrete || 0) : 0;
                 baseSubs += Number(imp.indSubsIpiSoma) === 1 ? ipi : 0;
                 baseSubs += Number(imp.indSubsPisSoma) === 1 ? pis : 0;
                 baseSubs += Number(imp.indSubsCofinsSoma) === 1 ? cofins : 0;
@@ -1295,7 +1292,7 @@ export function PedidoVenda() {
                 } else {
                     baseSubs = valorVendaTotal;
                 }
-                baseSubs += Number(imp.indSubsFreteSoma) === 1 ? Number(item.valorFrete || 0) : 0;
+                baseSubs += opcaoFrete === 'COBRAR_NF' && Number(imp.indSubsFreteSoma) === 1 ? Number(item.valorFrete || 0) : 0;
                 baseSubs += Number(imp.indSubsIpiSoma) === 1 ? ipi : 0;
                 baseSubs += Number(imp.indSubsPisSoma) === 1 ? pis : 0;
                 baseSubs += Number(imp.indSubsCofinsSoma) === 1 ? cofins : 0;
@@ -2887,26 +2884,26 @@ export function PedidoVenda() {
         const composicoesBases = [
             { nome: 'ICMS', componentes: componentesAtivos(
                 componente('Venda', 'base'),
-                Number(imp.indIcmsFreteSoma) === 1 && componente('Frete'),
+                opcaoFrete === 'COBRAR_NF' && Number(imp.indIcmsFreteSoma) === 1 && componente('Frete'),
                 Number(imp.indIcmsIpiSoma) === 1 && componente('IPI'),
                 Number(imp.indIcmsPisSoma) === 1 && componente('PIS'),
                 Number(imp.indIcmsCofinsSoma) === 1 && componente('COFINS')
             )},
             { nome: 'PIS/COFINS', componentes: componentesAtivos(
                 componente('Venda', 'base'),
-                Number(imp.indPiscofFreteSoma) === 1 && componente('Frete'),
+                opcaoFrete === 'COBRAR_NF' && Number(imp.indPiscofFreteSoma) === 1 && componente('Frete'),
                 Number(imp.indPiscofIpiSoma) === 1 && componente('IPI'),
                 Number(imp.indPiscofIcmsAbate) === 1 && componente('ICMS', 'abate')
             )},
             { nome: 'IPI', componentes: componentesAtivos(
                 componente('Venda', 'base'),
-                Number(imp.indIpiFreteSoma) === 1 && componente('Frete')
+                opcaoFrete === 'COBRAR_NF' && Number(imp.indIpiFreteSoma) === 1 && componente('Frete')
             )},
             Number(imp.indSubsMercadoria) === 1 && {
                 nome: imp.difal?.toUpperCase().includes('DIF') ? 'DIFAL' : 'ICMS ST',
                 componentes: componentesAtivos(
                     componente(item.baseST ? 'Lista ST' : imp.idxSubsTrib ? 'Venda × índice' : 'Venda', 'base'),
-                    Number(imp.indSubsFreteSoma) === 1 && componente('Frete'),
+                    opcaoFrete === 'COBRAR_NF' && Number(imp.indSubsFreteSoma) === 1 && componente('Frete'),
                     Number(imp.indSubsIpiSoma) === 1 && componente('IPI'),
                     Number(imp.indSubsPisSoma) === 1 && componente('PIS'),
                     Number(imp.indSubsCofinsSoma) === 1 && componente('COFINS')

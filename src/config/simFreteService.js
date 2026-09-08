@@ -66,7 +66,7 @@ function montarPayload({ unidade, cliente, itens }) {
         remetenteCnpj: config.cnpj,
         origem: Number(config.cep),
         destino,
-        volumeTotal: Number(volumeTotal.toFixed(4)),
+        volumeTotal: Number(volumeTotal.toFixed(6)),
         valorTotal: Number(valorTotal.toFixed(2)),
         pesoTotal: Number(pesoTotal.toFixed(3)),
         quantidadeTotalDecimal: quantidadeTotal,

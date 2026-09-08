@@ -2109,6 +2109,25 @@ export function PedidoVenda() {
             };
         }
 
+        const possuiDadosTriangulacao = Boolean(
+            String(codClienteTriangulacaoDigitado || '').trim()
+            || String(codOperacaoTriangulacaoDigitado || '').trim()
+            || clienteTriangulacao?.cod_pessoa
+            || operacaoTriangulacao?.cod_oper
+        );
+
+        if (possuiDadosTriangulacao && !clienteTriangulacao?.cod_pessoa) {
+            return {
+                mensagem: 'Selecione um cliente de triangulacao valido antes de enviar o pedido.'
+            };
+        }
+
+        if (possuiDadosTriangulacao && !operacaoTriangulacao?.cod_oper) {
+            return {
+                mensagem: 'Selecione uma operacao de triangulacao valida antes de enviar o pedido.'
+            };
+        }
+
         if (!ordemCompra.trim()) {
             return {
                 mensagem: 'Informe a ordem de compra antes de enviar o pedido.',
@@ -2287,6 +2306,12 @@ export function PedidoVenda() {
         const dataTransacao = dataCargaDigitada || dataErp;
         const peObservacoes = montarPeObservacoes();
         const peEndEntrega = montarPeEndEntrega(unidadePedido, dataTransacao);
+        const codClienteRemessa = String(
+            codClienteTriangulacaoDigitado || clienteTriangulacao?.cod_pessoa || ''
+        ).trim();
+        const codOperRemessa = String(
+            codOperacaoTriangulacaoDigitado || operacaoTriangulacao?.cod_oper || ''
+        ).trim();
 
         const pePedidos = {
             codEmp: '01',
@@ -2303,10 +2328,10 @@ export function PedidoVenda() {
             codPosicao: '22',
             codCondPgto: String(CondPgto.cod_cond_pgto),
             codOper: String(operacao.cod_oper),
-            codOperRemessa: operacaoTriangulacao.cod_oper ? String(operacaoTriangulacao.cod_oper) : null,
+            codOperRemessa: codOperRemessa || null,
             indConsumidor: Number(clienteDetalhado?.ind_consumidor) === 1 ? 1 : 0,
             codCliente: String(cliente.cod_pessoa),
-            codClienteRemessa: clienteTriangulacao?.cod_pessoa ? String(clienteTriangulacao.cod_pessoa) : null,
+            codClienteRemessa: codClienteRemessa || null,
             codRepresentante: representante?.cod_pessoa_rep ? String(representante.cod_pessoa_rep) : null,
             tipTransacao: 1,
             peItens: itensUnidade.map(item => ({
@@ -3471,7 +3496,10 @@ export function PedidoVenda() {
                     <div className="field-group full">
                         <input type="text" className='input-cod'
                             value={codClienteTriangulacaoDigitado}
-                            onChange={(e) => { setCodClienteTriangulacaoDigitado(e.target.value); }}
+                            onChange={(e) => {
+                                setCodClienteTriangulacaoDigitado(e.target.value);
+                                setClienteTriangulacao(null);
+                            }}
                             onBlur={buscarClienteTriangulacaoPorCodigo}
                         />
                         <input type="text" className='input-desc' value={clienteTriangulacao?.des_pessoa || ''} readOnly />
@@ -3497,7 +3525,10 @@ export function PedidoVenda() {
                             type="text"
                             className='input-cod'
                             value={codOperacaoTriangulacaoDigitado}
-                            onChange={(e) => setCodOperacaoTriangulacaoDigitado(e.target.value)}
+                            onChange={(e) => {
+                                setCodOperacaoTriangulacaoDigitado(e.target.value);
+                                setOperacaoTriangulacao({ cod_oper: null, des_oper: null });
+                            }}
                             onBlur={buscarOperacaoTriangulacaoPorCodigo}
                         />
                         <input

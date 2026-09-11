@@ -52,7 +52,7 @@ Convenções de nomes:
 | Constante | Valor atual | Uso | Fonte |
 |---|---:|---|---|
 | Empresa ERP | `01` | `codEmp` no envelope, pedido e endereço | `PedidoVenda.js` |
-| Complemento ERP | `99` | `codCompl` do pedido/endereço | `PedidoVenda.js` |
+| Complemento ERP | `0` | `codCompl` do pedido/endereço | `PedidoVenda.js` |
 | Máquina | `1` | `codMaquina` | `PedidoVenda.js` |
 | Reserva | `7` | `codReserva` de todo item | `PedidoVenda.js` |
 | Tipo de transação | `1` | pedido, item, observação e endereço | `PedidoVenda.js` |
@@ -252,7 +252,7 @@ Objeto interno `impostos`:
 | `codMaquina` | constante | número `1` |
 | `usuario` | query string | string opcional |
 | `pePedidos.codUnidade` | grupo selecionado | número 201/203 |
-| `pePedidos.numPedido` | placeholder frontend; sequence backend | string |
+| `pePedidos.numPedido` | fixo -1; número definitivo gerado pelo ERP | string |
 | `pePedidos.numSeqConf` | modalidade | número 2/7 |
 | `pePedidos.codSituacao` | margem + modalidade | número 6/32/70 |
 | `desNumOcCliente` | `ordemCompra` | string |
@@ -363,7 +363,7 @@ Antes da emissão, a tela tenta enriquecer `cliente` com `GET clientes/{codigo}`
 ```text
 inicio
 conectar_oracle
-gerar_numero_pedido
+gerar_numero_sequencia
 montar_payload_erp
 inserir_controle_integracao
 post_erp

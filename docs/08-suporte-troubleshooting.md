@@ -27,7 +27,7 @@ Antes de atualizar a página ou repetir uma operação, registre:
 | Ordem de compra | valor informado na tela |
 | Modalidade | 2 — Orçamento ou 7 — Orçamento/Contrato |
 | Resultado visual | texto integral do modal ou alerta |
-| Número gerado | `numPedido`, quando apresentado |
+| Número gerado | `numSeq`, identificador da integração |
 | Requisição HTTP | URL, status, duração e resposta, sem credenciais |
 | Estado Oracle | `ENVIANDO`, `INTEGRADO`, `ERRO` ou ausência de registro |
 
@@ -354,7 +354,7 @@ As etapas abaixo aparecem internamente nos logs. O JSON devolvido ao navegador n
 | Etapa | Interpretação provável | Verificação |
 |---|---|---|
 | `conectar_oracle` | pool, rede, credencial ou Instant Client | logs Oracle e variáveis |
-| `gerar_numero_pedido` | sequence ausente ou sem permissão | `SEQ_PEDIDO_ERP_INTEGRACAO` |
+| `gerar_numero_sequencia` | sequence ausente ou sem permissão | `SEQ_PEDIDO_ERP_INTEGRACAO` |
 | `montar_payload_erp` | corpo inválido ou erro de aplicação | request recebido e stack |
 | `inserir_controle_integracao` | tabela, CLOB ou permissão | tabela e grants |
 | `post_erp` | rede, timeout, token, aplicação ou rejeição do ERP | retorno externo e ERP |
@@ -368,21 +368,21 @@ As etapas abaixo aparecem internamente nos logs. O JSON devolvido ao navegador n
 Use acesso somente leitura e parâmetros vinculados. Exemplos conceituais:
 
 ```sql
-SELECT NUM_PEDIDO,
+SELECT NUM_SEQ,
        STATUS,
        USUARIO,
        DATA_ENVIO,
        DBMS_LOB.SUBSTR(ERRO, 2000, 1) AS ERRO_RESUMIDO
-  FROM PEDIDO_ERP_INTEGRACAO
- WHERE NUM_PEDIDO = :num_pedido;
+  FROM ES_PEDIDO_ERP_INTEGRACAO
+ WHERE NUM_SEQ = :num_seq;
 ```
 
 Para uma janela recente, quando autorizado:
 
 ```sql
-SELECT NUM_PEDIDO, STATUS, USUARIO, DATA_ENVIO
-  FROM PEDIDO_ERP_INTEGRACAO
- ORDER BY NUM_PEDIDO DESC
+SELECT NUM_SEQ, STATUS, USUARIO, DATA_ENVIO
+  FROM ES_PEDIDO_ERP_INTEGRACAO
+ ORDER BY NUM_SEQ DESC
  FETCH FIRST 50 ROWS ONLY;
 ```
 
@@ -390,7 +390,7 @@ Campos úteis:
 
 | Campo | Uso no diagnóstico |
 |---|---|
-| `NUM_PEDIDO` | correlação com o ERP |
+| `NUM_SEQ` | correlação com o ERP |
 | `STATUS` | `ENVIANDO`, `INTEGRADO` ou `ERRO` |
 | `PAYLOAD` | unidade, cliente, OC e dados enviados |
 | `RESPOSTA_ERP` | confirmação ou retorno funcional |

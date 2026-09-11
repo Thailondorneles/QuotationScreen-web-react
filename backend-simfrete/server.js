@@ -112,14 +112,14 @@ async function getOracleConnection() {
   return oraclePool.getConnection();
 }
 
-async function gerarNumeroPedido(connection) {
+async function gerarNumeroSequencia(connection) {
   const result = await connection.execute(
-    'SELECT SEQ_PEDIDO_ERP_INTEGRACAO.NEXTVAL AS NUM_PEDIDO FROM DUAL',
+    'SELECT SEQ_PEDIDO_ERP_INTEGRACAO.NEXTVAL AS NUM_SEQ FROM DUAL',
     [],
     { outFormat: oracledb.OUT_FORMAT_OBJECT }
   );
 
-  return result.rows[0].NUM_PEDIDO;
+  return result.rows[0].NUM_SEQ;
 }
 
 function toClobValue(value) {
@@ -198,33 +198,50 @@ app.post('/api/cotacao', async (req, res) => {
 
 app.post('/api/pedidos/enviar-erp', async (req, res) => {
   let connection;
-  let numPedido;
+  let numSeq;
   let etapa = 'inicio';
 
   try {
     etapa = 'conectar_oracle';
     connection = await getOracleConnection();
 
-    etapa = 'gerar_numero_pedido';
-    numPedido = await gerarNumeroPedido(connection);
+    etapa = 'gerar_numero_sequencia';
+    numSeq = await gerarNumeroSequencia(connection);
 
     etapa = 'montar_payload_erp';
     const payloadErp = {
       ...req.body,
       pePedidos: {
         ...req.body.pePedidos,
-        numPedido: String(numPedido)
+        numPedido: '-1',
+        codCompl: 0,
+        ...(req.body.pePedidos?.peEndEntrega && {
+          peEndEntrega: { ...req.body.pePedidos.peEndEntrega, codCompl: 0 }
+        }),
+        peObservacoes: [
+          ...(req.body.pePedidos?.peObservacoes || [])
+            .filter(obs => Number(obs.numSeq) !== 99),
+          {
+            txtObs: String(numSeq),
+            indPedido: 0,
+            indNf: 0,
+            indRegistro: 0,
+            indCr: 0,
+            numSeq: 99,
+            tipTransacao: 1
+          }
+        ]
       }
     };
 
     etapa = 'inserir_controle_integracao';
     const insertPromise = connection.execute(
-      `INSERT INTO PEDIDO_ERP_INTEGRACAO
-        (NUM_PEDIDO, STATUS, PAYLOAD, USUARIO)
+      `INSERT INTO ES_PEDIDO_ERP_INTEGRACAO
+        (NUM_SEQ, STATUS, PAYLOAD, USUARIO)
        VALUES
-        (:numPedido, :status, :payload, :usuario)`,
+        (:numSeq, :status, :payload, :usuario)`,
       {
-        numPedido,
+        numSeq,
         status: 'ENVIANDO',
         payload: clobBind(payloadErp),
         usuario: req.body.usuario || null
@@ -240,21 +257,21 @@ app.post('/api/pedidos/enviar-erp', async (req, res) => {
 
     res.json({
       sucesso: true,
-      numPedido,
+      numSeq,
       retornoErp: response.data
     });
 
     etapa = 'atualizar_integracao_sucesso';
     await connection.execute(
-      `UPDATE PEDIDO_ERP_INTEGRACAO
+      `UPDATE ES_PEDIDO_ERP_INTEGRACAO
           SET STATUS = :status,
               RESPOSTA_ERP = :resposta,
               DATA_ENVIO = SYSDATE
-        WHERE NUM_PEDIDO = :numPedido`,
+        WHERE NUM_SEQ = :numSeq`,
       {
         status: 'INTEGRADO',
         resposta: clobBind(response.data),
-        numPedido
+        numSeq
       },
       { autoCommit: true }
     );
@@ -263,25 +280,25 @@ app.post('/api/pedidos/enviar-erp', async (req, res) => {
     const statusErro = err?.response?.status || 500;
     console.error('Erro ao integrar pedido com o ERP:', {
       etapa,
-      numPedido,
+      numSeq,
       statusErro,
       erro
     });
     console.error(err.stack);
 
-    if (connection && numPedido) {
+    if (connection && numSeq) {
       try {
         etapa = 'atualizar_integracao_erro';
         await connection.execute(
-          `UPDATE PEDIDO_ERP_INTEGRACAO
+          `UPDATE ES_PEDIDO_ERP_INTEGRACAO
               SET STATUS = :status,
                   ERRO = :erro,
                   DATA_ENVIO = SYSDATE
-            WHERE NUM_PEDIDO = :numPedido`,
+            WHERE NUM_SEQ = :numSeq`,
           {
             status: 'ERRO',
             erro: clobBind(erro),
-            numPedido
+            numSeq
           },
           { autoCommit: true }
         );
@@ -296,7 +313,7 @@ app.post('/api/pedidos/enviar-erp', async (req, res) => {
 
     return res.status(statusErro).json({
       sucesso: false,
-      numPedido,
+      numSeq,
       erro: 'Erro ao integrar pedido com o ERP',
       etapa,
       detalhe: erro

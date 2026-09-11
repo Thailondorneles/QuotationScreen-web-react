@@ -25,9 +25,9 @@ Os envios são disparados em paralelo com `Promise.all`.
   "pePedidos": {
     "codEmp": "01",
     "codUnidade": 201,
-    "numPedido": "0",
+    "numPedido": "-1",
     "numSeqConf": 2,
-    "codCompl": 99,
+    "codCompl": 0,
     "desNumOcCliente": "OC-12345",
     "codSituacao": 6,
     "dtaEmissao": "18/08/2026",
@@ -69,7 +69,7 @@ Os envios são disparados em paralelo com `Promise.all`.
     "peEndEntrega": {
       "codEmp": "01",
       "codUnidade": 201,
-      "codCompl": 99,
+      "codCompl": 0,
       "desEndereco": "RUA SANTA CRUZ",
       "desLogradouro": "SANTA CRUZ",
       "codLogradouro": 1,
@@ -112,9 +112,9 @@ Se nenhum existir, o campo é removido.
 |---|---|---|
 | `codEmp` | string | `01` |
 | `codUnidade` | number | 201 ou 203 |
-| `numPedido` | string | Frontend envia `0`; backend substitui pela sequência Oracle |
+| `numPedido` | string | Fixo `-1`; ERP gera o número do pedido |
 | `numSeqConf` | number | Modalidade 2 ou 7 |
-| `codCompl` | number | `99` |
+| `codCompl` | number | `0` |
 | `desNumOcCliente` | string | Ordem de compra |
 | `codSituacao` | number | 6, 32 ou 70 |
 | `dtaEmissao` | string | Data local `dd/MM/yyyy` |
@@ -178,7 +178,7 @@ O objeto é criado quando existe pelo menos um destes valores: CEP, logradouro, 
 |---|---|---|
 | `codEmp` | string | `01` |
 | `codUnidade` | number | Unidade do pedido |
-| `codCompl` | number | `99` |
+| `codCompl` | number | `0` |
 | `desEndereco` | string | Tipo + logradouro, ou somente logradouro |
 | `desLogradouro` | string | Logradouro sem o tipo |
 | `codLogradouro` | number/string | `cod_tipo` encontrado pelo `des_tipo` selecionado |
@@ -215,25 +215,28 @@ Preserva:
 
 ## 10. Transformação no backend
 
-O backend substitui apenas:
+O backend garante os valores fixos e acrescenta a observação de controle:
 
 ```text
-pePedidos.numPedido = String(sequence Oracle)
+pePedidos.numPedido = "-1"
+pePedidos.codCompl = 0
+pePedidos.peEndEntrega.codCompl = 0 (quando houver endereço)
+pePedidos.peObservacoes += { txtObs: String(sequence Oracle), indPedido: 0, indNf: 0, indRegistro: 0, indCr: 0, numSeq: 99, tipTransacao: 1 }
 ```
 
-O restante do contrato é encaminhado como recebido.
+As observações da tela são preservadas; a posição 99 fica reservada ao controle. A sequence SEQ_PEDIDO_ERP_INTEGRACAO é gravada em ES_PEDIDO_ERP_INTEGRACAO.NUM_SEQ.
 
 ## 11. Resposta de sucesso
 
 ```json
 {
   "sucesso": true,
-  "numPedido": 123456,
+  "numSeq": 123456,
   "retornoErp": {}
 }
 ```
 
-O frontend utiliza `numPedido` para compor a mensagem final por unidade.
+Após os envios, o frontend consulta `ConsultaPedidosSeq/{numSeq}` para cada sequence retornada pelo backend. A mensagem de sucesso apresenta `cod_unidade`, `num_pedido` e `cod_compl` dos registros encontrados em `items`, correlacionados pelo `txt_obs`. A consulta usa a API Unimed configurada e tenta até três vezes, com intervalo de 700 ms e timeout de 5 segundos por tentativa. Se os dados estiverem indisponíveis, a mensagem confirma a geração e informa a indisponibilidade da consulta para a unidade, sem reenviar o pedido.
 
 ## 12. Checklist de alteração do contrato
 

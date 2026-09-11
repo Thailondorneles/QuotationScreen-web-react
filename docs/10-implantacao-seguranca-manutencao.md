@@ -355,7 +355,7 @@ Também devem ser controlados:
 - compatibilidade do Oracle Instant Client;
 - mudanças de contrato no ORDS;
 - validade do token ERP e credenciais SimFrete;
-- capacidade e índices da tabela `PEDIDO_ERP_INTEGRACAO`;
+- capacidade e índices da tabela `ES_PEDIDO_ERP_INTEGRACAO`;
 - crescimento e retenção dos CLOBs;
 - certificados e regras de firewall;
 - alterações nas constantes por unidade.

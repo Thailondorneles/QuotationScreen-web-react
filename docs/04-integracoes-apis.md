@@ -221,17 +221,17 @@ sequenceDiagram
     participant DB as Oracle
     participant ERP as ERP/NL
 
-    UI->>BE: payload com numPedido "0"
+    UI->>BE: payload com numPedido "-1" e codCompl 0
     BE->>DB: SEQ_PEDIDO_ERP_INTEGRACAO.NEXTVAL
-    DB-->>BE: numPedido
-    BE->>BE: substitui pePedidos.numPedido
+    DB-->>BE: numSeq
+    BE->>BE: fixa pedido -1 e complemento 0; adiciona observação 99 com numSeq
     par Registro inicial
         BE->>DB: INSERT status ENVIANDO + payload
     and Envio
         BE->>ERP: POST ERP_PEDIDOS_URL
     end
     ERP-->>BE: resposta
-    BE-->>UI: sucesso + numPedido
+    BE-->>UI: sucesso + numSeq
     BE->>DB: UPDATE INTEGRADO + resposta
 ```
 
@@ -245,11 +245,11 @@ x-nl-aplicacao: ERP_NL_APLICACAO
 
 ### Registro Oracle
 
-Tabela: `PEDIDO_ERP_INTEGRACAO`.
+Tabela: `ES_PEDIDO_ERP_INTEGRACAO`.
 
 | Campo | Uso |
 |---|---|
-| `NUM_PEDIDO` | Sequência gerada |
+| `NUM_SEQ` | Sequência gerada |
 | `STATUS` | `ENVIANDO`, `INTEGRADO` ou `ERRO` |
 | `PAYLOAD` | JSON efetivamente enviado em CLOB |
 | `USUARIO` | Usuário vindo da URL, se disponível |
@@ -268,7 +268,7 @@ Exemplo:
 ```json
 {
   "sucesso": false,
-  "numPedido": 123456,
+  "numSeq": 123456,
   "erro": "Erro ao integrar pedido com o ERP",
   "etapa": "atualizar_integracao_erro",
   "detalhe": {}
@@ -279,7 +279,7 @@ Etapas internas registradas nos logs:
 
 - `inicio`;
 - `conectar_oracle`;
-- `gerar_numero_pedido`;
+- `gerar_numero_sequencia`;
 - `montar_payload_erp`;
 - `inserir_controle_integracao`;
 - `post_erp`;
@@ -288,7 +288,7 @@ Etapas internas registradas nos logs:
 
 O campo `etapa` retornado ao frontend exige interpretação cuidadosa:
 
-- falhas antes de gerar um número podem retornar a etapa original, como `conectar_oracle` ou `gerar_numero_pedido`;
+- falhas antes de gerar um número podem retornar a etapa original, como `conectar_oracle` ou `gerar_numero_sequencia`;
 - depois que existem conexão e número, o `catch` muda a etapa para `atualizar_integracao_erro` antes de responder, podendo ocultar no JSON a etapa original do POST ou INSERT;
 - uma falha em `atualizar_integracao_sucesso` acontece depois de a resposta de sucesso já ter sido enviada e, portanto, aparece apenas nos logs;
 - os logs emitidos antes da tentativa de atualização de erro preservam a etapa original e são a evidência mais confiável para diagnóstico.

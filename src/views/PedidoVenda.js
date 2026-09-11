@@ -29,7 +29,7 @@ import { format } from '../utils/format.js';
 import { maskMoneyBR } from '../utils/maskMoney.js';
 import LoadingOverlay from '../components/LoadingOverlay.js';
 import { LovObservacao } from '../components/LovObservacao.js';
-import { enviarPedidoErp } from '../services/pedidosErp.js';
+import { enviarPedidoErp, consultarPedidosPorSequencia } from '../services/pedidosErp.js';
 import { LovUnidadesPedido } from '../components/LovUnidadesPedido.js';
 import { ModalConfirmacao } from '../components/ModalConfirmacao.js';
 import { ModalEmitirProposta } from '../components/ModalEmitirProposta.js';
@@ -2268,7 +2268,7 @@ export function PedidoVenda() {
             indNf: obs.nota ? 1 : 0,
             indRegistro: obs.registro ? 1 : 0,
             indCr: obs.financeiro ? 1 : 0,
-            numSeq: index + 1,
+            numSeq: index < 98 ? index + 1 : index + 2,
             tipTransacao: 1
         }));
     }
@@ -2283,7 +2283,7 @@ export function PedidoVenda() {
         return limparCamposVazios({
             codEmp: '01',
             codUnidade: unidadePedido,
-            codCompl: 99,
+            codCompl: 0,
             desEndereco: endereco || logradouroDigitado,
             desLogradouro: logradouroDigitado,
             codLogradouro: getCodigoTipoLogradouro(tipoLogradouroSelecionado),
@@ -2313,9 +2313,9 @@ export function PedidoVenda() {
         const pePedidos = {
             codEmp: '01',
             codUnidade: unidadePedido,
-            numPedido: '0',
+            numPedido: '-1',
             numSeqConf: modalidadeIntegracao,
-            codCompl: 99,
+            codCompl: 0,
             desNumOcCliente: ordemCompra || null,
             codSituacao,
             dtaEmissao: dataErp,
@@ -2411,13 +2411,13 @@ export function PedidoVenda() {
             ? JSON.stringify(erroBackend.detalhe)
             : error.message;
         const etapaErro = erroBackend?.etapa ? ` Etapa: ${erroBackend.etapa}.` : '';
-        const pedidoErro = erroBackend?.numPedido ? ` Pedido: ${erroBackend.numPedido}.` : '';
+        const sequenciaErro = erroBackend?.numSeq ? ` Sequência de integração: ${erroBackend.numSeq}.` : '';
 
         setModalErro({
             aberto: true,
             seqItem: error?.seqItem || null,
             mensagem: erroBackend
-                ? `${erroBackend.erro}.${etapaErro}${pedidoErro} Detalhe: ${detalheErro}`
+                ? `${erroBackend.erro}.${etapaErro}${sequenciaErro} Detalhe: ${detalheErro}`
                 : error.mensagem || error.message || 'Erro ao integrar pedido com o ERP.'
         });
     }
@@ -2427,22 +2427,23 @@ export function PedidoVenda() {
             setLoading(true);
             const payloads = montarPayloadsPedidoErp(unidadesSelecionadas, situacoesPorUnidade);
 
-            const responses = await Promise.all(payloads.map(async payload => {
-                const response = await enviarPedidoErp(payload);
-                return {
-                    unidade: payload.pePedidos.codUnidade,
-                    data: response.data
-                };
-            }));
-
-            const pedidos = responses
-                .sort((a, b) => Number(a.unidade) - Number(b.unidade))
-                .map(response => `Pedido ${response.unidade}: ${response.data.numPedido}`)
-                .join('\n');
+            const responses = await Promise.all(payloads.map(payload => enviarPedidoErp(payload)));
+            const consultas = await Promise.all(responses.map(response =>
+                consultarPedidosPorSequencia(response.data.numSeq)
+            ));
+            const detalhes = consultas.flatMap((pedidos, index) => pedidos.length
+                ? pedidos.map(pedido =>
+                    `Unidade ${pedido.cod_unidade} — Pedido ${pedido.num_pedido} — Complemento ${pedido.cod_compl}`
+                )
+                : [`Unidade ${payloads[index].pePedidos.codUnidade} — Pedido gerado; dados ainda indisponíveis para consulta.`]
+            );
+            const mensagem = payloads.length === 1
+                ? 'O pedido foi gerado no ERP com sucesso.'
+                : 'Os pedidos foram gerados no ERP com sucesso.';
 
             setModalSucesso({
                 aberto: true,
-                mensagem: pedidos,
+                mensagem: `${mensagem}\n\n${detalhes.join('\n')}`,
                 limparAoFechar: true
             });
         } catch (error) {

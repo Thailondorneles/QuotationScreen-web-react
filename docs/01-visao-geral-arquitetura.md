@@ -31,7 +31,7 @@ O sistema não é apenas um formulário. Ele orquestra dados cadastrais, tribut�
 - Recuperação de uma simulação após recarregar o navegador.
 - Armazenamento das propostas emitidas.
 - Autenticação própria do frontend.
-- Tela de acompanhamento do registro `PEDIDO_ERP_INTEGRACAO`.
+- Tela de acompanhamento do registro `ES_PEDIDO_ERP_INTEGRACAO`.
 - Reprocessamento de integração pela interface.
 - Testes automatizados configurados no projeto.
 

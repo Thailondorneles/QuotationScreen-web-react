@@ -6,7 +6,9 @@ import { baixarBlob, nomeArquivoProposta } from './propostaDownloadService.js';
 const VERDE = [0, 132, 74];
 
 function moeda(valor) {
-    return Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    return Number(valor || 0).toLocaleString('pt-BR', {
+        style: 'currency', currency: 'BRL', minimumFractionDigits: 4, maximumFractionDigits: 4
+    });
 }
 
 function data(valor) {
@@ -50,30 +52,34 @@ export async function gerarPropostaPdf(proposta) {
     doc.setFont(undefined, 'normal');
     doc.text(`${proposta.cliente.codigo} - ${proposta.cliente.nome}`, 14, 49);
     doc.text(`CNPJ: ${textoOuTraco(proposta.cliente.cnpj)} | Telefone: ${textoOuTraco(proposta.cliente.telefone)} | E-mail: ${textoOuTraco(proposta.cliente.email)}`, 14, 55);
-    doc.text(`Condição de pagamento: ${proposta.condicaoPagamento.codigo} - ${proposta.condicaoPagamento.descricao}`, 14, 61);
-    doc.text(`Representante: ${textoOuTraco(proposta.representante.nome)} | Emissão: ${data(proposta.emissao)} | Validade: ${data(proposta.validade)}`, 14, 67);
-    if (proposta.ordemCompra) doc.text(`Ordem de compra: ${proposta.ordemCompra}`, 14, 73);
-    if (proposta.dataCarga) doc.text(`Data de carga: ${proposta.dataCarga}`, 110, 73);
+    doc.text(`Cidade: ${textoOuTraco(proposta.cliente.cidade)}`, 14, 61);
+    doc.text(`Condição de pagamento: ${proposta.condicaoPagamento.codigo} - ${proposta.condicaoPagamento.descricao}`, 14, 67);
+    doc.text(`Representante: ${textoOuTraco(proposta.representante.nome)} | Emissão: ${data(proposta.emissao)} | Validade: ${data(proposta.validade)}`, 14, 73);
+    if (proposta.ordemCompra) doc.text(`Ordem de compra: ${proposta.ordemCompra}`, 14, 79);
+    if (proposta.dataCarga) doc.text(`Data de carga: ${proposta.dataCarga}`, 110, 79);
 
     const endereco = enderecoTexto(proposta.enderecoEntrega);
-    const inicioTabela = endereco ? 84 : proposta.ordemCompra ? 79 : 73;
+    const possuiLinhaCarga = proposta.ordemCompra || proposta.dataCarga;
+    const inicioTabela = endereco ? 90 : possuiLinhaCarga ? 85 : 79;
     if (endereco) {
         doc.setFont(undefined, 'bold');
-        doc.text('Endereço de entrega:', 14, proposta.ordemCompra ? 79 : 73);
+        doc.text('Endereço de entrega:', 14, possuiLinhaCarga ? 85 : 79);
         doc.setFont(undefined, 'normal');
-        doc.text(endereco, 51, proposta.ordemCompra ? 79 : 73, { maxWidth: 230 });
+        doc.text(endereco, 51, possuiLinhaCarga ? 85 : 79, { maxWidth: 230 });
     }
 
     autoTable(doc, {
         startY: inicioTabela,
-        head: [['Seq.', 'Código', 'Descrição', 'Princípio ativo', 'Marca', 'Quantidade', 'Valor unitário', 'Valor total']],
+        tableWidth: 262,
+        head: [['Seq.', 'Código', 'Descrição', 'Princípio ativo', 'Marca', 'UM', 'Quantidade', 'Valor unitário', 'Valor total']],
         body: proposta.itens.map(item => [
             item.sequencia,
             item.codigo,
             item.descricao,
             textoOuTraco(item.principioAtivo),
             textoOuTraco(item.marca),
-            item.quantidade.toLocaleString('pt-BR'),
+            textoOuTraco(item.unidadeMedida),
+            item.quantidade.toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 }),
             moeda(item.valorUnitario),
             moeda(item.valorTotal)
         ]),
@@ -83,12 +89,13 @@ export async function gerarPropostaPdf(proposta) {
         columnStyles: {
             0: { cellWidth: 12 },
             1: { cellWidth: 20 },
-            2: { cellWidth: 72 },
-            3: { cellWidth: 50 },
-            4: { cellWidth: 32 },
-            5: { cellWidth: 22, halign: 'right' },
-            6: { cellWidth: 27, halign: 'right' },
-            7: { cellWidth: 27, halign: 'right' }
+            2: { cellWidth: 62 },
+            3: { cellWidth: 43 },
+            4: { cellWidth: 28 },
+            5: { cellWidth: 12, halign: 'center' },
+            6: { cellWidth: 24, halign: 'right' },
+            7: { cellWidth: 30, halign: 'right' },
+            8: { cellWidth: 31, halign: 'right' }
         },
         didDrawPage: () => {
             const pagina = doc.getNumberOfPages();

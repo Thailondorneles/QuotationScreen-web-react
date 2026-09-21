@@ -1,6 +1,7 @@
 import { RootLayout } from "./views/RootLayout";
 import { createBrowserRouter } from "react-router-dom";
 import { PedidoVenda } from "./views/PedidoVenda";
+import { Configuracoes } from "./views/Configuracoes"
 
 export const routes = createBrowserRouter([
     {
@@ -10,6 +11,10 @@ export const routes = createBrowserRouter([
             {   
                 path: "/",
                 element: <PedidoVenda />
+            },
+            {   
+                path: "/config",
+                element: <Configuracoes/>
             }
         ]
     }

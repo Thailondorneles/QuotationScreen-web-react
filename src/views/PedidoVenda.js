@@ -13,7 +13,7 @@ import { LovEnderecos } from '../components/LovEnderecos.js';
 import { getCepsByFilter } from '../services/ceps.js';
 import { getEnderecosPadraoByFilter } from '../services/enderecosPadrao.js';
 import { getRepresentantesByCliente, getRepresentantesByIdCliente } from '../services/representantes.js';
-import { getClienteByFilter, getAllClientesCached, getClienteDetalhado, getClientesComentarios, getClientesHistorico, getClientesUltimasCompras, agruparUltimasComprasPorItem } from '../services/clientes.js';
+import { getClienteByFilter, getAllClientesCached, getClienteDetalhado, getClientesComentarios, getClientesHistorico, getClientesUltimasCompras, agruparUltimasComprasPorItem, obterClienteParaProposta } from '../services/clientes.js';
 import { getCidadesByFilter } from '../services/cidades.js';
 import { getUfByFilter } from '../services/uf.js';
 import { getTipLogradouro } from '../services/tipLogradouro.js';
@@ -26,7 +26,8 @@ import { getListaPreco } from '../services/listaPreco.js';
 import { getItensAcordos, getItensClassificacao, getItensDetalhados, getItemUltimaCompra, getItensLotesCached } from '../services/itens.js';
 import { cotarSimFrete } from '../config/simFreteService.js';
 import { format } from '../utils/format.js';
-import { maskMoneyBR } from '../utils/maskMoney.js';
+import { maskMoneyBR, formatarMilharesBR } from '../utils/maskMoney.js';
+import { calcularCobrancaFrete, calcularSobraComFrete, ratearValor } from '../utils/cobrancaFrete.js';
 import LoadingOverlay from '../components/LoadingOverlay.js';
 import { LovObservacao } from '../components/LovObservacao.js';
 import { enviarPedidoErp, consultarPedidosPorSequencia } from '../services/pedidosErp.js';
@@ -63,7 +64,9 @@ export function PedidoVenda() {
     const [modalidadeIntegracao, setModalidadeIntegracao] = useState(2);
     const [menuModalidadeIntegracaoOpen, setMenuModalidadeIntegracaoOpen] = useState(false);
     const [opcaoFrete, setOpcaoFrete] = useState('CIF');
+    const [cobrancaFrete, setCobrancaFrete] = useState({ tipo: 'PERCENTUAL', valor: '100' });
     const [menuOpcaoFreteOpen, setMenuOpcaoFreteOpen] = useState(false);
+    const [menuCobrancaFreteOpen, setMenuCobrancaFreteOpen] = useState(false);
     const [creditoCliente, setCreditoCliente] = useState({
         atingido: null,
         limiteMensal: null,
@@ -114,6 +117,15 @@ export function PedidoVenda() {
         203: null
     });
     const [cotacoesFrete, setCotacoesFrete] = useState({ 201: [], 203: [] });
+    const cobrancaCalculada = calcularCobrancaFrete(itensPedido, freteSelecionado, opcaoFrete, cobrancaFrete);
+    const chaveRateioFrete = JSON.stringify(itensPedido.map(item => [item.seq, item.unidade, item.selecionado, item.quantidade, item.pesoBruto, item.qtdM3]));
+    useEffect(() => {
+        aplicarRateioFrete(freteSelecionado);
+    }, [chaveRateioFrete, freteSelecionado]);
+    useEffect(() => {
+        setItensPedido(prev => prev.some(item => item.sobraDesejada != null)
+            ? prev.map(item => ({ ...item, sobraDesejada: null })) : prev);
+    }, [opcaoFrete, cobrancaFrete, freteSelecionado]);
     const [loading, setLoading] = useState(false);
     const [loadingDadosCliente, setLoadingDadosCliente] = useState(false);
     const [observacoes, setObservacoes] = useState([]);
@@ -126,6 +138,7 @@ export function PedidoVenda() {
     const [obsEditando, setObsEditando] = useState(null);
     const [ordemCompra, setOrdemCompra] = useState('');
     const [menuSelecaoItensOpen, setMenuSelecaoItensOpen] = useState(null);
+    const [valorListaEmEdicao, setValorListaEmEdicao] = useState(null);
     const [ordenacaoItens, setOrdenacaoItens] = useState({ coluna: null, direcao: null });
     const [openLovUnidadesPedido, setOpenLovUnidadesPedido] = useState(false);
     const [ultimasComprasClienteMap, setUltimasComprasClienteMap] = useState({});
@@ -295,6 +308,7 @@ export function PedidoVenda() {
         setModalidadeIntegracao(2);
         setMenuModalidadeIntegracaoOpen(false);
         setOpcaoFrete('CIF');
+        setCobrancaFrete({ tipo: 'PERCENTUAL', valor: '100' });
         setMenuOpcaoFreteOpen(false);
         setCreditoCliente({ atingido: null, limiteMensal: null, titulosVencidos: null });
         setCodClienteDigitado('');
@@ -898,6 +912,7 @@ export function PedidoVenda() {
             numItem,
             cod_item: itemLov.cod_item,
             descricao: itemLov.des_item,
+            unidadeMedida: itemLov.cod_um ?? '',
             principiosAtivos: itemLov.principios_ativos,
             marca: itemLov.cod_completo,
             qtdMultiplo: null,
@@ -907,7 +922,7 @@ export function PedidoVenda() {
             qtdM3: null,
             qtdM2: null,
             pesoBruto: null,
-            quantidade: '',
+            quantidade: itemLov.quantidade ?? '',
             estoque: 0,
             vlrMedio: 0,
             valorLista: 0,
@@ -1092,7 +1107,7 @@ export function PedidoVenda() {
 
     function calcularTributosItem(item, valorVendaTotal) {
         const imp = item.impostos || {};
-        const frete = opcaoFrete === 'COBRAR_NF' ? Number(item.valorFrete || 0) : 0;
+        const frete = cobrancaCalculada.porItem[item.seq] || 0;
         const ativo = indicador => Number(indicador) === 1 ? 1 : 0;
         const rIpi = Number(imp.perIpi || 0) / 100;
         const rIcms = Number(imp.perIcms || 0) / 100;
@@ -1136,7 +1151,7 @@ export function PedidoVenda() {
 
         const custoTotal = Number(item.vlrMedio || 0) * qtd;
         const frete = Number(item.valorFrete || 0);
-        return (custoTotal + frete + impostosFixos) / divisor / qtd;
+        return (custoTotal + frete - (cobrancaCalculada.porItem[item.seq] || 0) + impostosFixos) / divisor / qtd;
     }
 
     function handleSobraPercentualChange(seq, valor) {
@@ -1276,7 +1291,7 @@ export function PedidoVenda() {
             if (imp.difal && imp.difal.toUpperCase().includes('DIF')) {
                 const perDifal = Number(imp.perDifal || 0);
                 baseSubs = valorVendaTotal;
-                baseSubs += opcaoFrete === 'COBRAR_NF' && Number(imp.indSubsFreteSoma) === 1 ? Number(item.valorFrete || 0) : 0;
+                baseSubs += Number(imp.indSubsFreteSoma) === 1 ? (cobrancaCalculada.porItem[item.seq] || 0) : 0;
                 baseSubs += Number(imp.indSubsIpiSoma) === 1 ? ipi : 0;
                 baseSubs += Number(imp.indSubsPisSoma) === 1 ? pis : 0;
                 baseSubs += Number(imp.indSubsCofinsSoma) === 1 ? cofins : 0;
@@ -1292,7 +1307,7 @@ export function PedidoVenda() {
                 } else {
                     baseSubs = valorVendaTotal;
                 }
-                baseSubs += opcaoFrete === 'COBRAR_NF' && Number(imp.indSubsFreteSoma) === 1 ? Number(item.valorFrete || 0) : 0;
+                baseSubs += Number(imp.indSubsFreteSoma) === 1 ? (cobrancaCalculada.porItem[item.seq] || 0) : 0;
                 baseSubs += Number(imp.indSubsIpiSoma) === 1 ? ipi : 0;
                 baseSubs += Number(imp.indSubsPisSoma) === 1 ? pis : 0;
                 baseSubs += Number(imp.indSubsCofinsSoma) === 1 ? cofins : 0;
@@ -1308,8 +1323,9 @@ export function PedidoVenda() {
 
         const sobraBruta = valorVendaTotal - valorCustoTotal;
         const frete = Number(item.valorFrete || 0);
-        const sobraReal = sobraBruta - totalImpostos - frete; // nota: não subtrai Funrural
-        const sobraPercentual = valorVendaTotal > 0 ? (sobraReal / valorVendaTotal) * 100 : 0;
+        const { sobraReal, sobraPercentual } = calcularSobraComFrete(
+            valorVendaTotal, valorCustoTotal, totalImpostos, frete, cobrancaCalculada.porItem[item.seq] || 0
+        ); // não subtrai Funrural
         return {
             valorVendaTotal,
             valorCustoTotal,
@@ -1814,7 +1830,7 @@ export function PedidoVenda() {
             const itensSelecionados = itensPedido.filter(item => item.selecionado);
 
             setFreteSelecionado({ 201: null, 203: null });
-            setItensPedido(prev => prev.map(item => ({ ...item, valorFrete: 0 })));
+            aplicarRateioFrete({});
 
             if (itensSelecionados.length === 0) {
                 setModalErro({
@@ -1885,7 +1901,7 @@ export function PedidoVenda() {
                 return;
             }
 
-            setCotacoesFrete(cotacoesMap);
+            setCotacoesFrete(prev => ({ ...prev, ...cotacoesMap }));
             setFreteSelecionado(selecaoAuto);
             aplicarRateioFrete(selecaoAuto);
         } catch (err) {
@@ -1902,6 +1918,7 @@ export function PedidoVenda() {
 
             Object.entries(selecionados).forEach(([unidade, frete]) => {
 
+                if (!frete) return;
                 const valorFrete = Number(frete.valor);
                 if (isNaN(valorFrete) || valorFrete <= 0) {
                     return;
@@ -1936,15 +1953,11 @@ export function PedidoVenda() {
                     if (totalQuantidade === 0) {
                         return;
                     }
-                    indicesItensUnidade.forEach((itemIndex, i) => {
-                        const proporcao = quantidades[i] / totalQuantidade;
-                        novosItens[itemIndex].valorFrete = Number((proporcao * valorFrete).toFixed(2));
-                    });
+                    const parcelas = ratearValor(valorFrete, quantidades);
+                    indicesItensUnidade.forEach((itemIndex, i) => { novosItens[itemIndex].valorFrete = parcelas[i]; });
                 } else {
-                    indicesItensUnidade.forEach((itemIndex, i) => {
-                        const proporcao = pesosCobranca[i] / totalPesoCobranca;
-                        novosItens[itemIndex].valorFrete = Number((proporcao * valorFrete).toFixed(2));
-                    });
+                    const parcelas = ratearValor(valorFrete, pesosCobranca);
+                    indicesItensUnidade.forEach((itemIndex, i) => { novosItens[itemIndex].valorFrete = parcelas[i]; });
                 }
             });
 
@@ -2321,6 +2334,7 @@ export function PedidoVenda() {
             dtaEmissao: dataErp,
             dtaDigitacao: dataErp,
             tipFrete: 1,
+            vlrFrete: valorDecimalErp(itensUnidade.reduce((total, item) => total + (cobrancaCalculada.porItem[item.seq] || 0), 0)),
             codPortador: Number(unidadePedido) === 201 ? '156' : '203',
             codPosicao: '22',
             codCondPgto: String(CondPgto.cod_cond_pgto),
@@ -2505,6 +2519,7 @@ export function PedidoVenda() {
             itensPedido,
             freteSelecionado,
             opcaoFrete,
+            cobrancaFrete,
             endereco: {
                 cep: codCepDigitado,
                 uf: codUfDigitado,
@@ -2531,10 +2546,8 @@ export function PedidoVenda() {
     async function emitirProposta(formato) {
         try {
             setGerandoProposta(true);
-            const responseCliente = await getClienteByFilter({ filtro: cliente.cod_pessoa }).catch(() => null);
-            const clienteContato = responseCliente?.data?.items?.[0] || {};
             const dadosProposta = obterDadosPropostaTela();
-            dadosProposta.cliente = { ...dadosProposta.cliente, ...clienteContato };
+            dadosProposta.cliente = await obterClienteParaProposta(dadosProposta.cliente);
             const propostas = criarPropostasPorUnidade(dadosProposta);
             await exportarPropostas(propostas, formato);
             setModalEmitirProposta(false);
@@ -2824,6 +2837,7 @@ export function PedidoVenda() {
                 </div>
                 <div className="pedido-total-card pedido-total-frete">
                     <span className="pedido-total-label">Frete</span>
+                    {opcaoFrete === 'COBRAR_NF' && <small>Cobrar do cliente: {format.moeda(cobrancaCalculada.porUnidade[unidade] || 0)}</small>}
                     {freteFoiCotado ? (
                         <>
                             <div className="frete-valor-row">
@@ -2839,7 +2853,7 @@ export function PedidoVenda() {
                                             <div className="lov-tooltip-acordo">Nenhuma cotação disponível</div>
                                         ) : (
                                             (cotacoesFrete[unidade] || []).map((t, idx) => {
-                                                const isSel = freteSelecionado[unidade] && String(freteSelecionado[unidade].cnpj) === String(t.cnpj) && Number(freteSelecionado[unidade].valor) === Number(t.valor);
+                                                const isSel = Boolean(freteSelecionado[unidade] && String(freteSelecionado[unidade].cnpj) === String(t.cnpj) && Number(freteSelecionado[unidade].valor) === Number(t.valor));
                                                 return (
                                                     <div key={idx} className={['frete-tooltip-item', isSel ? 'frete-tooltip-item-selected' : ''].filter(Boolean).join(' ')} onClick={(e) => { e.stopPropagation(); selecionarTransportadora(unidade, t); }}>
                                                         <label className="frete-tooltip-row">
@@ -2945,7 +2959,8 @@ export function PedidoVenda() {
                     <div className="tip-linha"><span className="tip-nome">Frete rateado:</span><span className="tip-valor">{format.moeda(item.valorFrete ?? 0)}</span></div>
                     <div className="tip-linha"><span className="tip-nome">Sobra:</span><span className="tip-valor">{format.moeda(valores.sobraReal ?? 0)}</span></div>
                     <div className="tip-linha"><span className="tip-nome">Transportadora:</span><span className="tip-valor">{freteItem?.nome || '-'}</span></div>
-                    <div className="tip-linha"><span className="tip-nome">Prazo:</span><span className="tip-valor">{freteItem ? `${freteItem.prazo} dias` : '-'}</span></div>
+                    <div className="tip-linha"><span className="tip-nome">Frete cobrado:</span><span className="tip-valor">{format.moeda(cobrancaCalculada.porItem[item.seq] || 0)}</span></div>
+                    <div className="tip-linha"><span className="tip-nome">Prazo:</span><span className="tip-valor">{freteItem?.prazo != null ? `${freteItem.prazo} dias` : '-'}</span></div>
                     <div className="tip-linha"><span className="tip-nome">Última compra:</span><span className="tip-valor">{formatarDataUltimaCompraItem(item)}</span></div>
                     <div className="tip-linha"><span className="tip-nome">Ticket médio:</span><span className="tip-valor">{item.ticktMedio != null ? format.moeda(item.ticktMedio) : '-'}</span></div>
                     {possuiAcordo && (
@@ -3170,6 +3185,7 @@ export function PedidoVenda() {
                                     aria-expanded={menuOpcaoFreteOpen}
                                     onClick={() => {
                                         setMenuOpcaoFreteOpen(aberto => !aberto);
+                                        setMenuCobrancaFreteOpen(false);
                                         setMenuModalidadeIntegracaoOpen(false);
                                     }}
                                 >
@@ -3186,6 +3202,38 @@ export function PedidoVenda() {
                                     </div>
                                 )}
                             </div>
+                            {opcaoFrete === 'COBRAR_NF' && (
+                                <div className="cobranca-frete">
+                                    <span>Cobrar do cliente</span>
+                                    <div className="seletor-verde-wrap">
+                                        <button type="button" className="btn-modalidade-integracao btn-opcao-frete" aria-label="Tipo de cobrança de frete" aria-haspopup="listbox" aria-expanded={menuCobrancaFreteOpen} onClick={() => {
+                                            setMenuCobrancaFreteOpen(aberto => !aberto);
+                                            setMenuOpcaoFreteOpen(false);
+                                            setMenuModalidadeIntegracaoOpen(false);
+                                        }}>
+                                            {cobrancaFrete.tipo === 'PERCENTUAL' ? '% do custo do frete' : 'Valor total (R$)'}
+                                        </button>
+                                        {menuCobrancaFreteOpen && (
+                                            <div className="modalidade-integracao-menu opcao-frete-menu" role="listbox" aria-label="Tipo de cobrança de frete">
+                                                {[['PERCENTUAL', '% do custo do frete'], ['VALOR', 'Valor total (R$)']].map(([tipo, descricao]) => (
+                                                    <button key={tipo} type="button" role="option" aria-selected={cobrancaFrete.tipo === tipo} onClick={() => {
+                                                        setCobrancaFrete({ tipo, valor: tipo === 'PERCENTUAL' ? '100' : '0' });
+                                                        setMenuCobrancaFreteOpen(false);
+                                                    }}>{descricao}</button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <input aria-label="Cobrança de frete" inputMode="decimal" value={cobrancaFrete.valor} onChange={event => {
+                                        const valor = event.target.value;
+                                        if (!/^\d*(?:,\d{0,2})?$/.test(valor)) return;
+                                        if (cobrancaFrete.tipo === 'PERCENTUAL' && numeroDecimalBR(valor) > 100) return;
+                                        setCobrancaFrete(prev => ({ ...prev, valor }));
+                                        setItensPedido(prev => prev.map(item => ({ ...item, sobraDesejada: null })));
+                                    }} />
+                                    <span>Total a cobrar: {format.moeda(cobrancaCalculada.total)}</span>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -3272,7 +3320,7 @@ export function PedidoVenda() {
                         </section>
 
                         {[{ unidade: 201, titulo: 'Unidade 201 (Matriz)' }, { unidade: 203, titulo: 'Unidade 203 (Filial)' }].map(config => (
-                            <section className="tabela-itens-bloco tabela-unidade-resumo" key={config.unidade}>
+                            <section className="tabela-itens-bloco tabela-unidade-resumo" data-unidade={config.unidade} key={config.unidade}>
                                 <div className="tabela-bloco-cabecalho">
                                     <h3>{config.titulo}</h3>
                                     <div className="item-selection-menu">
@@ -3303,7 +3351,7 @@ export function PedidoVenda() {
                                                     <td><input type="checkbox" checked={Boolean(item.selecionado)} disabled={semTributacao} title={semTributacao ? 'Item sem tributação: envio ao ERP bloqueado' : undefined} onChange={(e) => handleCheckboxChange(item.seq, e.target.checked)} aria-label={`Enviar item ${item.cod_item} pela unidade ${item.unidade}`} /></td>
                                                     <td><input className="item-table-input" data-field="quantidade-unidade" data-unidade={item.unidade} data-seq={item.seq} value={item.quantidade} disabled={!item.selecionado || semTributacao} onChange={(e) => handleQuantidadeChange(item.seq, e.target.value)} onBlur={() => validarMultiplo(item.seq)} onKeyDown={navegarCamposItens} /></td>
                                                     <td>{item.estoque}</td>
-                                                    <td><input className="item-table-input item-table-money" data-field="valor-lista" data-unidade={item.unidade} data-seq={item.seq} value={item.valorLista} disabled={item.precoListaBloqueado} title={item.precoListaBloqueado ? 'Preço bloqueado por contrato' : item.precoListaPromocional ? 'Preço promocional: permitido somente aumentar' : undefined} onFocus={e => e.target.select()} onChange={(e) => handleValorListaChange(item.seq, maskMoneyBR(e.target.value, 4))} onBlur={() => validarValorListaPromocional(item.seq)} onKeyDown={navegarCamposItens} /></td>
+                                                    <td><input className="item-table-input item-table-money" data-field="valor-lista" data-unidade={item.unidade} data-seq={item.seq} value={valorListaEmEdicao === item.seq ? item.valorLista : formatarMilharesBR(item.valorLista)} disabled={item.precoListaBloqueado} title={item.precoListaBloqueado ? 'Preço bloqueado por contrato' : item.precoListaPromocional ? 'Preço promocional: permitido somente aumentar' : undefined} onFocus={e => { setValorListaEmEdicao(item.seq); e.target.select(); }} onChange={(e) => handleValorListaChange(item.seq, maskMoneyBR(e.target.value, 4))} onBlur={() => { setValorListaEmEdicao(null); validarValorListaPromocional(item.seq); }} onKeyDown={navegarCamposItens} /></td>
                                                     <td>{format.moeda(valores.valorVendaTotal ?? 0)}</td>
                                                     <td>
                                                         <input

@@ -256,7 +256,10 @@ Ao adicionar ou mudar um campo:
 
 - Não há validação final exigindo preço unitário maior que zero antes do envio.
 - `indVlrAlterado` permanece `0`, mesmo quando o valor foi editado pelo usuário; a semântica deve ser confirmada com o ERP antes de qualquer alteração.
-- `tipFrete` é fixo em `1`; transportadora, prazo e valor cotado não fazem parte do contrato atual, embora o frete afete a sobra.
+- `tipFrete` é fixo em `1`. `pePedidos.vlrFrete` recebe o valor cobrado do cliente por unidade, em formato decimal brasileiro com quatro casas; em CIF recebe zero. Transportadora, prazo e custo cotado não são enviados nesse campo.
+- Em **Cobrar na NF**, o vendedor informa um percentual do custo do frete (0 a 100%) ou um valor total em reais. O total em reais é rateado entre unidades proporcionalmente ao custo; sem custo informado, usa as quantidades selecionadas. O rateio conserva os centavos.
+- A sobra considera o custo do frete como despesa e a cobrança como receita, mantendo o valor dos produtos como base do percentual. As bases tributárias usam apenas a cobrança, conforme os indicadores de impostos já configurados.
+- O custo do frete é obtido pela cotação do SimFrete. A cobrança ao cliente é configurada separadamente em **Cobrar na NF**.
 - Complemento e referência de endereço não são enviados.
 - Endereço parcial pode preservar `numCep: 0` e `numLogradouro: 0`, pois zeros não são removidos pela limpeza.
 - `numItem` mantém a identidade criada para o produto e pode apresentar lacunas dentro do pedido de uma unidade.

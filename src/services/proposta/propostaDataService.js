@@ -1,4 +1,5 @@
 import { DIAS_VALIDADE_PROPOSTA, EMPRESA_PROPOSTA } from '../../config/propostaConfig.js';
+import { calcularCobrancaFrete } from '../../utils/cobrancaFrete.js';
 
 function numeroDecimal(valor) {
     const texto = String(valor ?? '').trim();
@@ -39,6 +40,7 @@ export function criarPropostasPorUnidade(dados) {
     const validade = adicionarDias(agora, DIAS_VALIDADE_PROPOSTA);
     const itensSelecionados = (dados.itensPedido || []).filter(item => item.selecionado);
     const unidades = [...new Set(itensSelecionados.map(item => Number(item.unidade)))].sort((a, b) => a - b);
+    const cobranca = calcularCobrancaFrete(dados.itensPedido || [], dados.freteSelecionado || {}, dados.opcaoFrete, dados.cobrancaFrete);
 
     return unidades.map(unidade => {
         const itens = itensSelecionados
@@ -52,6 +54,7 @@ export function criarPropostasPorUnidade(dados) {
                     descricao: item.descricao || item.des_item || '',
                     principioAtivo: item.principiosAtivos || item.principios_ativos || '',
                     marca: item.marca || item.cod_completo || '',
+                    unidadeMedida: item.unidadeMedida || '',
                     quantidade,
                     valorUnitario,
                     valorTotal: quantidade * valorUnitario
@@ -59,7 +62,7 @@ export function criarPropostasPorUnidade(dados) {
             });
         const freteSelecionado = dados.freteSelecionado?.[unidade] || null;
         const totalProdutos = itens.reduce((total, item) => total + item.valorTotal, 0);
-        const valorFrete = freteSelecionado ? numeroDecimal(freteSelecionado.valor) : 0;
+        const valorFrete = cobranca.porUnidade[unidade] || 0;
         const cobrarFreteNaNf = dados.opcaoFrete === 'COBRAR_NF';
         const configUnidade = EMPRESA_PROPOSTA.unidades[unidade] || { nome: `Unidade ${unidade}`, cnpj: '' };
 
@@ -75,6 +78,7 @@ export function criarPropostasPorUnidade(dados) {
             cliente: {
                 codigo: dados.cliente?.cod_pessoa || '',
                 nome: dados.cliente?.des_pessoa || '',
+                cidade: primeiroValor(dados.cliente?.des_cidade, dados.clienteDetalhado?.des_cidade),
                 cnpj: primeiroValor(dados.clienteDetalhado?.cnpj, dados.clienteDetalhado?.num_cnpj_cpf, dados.cliente?.cnpj),
                 telefone: primeiroValor(dados.clienteDetalhado?.telefone, dados.clienteDetalhado?.num_fone, dados.cliente?.num_fone, dados.cliente?.telefone),
                 email: primeiroValor(dados.clienteDetalhado?.email, dados.clienteDetalhado?.des_email, dados.cliente?.des_email, dados.cliente?.email)
@@ -95,10 +99,10 @@ export function criarPropostasPorUnidade(dados) {
                 .filter(Boolean),
             enderecoEntrega: montarEndereco(dados),
             itens,
-            frete: freteSelecionado ? {
+            frete: freteSelecionado || (cobrarFreteNaNf && valorFrete > 0) ? {
                 cotado: true,
-                transportadora: freteSelecionado.nome || '',
-                prazo: freteSelecionado.prazo,
+                transportadora: freteSelecionado?.nome || '',
+                prazo: freteSelecionado?.prazo,
                 valor: cobrarFreteNaNf ? valorFrete : null,
                 valorVisivel: cobrarFreteNaNf,
                 modalidade: cobrarFreteNaNf ? 'COBRAR_NF' : 'CIF'

@@ -3,7 +3,7 @@ import { FaX, FaChevronLeft, FaChevronRight } from "react-icons/fa6";
 import { FaStar, FaHourglassHalf } from "react-icons/fa";
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getImpostosCached } from '../services/impostos.js';
-import { getItens, getItensAcordos, getItensLotesCached } from '../services/itens';
+import { getItens, getItensAcordos, getItensDetalhados, getItensLotesCached } from '../services/itens';
 
 const ITENS_POR_PAGINA = 25;
 const CACHE_TTL = 5 * 60 * 1000;
@@ -76,6 +76,9 @@ async function mapComConcorrencia(itens, limite, processar) {
 export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], codCliente = null, codOper = null, codCondPgto = null, ultimasComprasMap = {} }) {
     const [filtro, setFiltro] = useState(FILTRO_PADRAO);
     const [itensSelecionados, setItensSelecionados] = useState({});
+    const [quantidades, setQuantidades] = useState({});
+    const [multiplos, setMultiplos] = useState({});
+    const [erroQuantidade, setErroQuantidade] = useState('');
     const [menuSelecionarOpen, setMenuSelecionarOpen] = useState(false);
     const [ordenacao, setOrdenacao] = useState({ coluna: null, direcao: null });
     const [todosItens, setTodosItens] = useState([]);
@@ -180,6 +183,8 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                     cod_item: item.cod_item,
                     cod_completo: item.cod_completo,
                     des_item: item.des_item,
+                    cod_um: item.cod_um,
+                    qtd_multiplo: item.qtd_multiplo,
                     principios_ativos: item.principios_ativos,
                     estoque_matriz: Number(item.qtd_estoque_matriz ?? 0),
                     estoque_filial: Number(item.qtd_estoque_filial ?? 0),
@@ -189,6 +194,10 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
 
             if (!acc[item.cod_item].cod_completo && item.cod_completo) {
                 acc[item.cod_item].cod_completo = item.cod_completo;
+            }
+
+            if (!acc[item.cod_item].cod_um && item.cod_um) {
+                acc[item.cod_item].cod_um = item.cod_um;
             }
 
             if (!acc[item.cod_item].principios_ativos && item.principios_ativos) {
@@ -269,6 +278,26 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
     const precisaAtualizar = Date.now() - atualizadoEm >= CACHE_TTL;
 
     useEffect(() => {
+        if (!isOpen || !itensPaginados.length) return;
+        let ativo = true;
+        const pendentes = itensPaginados.filter(item => item.qtd_multiplo == null);
+        if (!pendentes.length) return;
+
+        getItensDetalhados({ codItens: pendentes.map(item => item.cod_item) })
+            .then(response => {
+                if (!ativo) return;
+                const novosMultiplos = Object.fromEntries((response.data?.items || [])
+                    .map(item => [item.cod_item, Number(item.qtd_multiplo) > 0 ? Number(item.qtd_multiplo) : 1]));
+                setMultiplos(prev => ({ ...prev, ...novosMultiplos }));
+            })
+            .catch(() => {
+                if (ativo) setErroQuantidade('Não foi possível carregar os múltiplos. Tente buscar os itens novamente.');
+            });
+
+        return () => { ativo = false; };
+    }, [isOpen, itensPaginados, atualizadoEm]);
+
+    useEffect(() => {
         buscar({ filtro: FILTRO_PADRAO, novoOffset: 0 }).catch(() => {});
     }, []);
 
@@ -287,6 +316,9 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
     useEffect(() => {
         if (isOpen) {
             setItensSelecionados({});
+            setQuantidades({});
+            setMultiplos({});
+            setErroQuantidade('');
             proximaOrdemSelecao.current = 1;
             setMenuSelecionarOpen(false);
             if (precisaAtualizar) {
@@ -451,10 +483,31 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
 
         if (!selecionados.length) return;
 
-        onSelect(selecionados);
+        const itensComQuantidade = [];
+        for (const item of selecionados) {
+            const multiplo = obterMultiplo(item);
+            if (multiplo == null) {
+                setErroQuantidade(`Aguarde o carregamento do múltiplo do item ${item.cod_item}. Se necessário, busque os itens novamente.`);
+                return;
+            }
+            const quantidade = Number(String(quantidades[item.cod_item] ?? multiplo).replace(',', '.'));
+            const razao = quantidade / multiplo;
+            if (!Number.isFinite(quantidade) || quantidade <= 0 || Math.abs(razao - Math.round(razao)) > 1e-8) {
+                setErroQuantidade(`Informe uma quantidade positiva e múltipla de ${multiplo.toLocaleString('pt-BR')} para o item ${item.cod_item}.`);
+                return;
+            }
+            itensComQuantidade.push({ ...item, quantidade });
+        }
+
+        onSelect(itensComQuantidade);
         setLovOpen(false);
         setItensSelecionados({});
         setMenuSelecionarOpen(false);
+    }
+
+    function obterMultiplo(item) {
+        const valor = item.qtd_multiplo ?? multiplos[item.cod_item];
+        return valor == null ? null : Number(valor) > 0 ? Number(valor) : 1;
     }
 
     function alternarOrdenacao(coluna) {
@@ -549,6 +602,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                         Adicionar selecionados
                     </button>
                 </div>
+                {erroQuantidade && <div role="alert" className="lov-quantidade-erro">{erroQuantidade}</div>}
                 <div className="lov-list-frame">
                     {loading && (
                         <div className="lov-loading">
@@ -563,10 +617,12 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                 <th className="lov-check-col"></th>
                                 <th>{cabecalhoOrdenavel('cod_item', 'Código')}</th>
                                 <th>{cabecalhoOrdenavel('des_item', 'Descrição')}</th>
+                                <th className="lov-um-col" title="Unidade de medida">UM</th>
                                 <th>{cabecalhoOrdenavel('principios_ativos', 'Princípio ativo')}</th>
                                 <th>{cabecalhoOrdenavel('cod_completo', 'Marca')}</th>
                                  <th>{cabecalhoOrdenavel('estoque_matriz', 'Estoque Matriz')}</th>
                                  <th>{cabecalhoOrdenavel('estoque_filial', 'Estoque Filial')}</th>
+                                 <th className="lov-quantidade-col">Quantidade</th>
                                  <th className="lov-value-col">Lista 201</th>
                                  <th className="lov-value-col">Lista 203</th>
                                   <th className="lov-date-col">{cabecalhoOrdenavel('ultima_compra', 'Últ. compra')}</th>
@@ -598,7 +654,10 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                                     temUltimaCompra && !temAcordos ? 'lov-row-ultima-compra' : '',
                                                     loteProximo ? 'lov-row-lote-proximo' : ''
                                                 ].filter(Boolean).join(' ')}
-                                                onClick={() => !existe && alternarItem(item.cod_item, item)}
+                                                onClick={event => {
+                                                    if (event.target.closest('.lov-quantidade-col')) return;
+                                                    if (!existe) alternarItem(item.cod_item, item);
+                                                }}
                                             >
                                             <td className="lov-check-col">
                                                     <input
@@ -611,6 +670,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                                 </td>                                                                                              
                                                 <td>{item.cod_item}{loteProximo && <FaHourglassHalf className="lov-lote-proximo-marca" title={`Lote com validade próxima: ${formatarData(loteProximo.dta_validade)}`} aria-label="Lote com validade próxima" />}</td>
                                                 <td>{item.des_item}</td>
+                                                <td className="lov-um-col">{item.cod_um || '-'}</td>
                                         <td>{item.principios_ativos || '-'}</td>
                                         <td>
                                             {marcaPropria && (
@@ -624,6 +684,24 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                         </td>
                                          <td>{item.estoque_matriz}</td>
                                          <td>{item.estoque_filial}</td>
+                                         <td className="lov-quantidade-col" onClick={event => event.stopPropagation()}>
+                                             <input
+                                                 type="text"
+                                                 inputMode="decimal"
+                                                 onClick={event => event.stopPropagation()}
+                                                 aria-label={`Quantidade do item ${item.cod_item}`}
+                                                 disabled={existe}
+                                                 placeholder={obterMultiplo(item) == null ? '...' : undefined}
+                                                 title={obterMultiplo(item) == null ? 'Carregando múltiplo' : `Múltiplo: ${obterMultiplo(item)}`}
+                                                 value={quantidades[item.cod_item] ?? (obterMultiplo(item) == null ? '' : String(obterMultiplo(item)).replace('.', ','))}
+                                                 onChange={event => {
+                                                     const valor = event.target.value;
+                                                     if (!/^\d*(?:[.,]\d*)?$/.test(valor)) return;
+                                                     setQuantidades(prev => ({ ...prev, [item.cod_item]: valor }));
+                                                     setErroQuantidade('');
+                                                 }}
+                                             />
+                                         </td>
                                          <td className="lov-value-col">
                                             {loadingLista201 ? (
                                                 <span className="lov-spinner" style={{ width: 16, height: 16, borderWidth: 2 }}></span>

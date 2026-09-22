@@ -1,9 +1,10 @@
+import { parametros } from '../../config/parametrosAplicacao';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { carregarLogoProposta } from './propostaAssetsService.js';
 import { baixarBlob, nomeArquivoProposta } from './propostaDownloadService.js';
 
-const VERDE = [0, 132, 74];
+
 
 function moeda(valor) {
     return Number(valor || 0).toLocaleString('pt-BR', {
@@ -29,6 +30,7 @@ function textoOuTraco(valor) {
 }
 
 export async function gerarPropostaPdf(proposta) {
+    const VERDE = [1, 3, 5].map(inicio => parseInt(parametros.PROPOSTA_COR_PRINCIPAL.slice(inicio, inicio + 2), 16));
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     const logo = await carregarLogoProposta();
     doc.addImage(logo, 'PNG', 14, 10, 42, 21);
@@ -36,7 +38,7 @@ export async function gerarPropostaPdf(proposta) {
     doc.setTextColor(...VERDE);
     doc.setFontSize(18);
     doc.setFont(undefined, 'bold');
-    doc.text('PROPOSTA COMERCIAL', 282, 17, { align: 'right' });
+    doc.text(parametros.PROPOSTA_TITULO, 282, 17, { align: 'right' });
     doc.setFontSize(10);
     doc.setTextColor(70, 70, 70);
     doc.setFont(undefined, 'normal');

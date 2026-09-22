@@ -1,3 +1,4 @@
+import { parametros } from '../config/parametrosAplicacao';
 import '../style/lovStyle.css';
 import { FaX, FaChevronLeft, FaChevronRight } from "react-icons/fa6";
 import { FaStar, FaHourglassHalf } from "react-icons/fa";
@@ -636,7 +637,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                 const marcaPropria = itemEhMarcaPropria(item);
                                 const temAcordos = Array.isArray(acordosMap[item.cod_item]) && acordosMap[item.cod_item].length;
                                 const comprasItem = Array.isArray(ultimasComprasMap[item.cod_item])
-                                    ? ultimasComprasMap[item.cod_item].slice(0, 5)
+                                    ? ultimasComprasMap[item.cod_item].slice(0, parametros.HISTORICO_COMPRAS_POR_ITEM)
                                     : [];
                                 const temUltimaCompra = comprasItem.length > 0;
                                 const loteProximo = lotesProximosMap[String(item.cod_item)];
@@ -748,7 +749,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                                                 <div className="lov-tooltip-ultima-compra">
                                                                     {comprasItem.map((compra, index) => (
                                                                         <div className="lov-historico-compra-linha" key={`${compra.dta_emissao}-${compra.vlr_unitario}-${index}`}>
-                                                                            {compra.cod_unidade ?? compra.codUnidade ?? compra.cod_empresa ?? compra.codEmpresa ?? compra.unidade ?? '-'} - {formatarData(compra.dta_emissao)} - {formatarMoeda(compra.vlr_unitario)}
+                                                                            {compra.cod_unidade ?? '-'} - {formatarData(compra.dta_emissao)} - {formatarMoeda(compra.vlr_unitario)} - Qtd.: {compra.qtd_lancamento != null ? Number(compra.qtd_lancamento).toLocaleString('pt-BR', { maximumFractionDigits: 4 }) : '-'}
                                                                         </div>
                                                                     ))}
                                                                 </div>

@@ -1,4 +1,5 @@
-import { DIAS_VALIDADE_PROPOSTA, EMPRESA_PROPOSTA } from '../../config/propostaConfig.js';
+import { EMPRESA_PROPOSTA } from '../../config/propostaConfig.js';
+import { parametros } from '../../config/parametrosAplicacao';
 import { calcularCobrancaFrete } from '../../utils/cobrancaFrete.js';
 
 function numeroDecimal(valor) {
@@ -37,7 +38,7 @@ function montarEndereco(dados) {
 
 export function criarPropostasPorUnidade(dados) {
     const agora = new Date();
-    const validade = adicionarDias(agora, DIAS_VALIDADE_PROPOSTA);
+    const validade = adicionarDias(agora, parametros.PROPOSTA_VALIDADE_DIAS);
     const itensSelecionados = (dados.itensPedido || []).filter(item => item.selecionado);
     const unidades = [...new Set(itensSelecionados.map(item => Number(item.unidade)))].sort((a, b) => a - b);
     const cobranca = calcularCobrancaFrete(dados.itensPedido || [], dados.freteSelecionado || {}, dados.opcaoFrete, dados.cobrancaFrete);

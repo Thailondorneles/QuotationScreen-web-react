@@ -145,23 +145,26 @@ app.get('/health', (_req, res) => {
 });
 
 app.use('/api/unimed', async (req, res) => {
-  if (req.method !== 'GET') {
-    return res.status(405).json({ erro: 'Metodo nao permitido' });
-  }
-
   const encodedPath = req.originalUrl
     .slice(req.baseUrl.length)
     .split('?')[0];
   const targetPath = encodedPath.replace(/^\/+/, '');
+  const atualizarParametro = req.method === 'PUT' && /^parsConf\/\d+$/.test(targetPath);
+  if (req.method !== 'GET' && !atualizarParametro) {
+    return res.status(405).json({ erro: 'Metodo nao permitido' });
+  }
+  if (atualizarParametro && typeof req.body?.parametro !== 'string') {
+    return res.status(400).json({ erro: 'Informe o valor do parametro como texto.' });
+  }
 
   if (!targetPath) {
     return res.status(400).json({ erro: 'Recurso nao informado' });
   }
 
   try {
-    const response = await unimedApi.get(targetPath, {
-      params: req.query
-    });
+    const response = atualizarParametro
+      ? await unimedApi.put(targetPath, { parametro: req.body.parametro })
+      : await unimedApi.get(targetPath, { params: req.query });
 
     return res.status(response.status).json(response.data);
   } catch (err) {

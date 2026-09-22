@@ -8,6 +8,7 @@ if (!unimedApiBaseUrl) {
 
 export const unimedApi = axios.create({
     baseURL: unimedApiBaseUrl,
+    timeout: 25000,
     headers: {
         "Content-Type": "application/json",
     },

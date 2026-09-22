@@ -59,9 +59,9 @@
 
 .btn-recalcular-itens {
     padding: 7px 14px;
-    color: #2e7d32;
+    color: var(--ambiente-cor, #2e7d32);
     background: #fff;
-    border: 1px solid #2e7d32;
+    border: 1px solid var(--ambiente-cor, #2e7d32);
     border-radius: 4px;
     font-size: 12px;
     font-weight: 700;
@@ -70,7 +70,7 @@
 
 .btn-recalcular-itens:hover:not(:disabled) {
     color: #fff;
-    background: #2e7d32;
+    background: var(--ambiente-cor, #2e7d32);
 }
 
 .btn-recalcular-itens:disabled {
@@ -117,7 +117,7 @@ label {
   border-radius: 0;
   outline: none;
   box-shadow: none;
-  background-image: linear-gradient(#2e7d32, #2e7d32);
+  background-image: linear-gradient(var(--ambiente-cor, #2e7d32), var(--ambiente-cor, #2e7d32));
   background-repeat: no-repeat;
   background-position: center bottom;
   background-size: 0% 2px;
@@ -166,7 +166,7 @@ label {
 }
 
 .icon {
-  color: #2e7d32;
+  color: var(--ambiente-cor, #2e7d32);
   cursor: pointer;
   flex: 0 0 auto;
 }
@@ -185,7 +185,7 @@ label {
     height: 32px;
     min-width: 140px;     
     padding: 0 16px;      
-    background: #2f8c1d;
+    background: var(--ambiente-cor, #2f8c1d);
     color: #fff;
     border: none;
     border-radius: 3px;
@@ -203,7 +203,7 @@ label {
 
 .info-icon {
   cursor: pointer;
-  color: #2e8b1c;
+  color: var(--ambiente-cor, #2e8b1c);
 }
 
 .tooltip-info {
@@ -286,7 +286,7 @@ label {
 }
 
 .pedido-total-venda {
-    border-left-color: #2e7d32;
+    border-left-color: var(--ambiente-cor, #2e7d32);
 }
 
 .pedido-total-frete {
@@ -360,7 +360,7 @@ label {
 
 .tip-bases-titulo::after {
     content: '+';
-    color: #2e7d32;
+    color: var(--ambiente-cor, #2e7d32);
     font-size: 15px;
     line-height: 1;
 }
@@ -411,7 +411,7 @@ label {
 }
 
 .tip-base-chip-soma {
-    color: #256b2b;
+    color: var(--ambiente-escura, #256b2b);
     background: #e4f2e5;
 }
 
@@ -479,7 +479,7 @@ label {
 .consumidor-field input[type="checkbox"] {
   width: 16px;
   height: 16px;
-  accent-color: #2e7d32;
+  accent-color: var(--ambiente-cor, #2e7d32);
 }
 
 .condicao-pmv-info {
@@ -528,11 +528,11 @@ label {
 }
 
 .itens-grid thead th {
-    background: linear-gradient(135deg, #167a36, #239447);
+    background: linear-gradient(135deg, var(--ambiente-cor, #167a36), var(--ambiente-cor, #239447));
     color: #fff;
     padding: 5px 2px;
     font-size: 10px;
-    border: 1px solid #b9d6c0;
+    border: 1px solid var(--ambiente-borda, #b9d6c0);
     text-align: center;
     line-height: 1.1;
 }
@@ -560,7 +560,7 @@ label {
 
 .itens-grid tbody td {
     padding: 4px 2px;
-    border: 1px solid #d2e0d5;
+    border: 1px solid var(--ambiente-clara, #d2e0d5);
     font-size: 10px;
     text-align: center;
     vertical-align: middle;
@@ -627,11 +627,11 @@ label {
 }
 
 .itens-grid tbody tr:nth-child(even) {
-    background: #eaf5ef;
+    background: var(--ambiente-clara, #eaf5ef);
 }
 
 .itens-grid tbody tr:hover {
-    background: #ccefd8;
+    background: var(--ambiente-clara, #ccefd8);
 }
 
 .itens-grid tbody tr.item-row-acordo {
@@ -842,7 +842,7 @@ label {
     min-width: 210px;
     padding: 0 16px;
     color: #fff;
-    background: #2f8c1d;
+    background: var(--ambiente-cor, #2f8c1d);
     border: 0;
     border-radius: 3px;
     font-weight: 700;
@@ -882,8 +882,8 @@ label {
 
 .modalidade-integracao-menu button:hover,
 .modalidade-integracao-menu button[aria-selected="true"] {
-    color: #1f6d2b;
-    background: #e8f4eb;
+    color: var(--ambiente-escura, #1f6d2b);
+    background: var(--ambiente-clara, #e8f4eb);
     font-weight: 700;
 }
 
@@ -909,7 +909,7 @@ label {
     padding: 0;
     align-items: center;
     justify-content: center;
-    color: #218c3f;
+    color: var(--ambiente-cor, #218c3f);
     background: transparent;
     border: 0;
     border-radius: 50%;
@@ -923,8 +923,8 @@ label {
 
 .itens-legenda-trigger:hover,
 .itens-legenda-trigger:focus-visible {
-    color: #146c2d;
-    background: #e8f4eb;
+    color: var(--ambiente-escura, #146c2d);
+    background: var(--ambiente-clara, #e8f4eb);
     outline: none;
 }
 
@@ -936,10 +936,10 @@ label {
     display: none;
     width: 310px;
     padding: 14px;
-    color: #29312c;
+    color: var(--ambiente-escura, #29312c);
     background: #fff;
-    border: 1px solid #d9e2dc;
-    border-top: 3px solid #218c3f;
+    border: 1px solid var(--ambiente-clara, #d9e2dc);
+    border-top: 3px solid var(--ambiente-cor, #218c3f);
     border-radius: 7px;
     box-shadow: 0 8px 24px rgba(25, 48, 32, 0.2);
     font-size: 12px;
@@ -954,7 +954,7 @@ label {
 
 .itens-legenda-tooltip > strong {
     display: block;
-    color: #196f34;
+    color: var(--ambiente-cor, #196f34);
     font-size: 14px;
 }
 
@@ -965,7 +965,7 @@ label {
 }
 
 .itens-legenda-subtitulo {
-    color: #667069;
+    color: var(--ambiente-hover, #667069);
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.05em;
@@ -982,7 +982,7 @@ label {
 .itens-legenda-linha b,
 .itens-legenda-linha svg {
     justify-self: center;
-    color: #4b554e;
+    color: var(--ambiente-escura, #4b554e);
 }
 
 .itens-legenda-cor {
@@ -1013,7 +1013,7 @@ label {
 }
 
 .itens-legenda-margens strong {
-    color: #1c7838;
+    color: var(--ambiente-cor, #1c7838);
 }
 
 .itens-legenda-segmento {
@@ -1044,7 +1044,7 @@ label {
 .cobranca-frete input {
     width: 95px;
     padding: 5px;
-    border: 1px solid #b9d6c0;
+    border: 1px solid var(--ambiente-borda, #b9d6c0);
     border-radius: 4px;
 }
 
@@ -1187,7 +1187,7 @@ label {
 .item-selection-trigger {
     border: none;
     background: transparent;
-    color: #2e7d32;
+    color: var(--ambiente-cor, #2e7d32);
     padding: 0;
     font-size: 13px;
     font-weight: 700;
@@ -1231,7 +1231,7 @@ label {
     border: none;
     border-radius: 3px;
     background: transparent;
-    color: #2e7d32;
+    color: var(--ambiente-cor, #2e7d32);
     cursor: pointer;
 }
 
@@ -1284,7 +1284,7 @@ label {
     height: 32px;
     min-width: 140px;     
     padding: 0 16px;      
-    background: #2f8c1d;
+    background: var(--ambiente-cor, #2f8c1d);
     color: #fff;
     border: none;
     border-radius: 3px;
@@ -1325,7 +1325,7 @@ label {
 .endereco-tab {
     min-width: 78px;
     padding: 8px 14px;
-    background: #2f8c1d;
+    background: var(--ambiente-cor, #2f8c1d);
     color: #fff;
     border: none;
     border-radius: 2px;
@@ -1335,7 +1335,7 @@ label {
 }
 
 .endereco-tab.active {
-    background: #2f8c1d;
+    background: var(--ambiente-cor, #2f8c1d);
 }
 
 .endereco-grid {

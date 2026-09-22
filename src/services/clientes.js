@@ -1,3 +1,4 @@
+import { parametros } from '../config/parametrosAplicacao';
 import { unimedApi } from "../config/apis.js";
 
 export function getClientes() {
@@ -82,7 +83,7 @@ export function agruparUltimasComprasPorItem(items) {
             codItem,
             compras
                 .sort((a, b) => new Date(b.dta_emissao) - new Date(a.dta_emissao))
-                .slice(0, 5)
+                .slice(0, parametros.HISTORICO_COMPRAS_POR_ITEM)
         ])
     );
 }

@@ -1,3 +1,4 @@
+import { parametros } from '../config/parametrosAplicacao';
 import '../style/pedidoVenda.css';
 import { FaCalendarAlt, FaEdit, FaEraser, FaSearch, FaTrash, FaHourglassHalf } from "react-icons/fa";
 import { useState, useEffect, useMemo, useRef } from 'react';
@@ -23,7 +24,7 @@ import { IoInformationOutline } from "react-icons/io5";
 import { getImpostosCached } from '../services/impostos.js';
 import { ModalErro } from '../components/ModalErro.js';
 import { getListaPreco } from '../services/listaPreco.js';
-import { getItensAcordos, getItensClassificacao, getItensDetalhados, getItemUltimaCompra, getItensLotesCached } from '../services/itens.js';
+import { getItensAcordos, getItensClassificacao, getItensDetalhados, getItensLotesCached } from '../services/itens.js';
 import { cotarSimFrete } from '../config/simFreteService.js';
 import { format } from '../utils/format.js';
 import { maskMoneyBR, formatarMilharesBR } from '../utils/maskMoney.js';
@@ -146,9 +147,6 @@ export function PedidoVenda() {
     const representanteClienteCache = useRef(new Map());
     const historicoClienteCache = useRef(new Map());
     const acordosItemCache = useRef(new Map());
-    const ultimaCompraItemCache = useRef(new Map());
-    const ultimasComprasClienteCache = useRef(new Map());
-    const requisicaoUltimasComprasCliente = useRef(new Map());
     const listaPrecoInfoCache = useRef(new Map());
     const classificacoesItemCache = useRef(new Map());
     const recalculoClienteId = useRef(0);
@@ -186,6 +184,26 @@ export function PedidoVenda() {
             ultimaCompraItemDasUltimasCompras: ultimasComprasClienteMap[item.cod_item] || null
         })));
     }, [ultimasComprasClienteMap]);
+
+    useEffect(() => {
+        const codigo = cliente?.cod_pessoa;
+        if (!codigo) {
+            setUltimasComprasClienteMap({});
+            return;
+        }
+        let ativo = true;
+        const atualizarHistorico = () => getClientesUltimasCompras({ codCliente: codigo })
+            .then(response => {
+                if (ativo) setUltimasComprasClienteMap(agruparUltimasComprasPorItem(response.data?.items || []));
+            })
+            .catch(() => {});
+        atualizarHistorico();
+        window.addEventListener('focus', atualizarHistorico);
+        return () => {
+            ativo = false;
+            window.removeEventListener('focus', atualizarHistorico);
+        };
+    }, [cliente?.cod_pessoa, openLovItens]);
 
     useEffect(() => {
         getItensLotesCached()
@@ -363,55 +381,6 @@ export function PedidoVenda() {
         }
 
         setCliente(cli);
-
-        if (mudouCliente && codigoNovo) {
-            (async () => {
-                try {
-
-                    if (ultimasComprasClienteCache.current.has(codigoNovo)) {
-                        if (idRecalculo === recalculoClienteId.current) {
-                            setUltimasComprasClienteMap(ultimasComprasClienteCache.current.get(codigoNovo));
-                        }
-                        return;
-                    }
-
-                    if (requisicaoUltimasComprasCliente.current.has(codigoNovo)) {
-                        const result = await requisicaoUltimasComprasCliente.current.get(codigoNovo);
-                        if (idRecalculo === recalculoClienteId.current) {
-                            setUltimasComprasClienteMap(result);
-                        }
-                        return;
-                    }
-
-                    const promise = getClientesUltimasCompras({ codCliente: codigoNovo })
-                        .then(response => {
-                            const items = response.data?.items || [];
-                            const ultimasComprasAgrupadas = agruparUltimasComprasPorItem(items);
-                            const mapPorItem = {};
-                            Object.keys(ultimasComprasAgrupadas).forEach(codItem => {
-                                const compras = ultimasComprasAgrupadas[codItem];
-                                if (Array.isArray(compras) && compras.length > 0) {
-                                    mapPorItem[codItem] = compras;
-                                }
-                            });
-
-                            ultimasComprasClienteCache.current.set(codigoNovo, mapPorItem);
-                            requisicaoUltimasComprasCliente.current.delete(codigoNovo);
-                            return mapPorItem;
-                        })
-                        .catch(() => {
-                            requisicaoUltimasComprasCliente.current.delete(codigoNovo);
-                            return {};
-                        });
-
-                    requisicaoUltimasComprasCliente.current.set(codigoNovo, promise);
-                    const result = await promise;
-                    if (idRecalculo === recalculoClienteId.current) {
-                        setUltimasComprasClienteMap(result);
-                    }
-                } catch (e) {}
-            })();
-        }
 
         if (!mudouCliente || !codigoNovo || !itensPedido.length) {
             if (mudouCliente) setLoading(false);
@@ -656,7 +625,10 @@ export function PedidoVenda() {
 
         const promise = getListaPreco({ lista, item })
             .then(response => response.data?.items?.[0] || null)
-            .catch(() => null);
+            .catch(error => {
+                listaPrecoInfoCache.current.delete(chave);
+                throw new Error(`Não foi possível consultar a lista de preços ${lista} do item ${item}. Tente novamente quando a API estiver disponível.`);
+            });
 
         listaPrecoInfoCache.current.set(chave, promise);
 
@@ -672,7 +644,7 @@ export function PedidoVenda() {
         const condPgtoAtual = contexto.condPgtoAtual ?? CondPgto;
         // Busca estoque disponível
         const detalheItem = contexto.detalheItem || {};
-        const [respImp, acordosComerciais, ultimaCompraItem] = await Promise.all([
+        const [respImp, acordosComerciais] = await Promise.all([
             getImpostosCached({
                 codOper: operacaoAtual.cod_oper,
                 codUnidade: item.unidade,
@@ -680,8 +652,7 @@ export function PedidoVenda() {
                 codCondPgto: condPgtoAtual.cod_cond_pgto,
                 codItem: item.cod_item
             }),
-            carregarAcordosItem(item.cod_item, clienteAtual.cod_pessoa),
-            carregarUltimaCompraItem(item.cod_item, clienteAtual.cod_pessoa)
+            carregarAcordosItem(item.cod_item, clienteAtual.cod_pessoa)
         ]);
         const unidadeMatriz = Number(item.unidade) === 201;
         const estoque = unidadeMatriz
@@ -775,7 +746,6 @@ export function PedidoVenda() {
             impostos,
             baseST,
             acordosComerciais,
-            ultimaCompraItem,
             ultimaCompraItemDasUltimasCompras: ultimasComprasClienteMap[item.cod_item] || null
         };
     }
@@ -840,8 +810,8 @@ export function PedidoVenda() {
     function getDestaqueClassificacao(item) {
         const classificacao = String(item?.classificacao ?? '').trim().toUpperCase();
 
-        if (['I', 'T'].includes(classificacao)) return '(MMT)';
-        if (['A', 'B'].includes(classificacao)) return '(AC)';
+        if (parametros.SOBRA_CLASSES_MMT.includes(classificacao)) return '(MMT)';
+        if (parametros.SOBRA_CLASSES_AC.includes(classificacao)) return '(AC)';
 
         return null;
     }
@@ -876,32 +846,8 @@ export function PedidoVenda() {
             : primeirosPedidos;
     }
 
-    async function carregarUltimaCompraItem(codItem, codCliente) {
-        const chave = `${String(codItem ?? '').trim()}-${String(codCliente ?? '').trim()}`;
-
-        if (ultimaCompraItemCache.current.has(chave)) {
-            return await ultimaCompraItemCache.current.get(chave);
-        }
-
-        const promise = getItemUltimaCompra({
-            codItem,
-            codCliente,
-            offset: 0,
-            limit: 1
-        })
-            .then(response => response.data.items?.[0] || null)
-            .catch(() => null);
-
-        ultimaCompraItemCache.current.set(chave, promise);
-
-        const ultimaCompra = await promise;
-        ultimaCompraItemCache.current.set(chave, ultimaCompra);
-
-        return ultimaCompra;
-    }
-
     function formatarDataUltimaCompraItem(item) {
-        return formatarDataHistoricoCliente(item?.ultimaCompraItem?.dta_emissao);
+        return formatarDataHistoricoCliente(item?.ultimaCompraItemDasUltimasCompras?.[0]?.dta_emissao);
     }
 
     function criarItensPedido(itemLov) {
@@ -936,7 +882,7 @@ export function PedidoVenda() {
             impostos: null,
             baseST: null,
             acordosComerciais: [],
-            ultimaCompraItem: null,
+
             selecionado: true,
             valorFrete: 0
         };
@@ -986,7 +932,7 @@ export function PedidoVenda() {
             });
 
             setItensPedido(prev =>
-                prev.map(item =>
+                prev.filter(item => !novosItens.some(novo => novo.seq === item.seq) || dadosPorSeq.has(item.seq)).map(item =>
                     dadosPorSeq.has(item.seq)
                         ? {
                             ...item,
@@ -998,10 +944,11 @@ export function PedidoVenda() {
             );
 
             if (erros.length) {
-                alert('Erro ao carregar informaÃ§Ãµes de estoque ou impostos para alguns itens adicionados.');
+                setModalErro({ aberto: true, mensagem: `${erros[0]?.message || 'Não foi possível carregar os dados dos itens.'} Os itens que falharam não foram adicionados.`, seqItem: null, focusSelector: null });
             }
         } catch (error) {
-            alert('Erro ao carregar informações de estoque ou impostos para o item adicionado.');
+            setItensPedido(prev => prev.filter(item => !novosItens.some(novo => novo.seq === item.seq)));
+            setModalErro({ aberto: true, mensagem: 'Não foi possível carregar os dados do item. Verifique a disponibilidade da API e tente adicionar novamente.', seqItem: null, focusSelector: null });
         } finally {
             setLoading(false);
         }
@@ -1367,7 +1314,7 @@ export function PedidoVenda() {
             };
         }
 
-        if (dias <= 45) {
+        if (dias <= parametros.CLIENTE_COMPRA_RECENTE_DIAS) {
             return {
                 classe: 'cliente-historico-verde',
                 texto: 'Compra recente'
@@ -2159,8 +2106,8 @@ export function PedidoVenda() {
     function getPercentualMinimoSobraPorClassificacao(desGeral) {
         const classificacao = String(desGeral ?? '').trim().toUpperCase();
 
-        if (['T', 'I'].includes(classificacao)) return 6;
-        if (['A', 'B'].includes(classificacao)) return 4;
+        if (parametros.SOBRA_CLASSES_MMT.includes(classificacao)) return parametros.SOBRA_MINIMA_MMT_ITEM;
+        if (parametros.SOBRA_CLASSES_AC.includes(classificacao)) return parametros.SOBRA_MINIMA_AC_ITEM;
 
         return null;
     }
@@ -2168,8 +2115,8 @@ export function PedidoVenda() {
     function getNomeClassificacaoSobra(desGeral) {
         const classificacao = String(desGeral ?? '').trim().toUpperCase();
 
-        if (['T', 'I'].includes(classificacao)) return 'MMT';
-        if (['A', 'B'].includes(classificacao)) return 'AC';
+        if (parametros.SOBRA_CLASSES_MMT.includes(classificacao)) return 'MMT';
+        if (parametros.SOBRA_CLASSES_AC.includes(classificacao)) return 'AC';
 
         return classificacao;
     }
@@ -2201,15 +2148,12 @@ export function PedidoVenda() {
             const sobraTotal = Number((totais.valorVenda > 0
                 ? (totais.sobra / totais.valorVenda) * 100
                 : 0).toFixed(2));
-            const minimosSobraItens = itensUnidade.map(item =>
-                getPercentualMinimoSobraPorClassificacao(
-                    classificacoesPorItem[String(item.cod_item)]
-                )
-            );
-            // Somente itens AC: 4%. Se houver MMT ou item sem classificação: 6%.
-            const minimoSobraTotal = minimosSobraItens.every(minimo => minimo === 4)
-                ? 4
-                : 6;
+            const somenteAC = itensUnidade.every(item => parametros.SOBRA_CLASSES_AC.includes(
+                String(classificacoesPorItem[String(item.cod_item)] ?? '').trim().toUpperCase()
+            ));
+            const minimoSobraTotal = somenteAC
+                ? parametros.SOBRA_MINIMA_TOTAL_AC
+                : parametros.SOBRA_MINIMA_TOTAL_GERAL;
             const itensForaRegra = itensUnidade.reduce((erros, item) => {
                 if (item.precoListaBloqueado) return erros;
 
@@ -2972,9 +2916,9 @@ export function PedidoVenda() {
                     {possuiUltimaCompra && (
                         <div className="tooltip-ultima-compra">
                             <strong>Últimas compras</strong>
-                            {item.ultimaCompraItemDasUltimasCompras.slice(0, 5).map((compra, index) => (
+                            {item.ultimaCompraItemDasUltimasCompras.slice(0, parametros.HISTORICO_COMPRAS_POR_ITEM).map((compra, index) => (
                                 <div className="historico-compra-linha" key={`${compra.dta_emissao}-${compra.vlr_unitario}-${index}`}>
-                                    {getCodigoUnidadeCompra(compra)} - {formatarDataHistoricoCliente(compra.dta_emissao)} - {format.moeda(compra.vlr_unitario)}
+                                    {getCodigoUnidadeCompra(compra)} - {formatarDataHistoricoCliente(compra.dta_emissao)} - {format.moeda(compra.vlr_unitario)} - Qtd.: {compra.qtd_lancamento != null ? Number(compra.qtd_lancamento).toLocaleString('pt-BR', { maximumFractionDigits: 4 }) : '-'}
                                 </div>
                             ))}
                         </div>
@@ -3275,9 +3219,9 @@ export function PedidoVenda() {
 
                                             <div className="itens-legenda-secao itens-legenda-margens">
                                                 <span className="itens-legenda-subtitulo">Margens mínimas</span>
-                                                <div><span className="itens-legenda-segmento">AC</span><strong>4%</strong></div>
-                                                <div><span className="itens-legenda-segmento">MMT</span><strong>6%</strong></div>
-                                                <div><span className="itens-legenda-segmento">Total da unidade</span><strong>6%</strong></div>
+                                                <div><span className="itens-legenda-segmento">AC</span><strong>{parametros.SOBRA_MINIMA_AC_ITEM}%</strong></div>
+                                                <div><span className="itens-legenda-segmento">MMT</span><strong>{parametros.SOBRA_MINIMA_MMT_ITEM}%</strong></div>
+                                                <div><span className="itens-legenda-segmento">Total da unidade</span><strong>{parametros.SOBRA_MINIMA_TOTAL_GERAL}% (somente AC: {parametros.SOBRA_MINIMA_TOTAL_AC}%)</strong></div>
                                             </div>
 
                                             <small>Valores abaixo da margem seguem para aprovação em situação 70.</small>

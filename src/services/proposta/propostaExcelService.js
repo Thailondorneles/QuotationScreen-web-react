@@ -1,8 +1,9 @@
+import { parametros } from '../../config/parametrosAplicacao';
 import * as ExcelJS from 'exceljs';
 import { carregarLogoProposta } from './propostaAssetsService.js';
 import { baixarBlob, nomeArquivoProposta } from './propostaDownloadService.js';
 
-const VERDE = '00844A';
+
 
 function data(valor) {
     return valor.toLocaleDateString('pt-BR');
@@ -22,7 +23,7 @@ function enderecoTexto(endereco) {
 
 function aplicarTitulo(celula) {
     celula.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    celula.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${VERDE}` } };
+    celula.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${parametros.PROPOSTA_COR_PRINCIPAL.slice(1)}` } };
     celula.alignment = { vertical: 'middle' };
 }
 
@@ -43,8 +44,8 @@ export async function gerarPropostaExcel(proposta) {
         sheet.getRow(numeroLinha).height = 24;
     });
     sheet.mergeCells('D1:I2');
-    sheet.getCell('D1').value = 'PROPOSTA COMERCIAL';
-    sheet.getCell('D1').font = { bold: true, size: 18, color: { argb: `FF${VERDE}` } };
+    sheet.getCell('D1').value = parametros.PROPOSTA_TITULO;
+    sheet.getCell('D1').font = { bold: true, size: 18, color: { argb: `FF${parametros.PROPOSTA_COR_PRINCIPAL.slice(1)}` } };
     sheet.getCell('D1').alignment = { horizontal: 'right', vertical: 'middle' };
     sheet.mergeCells('D3:I3');
     sheet.getCell('D3').value = `${proposta.empresa.nome} | Unidade ${proposta.empresa.unidade} - ${proposta.empresa.nomeUnidade}`;
@@ -69,7 +70,7 @@ export async function gerarPropostaExcel(proposta) {
         sheet.getRow(numeroLinha).height = 22;
         sheet.mergeCells(numeroLinha, 1, numeroLinha, 2);
         sheet.getCell(numeroLinha, 1).value = linha[0];
-        sheet.getCell(numeroLinha, 1).font = { bold: true, color: { argb: `FF${VERDE}` } };
+        sheet.getCell(numeroLinha, 1).font = { bold: true, color: { argb: `FF${parametros.PROPOSTA_COR_PRINCIPAL.slice(1)}` } };
         sheet.getCell(numeroLinha, 1).alignment = { vertical: 'middle' };
         sheet.mergeCells(numeroLinha, 3, numeroLinha, 9);
         sheet.getCell(numeroLinha, 3).value = linha[1];
@@ -112,7 +113,7 @@ export async function gerarPropostaExcel(proposta) {
     total.getCell(9).numFmt = 'R$ #,##0.0000';
     if (proposta.observacoes.length) {
         const observacoes = sheet.addRow(['Observações', proposta.observacoes.join('\n')]);
-        observacoes.getCell(1).font = { bold: true, color: { argb: `FF${VERDE}` } };
+        observacoes.getCell(1).font = { bold: true, color: { argb: `FF${parametros.PROPOSTA_COR_PRINCIPAL.slice(1)}` } };
         sheet.mergeCells(observacoes.number, 2, observacoes.number, 9);
         observacoes.getCell(2).alignment = { wrapText: true, vertical: 'top' };
     }

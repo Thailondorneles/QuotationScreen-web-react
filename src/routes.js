@@ -13,7 +13,7 @@ export const routes = createBrowserRouter([
                 element: <PedidoVenda />
             },
             {   
-                path: "/config",
+                path: "/conf",
                 element: <Configuracoes/>
             }
         ]

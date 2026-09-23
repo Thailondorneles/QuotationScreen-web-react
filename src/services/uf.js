@@ -1,13 +1,13 @@
-import { unimedApi } from "../config/apis.js";
+import { getConsultaCached } from './consultaCache';
 
 export function getUf({ offset = 0, limit = 25 }) {
-    return unimedApi.get("uf", {
+    return getConsultaCached("uf", {
         params: { offset, limit }
     });
 }
 
 export function getUfByFilter({ filtro, offset = 0, limit = 25 }) {
-    return unimedApi.get(`uf/${filtro}`, {
+    return getConsultaCached(`uf/${filtro}`, {
         params: { offset, limit }
     });
 }

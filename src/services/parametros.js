@@ -1,12 +1,19 @@
 import { unimedApi } from '../config/apis';
 import { aplicarParametros } from '../config/parametrosAplicacao';
+import { consultarComCache, invalidarConsultas } from './consultaCache';
 
 export function getParametros() {
-    return unimedApi.get('parsConf', { timeout: 10000, params: { _atualizacao: Date.now() } });
+    return consultarComCache('parametros', () =>
+        unimedApi.get('parsConf', { timeout: 10000, params: { _atualizacao: Date.now() } }).then(response => {
+            if (!Array.isArray(response.data?.items)) throw new Error('Resposta inválida dos parâmetros.');
+            return response;
+        }), Infinity);
 }
 
-export function atualizarParametro(id, parametro) {
-    return unimedApi.put(`parsConf/${encodeURIComponent(id)}`, { parametro });
+export async function atualizarParametro(id, parametro) {
+    const response = await unimedApi.put(`parsConf/${encodeURIComponent(id)}`, { parametro });
+    invalidarConsultas('parametros');
+    return response;
 }
 
 let carregamento;

@@ -1,7 +1,9 @@
 import { parametros } from '../config/parametrosAplicacao';
 import '../style/pedidoVenda.css';
 import { FaCalendarAlt, FaEdit, FaEraser, FaSearch, FaTrash, FaHourglassHalf } from "react-icons/fa";
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useContext } from 'react';
+import { ParametrosContext } from '../config/ParametrosContext';
+import { invalidarConsultas } from '../services/consultaCache';
 import { LovItens } from '../components/LovItens.js';
 import { LovClientes } from '../components/LovClientes.js';
 import { LovRepresentantes } from '../components/LovRepresentantes.js';
@@ -17,11 +19,11 @@ import { getRepresentantesByCliente, getRepresentantesByIdCliente } from '../ser
 import { getClienteByFilter, getAllClientesCached, getClienteDetalhado, getClientesComentarios, getClientesHistorico, getClientesUltimasCompras, agruparUltimasComprasPorItem, obterClienteParaProposta } from '../services/clientes.js';
 import { getCidadesByFilter } from '../services/cidades.js';
 import { getUfByFilter } from '../services/uf.js';
-import { getTipLogradouro } from '../services/tipLogradouro.js';
+import { getTodosTiposLogradouro } from '../services/tipLogradouro.js';
 import { getCondPgtoByFilter } from '../services/condPgto.js';
 import { getOperacoesByFilter } from '../services/operacoes.js';
 import { IoInformationOutline } from "react-icons/io5";
-import { getImpostosCached } from '../services/impostos.js';
+import { getImpostosCached, invalidarImpostos } from '../services/impostos.js';
 import { ModalErro } from '../components/ModalErro.js';
 import { getListaPreco } from '../services/listaPreco.js';
 import { getItensAcordos, getItensClassificacao, getItensDetalhados, getItensLotesCached } from '../services/itens.js';
@@ -40,6 +42,7 @@ import { exportarPropostas } from '../services/proposta/propostaService.js';
 
 
 export function PedidoVenda() {
+    const parametrosCarregados = useContext(ParametrosContext);
     const [openLovItens, setOpenLovItens] = useState(false);
     const [openLovPessoas, setOpenLovPessoas] = useState(false);
     const [openLovTriangulacao, setOpenLovTriangulacao] = useState(false);
@@ -146,7 +149,6 @@ export function PedidoVenda() {
     const dadosClienteCache = useRef(new Map());
     const representanteClienteCache = useRef(new Map());
     const historicoClienteCache = useRef(new Map());
-    const acordosItemCache = useRef(new Map());
     const listaPrecoInfoCache = useRef(new Map());
     const classificacoesItemCache = useRef(new Map());
     const recalculoClienteId = useRef(0);
@@ -192,20 +194,18 @@ export function PedidoVenda() {
             return;
         }
         let ativo = true;
-        const atualizarHistorico = () => getClientesUltimasCompras({ codCliente: codigo })
+        getClientesUltimasCompras({ codCliente: codigo })
             .then(response => {
                 if (ativo) setUltimasComprasClienteMap(agruparUltimasComprasPorItem(response.data?.items || []));
             })
             .catch(() => {});
-        atualizarHistorico();
-        window.addEventListener('focus', atualizarHistorico);
         return () => {
             ativo = false;
-            window.removeEventListener('focus', atualizarHistorico);
         };
-    }, [cliente?.cod_pessoa, openLovItens]);
+    }, [cliente?.cod_pessoa, parametrosCarregados]);
 
     useEffect(() => {
+        if (!codigosItensPedido) return;
         getItensLotesCached()
             .then(itens => setLotesProximosMap((itens || []).reduce((acc, item) => {
                 const codItem = String(item.cod_item ?? '');
@@ -213,7 +213,7 @@ export function PedidoVenda() {
                 return acc;
             }, {})))
             .catch(() => setLotesProximosMap({}));
-    }, []);
+    }, [codigosItensPedido]);
 
     useEffect(() => {
         const codItens = codigosItensPedido ? codigosItensPedido.split(',') : [];
@@ -264,8 +264,8 @@ export function PedidoVenda() {
         return item?.des_uf || '';
     }
 
-    function getDescricaoTipoLogradouro(codTipo) {
-        const tipo = tiposLogradouro.find(item => String(item.cod_tipo) === String(codTipo));
+    function getDescricaoTipoLogradouro(codTipo, tipos = tiposLogradouro) {
+        const tipo = tipos.find(item => String(item.cod_tipo) === String(codTipo));
         return tipo?.des_tipo || '';
     }
 
@@ -506,6 +506,9 @@ export function PedidoVenda() {
 
         const idRecalculo = ++recalculoClienteId.current;
         const itensAtuais = itensPedido;
+        invalidarImpostos();
+        invalidarConsultas('acordos|');
+        listaPrecoInfoCache.current.clear();
         setFreteSelecionado({ 201: null, 203: null });
         setLoading(true);
 
@@ -575,23 +578,11 @@ export function PedidoVenda() {
 
     async function carregarTiposLogradouro() {
         try {
-            let offset = 0;
-            const limit = 25;
-            let hasMore = true;
-            const itens = [];
-
-            while (hasMore) {
-                const response = await getTipLogradouro({ offset, limit });
-                const data = response.data;
-
-                itens.push(...(data.items || []));
-                hasMore = Boolean(data.hasMore);
-                offset += limit;
-            }
-
-            const tiposValidos = itens.filter(item => item.des_tipo && item.des_tipo.trim() !== '');
+            const tiposValidos = await getTodosTiposLogradouro();
             setTiposLogradouro(tiposValidos);
+            return tiposValidos;
         } catch (error) {
+            return [];
         }
     }
 
@@ -719,7 +710,7 @@ export function PedidoVenda() {
             baseST = Number(vlrListaST ?? valorLista ?? 0);
         }
 
-        const qtdMultiplo = detalheItem.qtd_multiplo ?? item.qtdMultiplo;
+        const qtdMultiplo = item.qtdMultiplo ?? detalheItem.qtd_multiplo;
         const quantidade = item.quantidade !== '' && item.quantidade !== null && item.quantidade !== undefined
             ? item.quantidade
             : Number(qtdMultiplo) > 0 ? qtdMultiplo : 1;
@@ -767,13 +758,7 @@ export function PedidoVenda() {
     async function carregarAcordosItem(codItem, codCliente = getCodigoPessoaCliente()) {
         const codigo = String(codItem ?? '').trim();
         const codigoCliente = String(codCliente ?? '').trim();
-        const chave = `${codigoCliente}-${codigo}`;
-
-        if (acordosItemCache.current.has(chave)) {
-            return await acordosItemCache.current.get(chave);
-        }
-
-        const promise = getItensAcordos({
+        return getItensAcordos({
             codItem: codigo,
             codCliente: codigoCliente,
             offset: 0,
@@ -782,12 +767,6 @@ export function PedidoVenda() {
             .then(response => response.data.items || [])
             .catch(() => []);
 
-        acordosItemCache.current.set(chave, promise);
-
-        const acordos = await promise;
-        acordosItemCache.current.set(chave, acordos);
-
-        return acordos;
     }
 
     function itemPossuiAcordo(item) {
@@ -861,7 +840,8 @@ export function PedidoVenda() {
             unidadeMedida: itemLov.cod_um ?? '',
             principiosAtivos: itemLov.principios_ativos,
             marca: itemLov.cod_completo,
-            qtdMultiplo: null,
+            qtdMultiplo: Number.isFinite(Number(itemLov.qtd_multiplo)) && Number(itemLov.qtd_multiplo) > 0
+                ? Number(itemLov.qtd_multiplo) : 1,
             qtdAltura: null,
             qtdLargura: null,
             qtdComprimento: null,
@@ -1159,10 +1139,6 @@ export function PedidoVenda() {
         }));
     }
 
-    useEffect(() => {
-        carregarTiposLogradouro();
-    }, []);
-
     function validarMultiplo(seq) {
         const item = itensPedido.find(i => i.seq === seq);
         if (!item) return;
@@ -1305,6 +1281,19 @@ export function PedidoVenda() {
     }
 
     function getStatusHistoricoCliente() {
+        // A validade representa um dia civil, sem converter o horário da API.
+        const validade = String(cliente?.dta_validade_alvara ?? '').slice(0, 10);
+        const dataValidade = new Date(`${validade}T00:00:00`);
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(validade)
+            && !Number.isNaN(dataValidade.getTime()) && dataValidade < hoje) {
+            return {
+                classe: 'cliente-historico-vermelho',
+                texto: 'Alvará vencido'
+            };
+        }
+
         const dias = Number(historicoCliente.ultimaCompra?.dias_da_ultima_compra);
 
         if (!historicoCliente.ultimaCompra || Number.isNaN(dias)) {
@@ -1579,10 +1568,11 @@ export function PedidoVenda() {
             return;
         }
 
+        const tipos = await carregarTiposLogradouro();
         setCodCepDigitado(cep.num_cep || '');
         setLogradouroDigitado(cep.des_logradouro || '');
         setBairroDigitado(cep.des_bairro || '');
-        setTipoLogradouroSelecionado(getDescricaoTipoLogradouro(cep.cod_tipo));
+        setTipoLogradouroSelecionado(getDescricaoTipoLogradouro(cep.cod_tipo, tipos));
         setCodCidadeDigitado(cep.cod_ibge ? String(cep.cod_ibge) : '');
         setCidade(cep.cod_ibge ? {
             cod_ibge: cep.cod_ibge,
@@ -1598,6 +1588,7 @@ export function PedidoVenda() {
             return;
         }
 
+        const tipos = await carregarTiposLogradouro();
         if (endereco.num_cep) {
             try {
                 const response = await getCepsByFilter({
@@ -1610,7 +1601,7 @@ export function PedidoVenda() {
                 if (cepEncontrado) {
                     await aplicarCep(cepEncontrado);
                     setNumeroEnderecoDigitado(endereco.num_logradouro || '');
-                    setTipoLogradouroSelecionado(getDescricaoTipoLogradouro(endereco.cod_tipo_logradouro));
+                    setTipoLogradouroSelecionado(getDescricaoTipoLogradouro(endereco.cod_tipo_logradouro, tipos));
                     return;
                 }
             } catch (error) {
@@ -1621,7 +1612,7 @@ export function PedidoVenda() {
         setLogradouroDigitado(endereco.des_endereco || '');
         setBairroDigitado(endereco.des_bairro || '');
         setNumeroEnderecoDigitado(endereco.num_logradouro || '');
-        setTipoLogradouroSelecionado(getDescricaoTipoLogradouro(endereco.cod_tipo_logradouro));
+        setTipoLogradouroSelecionado(getDescricaoTipoLogradouro(endereco.cod_tipo_logradouro, tipos));
         setCodCidadeDigitado('');
         setCidade(endereco.des_cidade ? {
             cod_ibge: '',
@@ -2956,7 +2947,13 @@ export function PedidoVenda() {
                                         <span className='tip-valor'>{statusHistoricoCliente.texto}</span>
                                     </div>
                                     <div className='tip-linha'>
-                                        <span className='tip-nome'>Dias sem:</span>
+                                        <span className='tip-nome'>Validade alvará:</span>
+                                        <span className='tip-valor'>
+                                            {formatarDataHistoricoCliente(cliente.dta_validade_alvara)}
+                                        </span>
+                                    </div>
+                                    <div className='tip-linha'>
+                                        <span className='tip-nome'>Dias sem compra:</span>
                                         <span className='tip-valor'>
                                             {historicoCliente.loading
                                                 ? 'Carregando...'
@@ -3546,7 +3543,7 @@ export function PedidoVenda() {
                     </div>
                 </div>
             </div>
-            <div className="endereco-card">
+            <div className="endereco-card" onFocusCapture={carregarTiposLogradouro}>
                 <h2 className="pedido-title">Endereço de Entrega</h2>
                 <div className="endereco-actions">
                     <button type="button" className="endereco-tab active" onClick={carregarEnderecoPadraoCliente}>PADRÃO</button>

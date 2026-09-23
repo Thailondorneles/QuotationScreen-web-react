@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { routes } from './routes.js';
 import LoadingOverlay from './components/LoadingOverlay';
 import { carregarParametrosAplicacao } from './services/parametros';
+import { ParametrosContext } from './config/ParametrosContext';
 
 function App() {
   const [carregandoParametros, setCarregandoParametros] = useState(true);
@@ -18,7 +19,9 @@ function App() {
   return (
     <>
       <div style={{ display: 'contents' }} inert={carregandoParametros ? '' : undefined} aria-busy={carregandoParametros}>
-        <RouterProvider key={carregandoParametros ? 'padroes' : 'configurado'} router={routes}/>
+        <ParametrosContext.Provider value={!carregandoParametros}>
+          <RouterProvider router={routes}/>
+        </ParametrosContext.Provider>
       </div>
       <LoadingOverlay isOpen={carregandoParametros} />
     </>

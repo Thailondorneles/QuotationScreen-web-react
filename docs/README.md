@@ -38,6 +38,7 @@ A documentação foi produzida a partir do código-fonte vigente em **18/08/2026
 | [10 — Implantação, segurança e manutenção](10-implantacao-seguranca-manutencao.md) | Ambientes, variáveis, containers e cuidados operacionais |
 | [11 — Glossário e dicionário de dados](11-glossario-dados.md) | Termos de negócio, estados e principais objetos |
 | [12 — Registro de riscos e roadmap técnico](12-registro-riscos-roadmap.md) | Riscos priorizados, critérios de aceite e evolução recomendada |
+| [14 — Otimização de consultas](14-otimizacao-consultas-frontend.md) | Melhorias aplicadas no frontend e contratos propostos para consultas em lote no ORDS |
 
 ## Fluxo executivo
 

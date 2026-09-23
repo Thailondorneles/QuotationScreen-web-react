@@ -20,8 +20,8 @@ export function LovUf({ isOpen, setLovOpen, codUf, onSelect }) {
     });
 
     useEffect(() => {
-        if (isOpen || codUf) {
-            lov.buscar({ filtro: codUf, novoOffset: 0 });
+        if (isOpen) {
+            lov.buscar({ filtro: codUf, novoOffset: 0 }).catch(() => {});
         }
     }, [isOpen, codUf]);
 

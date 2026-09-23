@@ -1,5 +1,6 @@
 import { parametros } from '../config/parametrosAplicacao';
 import { unimedApi } from "../config/apis.js";
+import { consultarComCache } from './consultaCache';
 
 export function getClientes() {
     return unimedApi.get("clientes");
@@ -62,7 +63,8 @@ export function getClientesHistorico({ filtro, offset = 0, limit = 25 }) {
 }
 
 export function getClientesUltimasCompras({ codCliente }) {
-    return unimedApi.get(`clientesUltimaCompra/${codCliente}`);
+    return consultarComCache(`historicoItens|${codCliente}`, () =>
+        unimedApi.get(`clientesUltimaCompra/${encodeURIComponent(codCliente)}`));
 }
 
 export function agruparUltimasComprasPorItem(items) {

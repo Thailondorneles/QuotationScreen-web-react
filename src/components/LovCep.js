@@ -10,7 +10,7 @@ export function LovCep({ isOpen, setLovOpen, codCep, onSelect }) {
     const lov = useLovPagination({
         limit: 25,
         fetchFn: ({ filtro, offset, limit }) => {
-            if (filtro && filtro.trim() !== '') {
+            if (String(filtro ?? '').trim() !== '') {
                 return getCepsByFilter({ filtro, offset, limit });
             }
             return getCeps({ offset, limit });
@@ -18,9 +18,9 @@ export function LovCep({ isOpen, setLovOpen, codCep, onSelect }) {
     });
 
     useEffect(() => {
-        if (isOpen || codCep) {
+        if (isOpen) {
             setFiltro(codCep || '');
-            lov.buscar({ filtro: codCep, novoOffset: 0 });
+            lov.buscar({ filtro: codCep, novoOffset: 0 }).catch(() => {});
         }
         // eslint-disable-next-line
     }, [isOpen, codCep]);

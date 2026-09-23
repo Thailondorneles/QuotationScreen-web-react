@@ -1,8 +1,10 @@
 # Parâmetros da aplicação
 
-O frontend renderiza a tela inicial com os padrões e uma sobreposição de carregamento, bloqueando a interação enquanto consulta `GET parsConf` pelo mesmo proxy das demais APIs. A consulta ocorre uma vez por abertura da página. Ao concluir, a tela é remontada com os parâmetros carregados e liberada para uso. O retorno esperado é `{ "items": [{ "des_conf": "EMPRESA_NOME", "parametro": "Empresa" }] }`.
+O frontend renderiza a tela inicial com os padrões e uma sobreposição de carregamento, bloqueando a interação enquanto consulta `GET parsConf` pelo mesmo proxy das demais APIs. A consulta inicial é compartilhada entre o App e a página de configurações. Ao concluir, os componentes são notificados pelo contexto React e a tela é liberada, sem desmontar as rotas. O retorno esperado é `{ "items": [{ "des_conf": "EMPRESA_NOME", "parametro": "Empresa" }] }`.
 
 Os parâmetros ficam em memória durante a sessão da página. Navegar, emitir documentos, abrir LOVs ou voltar à janela não os recarrega. Atualizar a página inicia uma nova consulta. Não é necessário reconstruir a aplicação para mudar valores na tabela.
+
+Salvar uma configuração invalida apenas o cache da listagem para consultas posteriores. Os parâmetros em uso pelo sistema continuam os mesmos até recarregar a página.
 
 O serviço tem timeout de 10 segundos. Em falha usa os padrões de `src/config/parametrosAplicacao.js` até atualizar a página. Chaves desconhecidas são ignoradas; valores ausentes ou inválidos usam o padrão da chave.
 

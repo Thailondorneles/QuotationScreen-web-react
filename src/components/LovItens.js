@@ -4,14 +4,13 @@ import { FaX, FaChevronLeft, FaChevronRight } from "react-icons/fa6";
 import { FaStar, FaHourglassHalf } from "react-icons/fa";
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getImpostosCached } from '../services/impostos.js';
-import { getItens, getItensAcordos, getItensDetalhados, getItensLotesCached } from '../services/itens';
+import { getItens, getItensAcordos, getItensLotesCached } from '../services/itens';
 
 const ITENS_POR_PAGINA = 25;
 const CACHE_TTL = 5 * 60 * 1000;
 const FILTRO_PADRAO = 'POLIMAX';
 let cacheItens = null;
 let requisicaoItens = null;
-let acordosCache = new Map();
 
 function normalizarTextoBusca(valor) {
     return String(valor ?? '')
@@ -59,12 +58,12 @@ function obterTimestampUltimaCompra(compras) {
     return Number.isNaN(timestamp) ? null : timestamp;
 }
 
-async function mapComConcorrencia(itens, limite, processar) {
+async function mapComConcorrencia(itens, limite, processar, estaAtivo = () => true) {
     const resultados = Array(itens.length);
     let proximoIndice = 0;
 
     async function worker() {
-        while (proximoIndice < itens.length) {
+        while (estaAtivo() && proximoIndice < itens.length) {
             const indice = proximoIndice++;
             resultados[indice] = await processar(itens[indice]);
         }
@@ -78,7 +77,6 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
     const [filtro, setFiltro] = useState(FILTRO_PADRAO);
     const [itensSelecionados, setItensSelecionados] = useState({});
     const [quantidades, setQuantidades] = useState({});
-    const [multiplos, setMultiplos] = useState({});
     const [erroQuantidade, setErroQuantidade] = useState('');
     const [menuSelecionarOpen, setMenuSelecionarOpen] = useState(false);
     const [ordenacao, setOrdenacao] = useState({ coluna: null, direcao: null });
@@ -92,7 +90,6 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
     const [atualizadoEm, setAtualizadoEm] = useState(0);
     const [lotesProximosMap, setLotesProximosMap] = useState({});
     const ultimaRequisicao = useRef(0);
-    const precosImpostosCache = useRef(new Map());
     const proximaOrdemSelecao = useRef(1);
 
     const itensExistentesCodigos = useMemo(
@@ -129,13 +126,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
     }
 
     async function obterPrecoImpostosGlobal(codItem, unidade) {
-        const chave = `${codCliente}-${codOper}-${codCondPgto}-${codItem}-${unidade}`;
-        if (precosImpostosCache.current.has(chave)) {
-            const cached = precosImpostosCache.current.get(chave);
-            return typeof cached === 'function' ? await cached() : await cached;
-        }
-
-        const requisicao = getImpostosCached({
+        return getImpostosCached({
             codOper,
             codUnidade: unidade,
             codPessoa: codCliente,
@@ -145,10 +136,6 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
             .then(response => response.data?.vlr_item ?? null)
             .catch(() => null);
 
-        precosImpostosCache.current.set(chave, requisicao);
-        const preco = await requisicao;
-        precosImpostosCache.current.set(chave, preco);
-        return preco;
     }
 
     async function buscar({ filtro: valorFiltro, novoOffset = 0 }) {
@@ -279,30 +266,6 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
     const precisaAtualizar = Date.now() - atualizadoEm >= CACHE_TTL;
 
     useEffect(() => {
-        if (!isOpen || !itensPaginados.length) return;
-        let ativo = true;
-        const pendentes = itensPaginados.filter(item => item.qtd_multiplo == null);
-        if (!pendentes.length) return;
-
-        getItensDetalhados({ codItens: pendentes.map(item => item.cod_item) })
-            .then(response => {
-                if (!ativo) return;
-                const novosMultiplos = Object.fromEntries((response.data?.items || [])
-                    .map(item => [item.cod_item, Number(item.qtd_multiplo) > 0 ? Number(item.qtd_multiplo) : 1]));
-                setMultiplos(prev => ({ ...prev, ...novosMultiplos }));
-            })
-            .catch(() => {
-                if (ativo) setErroQuantidade('Não foi possível carregar os múltiplos. Tente buscar os itens novamente.');
-            });
-
-        return () => { ativo = false; };
-    }, [isOpen, itensPaginados, atualizadoEm]);
-
-    useEffect(() => {
-        buscar({ filtro: FILTRO_PADRAO, novoOffset: 0 }).catch(() => {});
-    }, []);
-
-    useEffect(() => {
         if (!isOpen) return;
 
         getItensLotesCached()
@@ -318,7 +281,6 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
         if (isOpen) {
             setItensSelecionados({});
             setQuantidades({});
-            setMultiplos({});
             setErroQuantidade('');
             proximaOrdemSelecao.current = 1;
             setMenuSelecionarOpen(false);
@@ -349,26 +311,14 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
             setAcordosMap(map);
 
             const buscarAcordo = async codItem => {
-                const chave = `${codCliente}-${codItem}`;
-
-                if (acordosCache.has(chave)) {
-                    const cached = acordosCache.get(chave);
-                    const acordos = (cached && typeof cached.then === 'function') ? await cached : cached;
-                    return { codItem, acordos: acordos || [] };
-                }
-
-                const p = getItensAcordos({ codItem, codCliente, offset: 0, limit: 25 })
+                const acordos = await getItensAcordos({ codItem, codCliente, offset: 0, limit: 25 })
                     .then(resp => resp.data.items || [])
                     .catch(() => []);
 
-                acordosCache.set(chave, p);
-
-                const acordos = await p;
-                acordosCache.set(chave, acordos);
                 return { codItem, acordos };
             };
 
-            const resultados = await mapComConcorrencia(itensParaBuscar, 5, buscarAcordo);
+            const resultados = await mapComConcorrencia(itensParaBuscar, 2, buscarAcordo, () => ativo);
 
             if (!ativo) return;
 
@@ -392,19 +342,20 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
 
         let ativo = true;
         setLoadingValores(true);
+        setPrecosImpostosMap({});
 
         // use obterPrecoImpostosGlobal (shared helper) to fetch prices
 
         (async () => {
             try {
-                const resultados = await mapComConcorrencia(itensPaginados, 4, async item => {
+                const resultados = await mapComConcorrencia(itensPaginados, 2, async item => {
                     const [lista201, lista203] = await Promise.all([
                         obterPrecoImpostosGlobal(item.cod_item, 201),
                         obterPrecoImpostosGlobal(item.cod_item, 203)
                     ]);
 
                     return { codItem: item.cod_item, lista201, lista203 };
-                });
+                }, () => ativo);
 
                 if (!ativo) return;
 
@@ -487,10 +438,6 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
         const itensComQuantidade = [];
         for (const item of selecionados) {
             const multiplo = obterMultiplo(item);
-            if (multiplo == null) {
-                setErroQuantidade(`Aguarde o carregamento do múltiplo do item ${item.cod_item}. Se necessário, busque os itens novamente.`);
-                return;
-            }
             const quantidade = Number(String(quantidades[item.cod_item] ?? multiplo).replace(',', '.'));
             const razao = quantidade / multiplo;
             if (!Number.isFinite(quantidade) || quantidade <= 0 || Math.abs(razao - Math.round(razao)) > 1e-8) {
@@ -507,8 +454,8 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
     }
 
     function obterMultiplo(item) {
-        const valor = item.qtd_multiplo ?? multiplos[item.cod_item];
-        return valor == null ? null : Number(valor) > 0 ? Number(valor) : 1;
+        const valor = Number(item.qtd_multiplo);
+        return Number.isFinite(valor) && valor > 0 ? valor : 1;
     }
 
     function alternarOrdenacao(coluna) {
@@ -692,9 +639,8 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                                  onClick={event => event.stopPropagation()}
                                                  aria-label={`Quantidade do item ${item.cod_item}`}
                                                  disabled={existe}
-                                                 placeholder={obterMultiplo(item) == null ? '...' : undefined}
-                                                 title={obterMultiplo(item) == null ? 'Carregando múltiplo' : `Múltiplo: ${obterMultiplo(item)}`}
-                                                 value={quantidades[item.cod_item] ?? (obterMultiplo(item) == null ? '' : String(obterMultiplo(item)).replace('.', ','))}
+                                                 title={`Múltiplo: ${obterMultiplo(item)}`}
+                                                 value={quantidades[item.cod_item] ?? String(obterMultiplo(item)).replace('.', ',')}
                                                  onChange={event => {
                                                      const valor = event.target.value;
                                                      if (!/^\d*(?:[.,]\d*)?$/.test(valor)) return;

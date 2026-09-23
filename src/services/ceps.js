@@ -1,4 +1,4 @@
-import { unimedApi } from "../config/apis.js";
+import { getConsultaCached } from './consultaCache';
 
 function normalizarRespostaCeps(data) {
     if (Array.isArray(data?.items)) {
@@ -29,7 +29,7 @@ function normalizarRespostaCeps(data) {
 }
 
 export function getCeps({ offset = 0, limit = 25 }) {
-    return unimedApi.get("ceps", {
+    return getConsultaCached("ceps", {
         params: { offset, limit }
     }).then((response) => ({
         ...response,
@@ -38,7 +38,7 @@ export function getCeps({ offset = 0, limit = 25 }) {
 }
 
 export function getCepsByFilter({ filtro, offset = 0, limit = 25 }) {
-    return unimedApi.get(`ceps/${filtro}`, {
+    return getConsultaCached(`ceps/${filtro}`, {
         params: { offset, limit }
     }).then((response) => ({
         ...response,

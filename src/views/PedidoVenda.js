@@ -2978,7 +2978,7 @@ export function PedidoVenda() {
                             ))}
                         </div> 
                     )}
-                    <NotasItemCliente consulta={notasCliente} codCliente={cliente?.cod_pessoa} codItem={item.cod_item} />
+                   <NotasItemCliente consulta={notasCliente} codCliente={cliente?.cod_pessoa} codItem={item.cod_item} />
                 </div>
             </div>
         );

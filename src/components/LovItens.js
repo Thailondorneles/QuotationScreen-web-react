@@ -139,6 +139,13 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
 
     }
 
+    useEffect(() => {
+        // Antecipa somente o catálogo enquanto o vendedor preenche o pedido.
+        // A abertura da LOV compartilha esta requisição e o cache de cinco minutos.
+        carregarTodosItens().catch(() => {});
+        // eslint-disable-next-line
+    }, []);
+
     async function buscar({ filtro: valorFiltro, novoOffset = 0 }) {
         const filtroBusca = normalizarFiltroItem(valorFiltro);
         const idRequisicao = ultimaRequisicao.current + 1;

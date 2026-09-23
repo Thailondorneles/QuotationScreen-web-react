@@ -76,7 +76,7 @@
     border-top: 1px solid #e1e6e2;
 }
 
-.modal-acoes .modal-btn {
+.modal-btn {
     min-width: 104px;
     padding: 9px 16px;
     color: #fff;
@@ -86,19 +86,19 @@
     transition: filter 0.15s ease, transform 0.15s ease;
 }
 
-.modal-acoes .modal-btn:hover {
+.modal-btn:hover {
     filter: brightness(0.92);
 }
 
-.modal-acoes .modal-btn:active {
+.modal-btn:active {
     transform: translateY(1px);
 }
 
-.modal-acoes .modal-btn-nao {
+.modal-btn-nao {
     background: #c53b3b;
 }
 
-.modal-acoes .modal-btn-sim {
+.modal-btn-sim {
     background: var(--ambiente-cor, #218c3f);
 }
 
@@ -163,3 +163,6 @@
         grid-template-columns: 1fr;
     }
 }
+
+.modal-btn { cursor: pointer; }
+.modal-btn:disabled { opacity: 0.55; cursor: not-allowed; filter: none; transform: none; }

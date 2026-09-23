@@ -1,6 +1,9 @@
 import { parametros } from '../config/parametrosAplicacao';
+import { getClientesItensNotas } from '../services/clientesItensNotas';
+import { NotasItemCliente } from '../components/NotasItemCliente';
 import '../style/pedidoVenda.css';
-import { FaCalendarAlt, FaEdit, FaEraser, FaSearch, FaTrash, FaHourglassHalf } from "react-icons/fa";
+import { FaCalendarAlt, FaEdit, FaEraser, FaSearch, FaTrash, FaHourglassHalf, FaUpload } from "react-icons/fa";
+import { ModalImportarItens } from '../components/ModalImportarItens';
 import { useState, useEffect, useMemo, useRef, useContext } from 'react';
 import { ParametrosContext } from '../config/ParametrosContext';
 import { invalidarConsultas } from '../services/consultaCache';
@@ -26,7 +29,7 @@ import { IoInformationOutline } from "react-icons/io5";
 import { getImpostosCached, invalidarImpostos } from '../services/impostos.js';
 import { ModalErro } from '../components/ModalErro.js';
 import { getListaPreco } from '../services/listaPreco.js';
-import { getItensAcordos, getItensClassificacao, getItensDetalhados, getItensLotesCached } from '../services/itens.js';
+import { getItens, getItensAcordos, getItensClassificacao, getItensDetalhados, getItensLotesCached } from '../services/itens.js';
 import { cotarSimFrete } from '../config/simFreteService.js';
 import { format } from '../utils/format.js';
 import { maskMoneyBR, formatarMilharesBR } from '../utils/maskMoney.js';
@@ -42,6 +45,8 @@ import { exportarPropostas } from '../services/proposta/propostaService.js';
 
 
 export function PedidoVenda() {
+    const [notasCliente, setNotasCliente] = useState(null);
+    const [importacaoAberta, setImportacaoAberta] = useState(false);
     const parametrosCarregados = useContext(ParametrosContext);
     const [openLovItens, setOpenLovItens] = useState(false);
     const [openLovPessoas, setOpenLovPessoas] = useState(false);
@@ -203,6 +208,17 @@ export function PedidoVenda() {
             ativo = false;
         };
     }, [cliente?.cod_pessoa, parametrosCarregados]);
+
+    useEffect(() => {
+        const codigo = cliente?.cod_pessoa;
+        if (!codigo) { setNotasCliente(null); return; }
+        let ativo = true;
+        setNotasCliente({ codigo, status: 'carregando' });
+        getClientesItensNotas(codigo)
+            .then(items => { if (ativo) setNotasCliente({ codigo, status: 'pronto', items }); })
+            .catch(() => { if (ativo) setNotasCliente({ codigo, status: 'erro' }); });
+        return () => { ativo = false; };
+    }, [cliente?.cod_pessoa]);
 
     useEffect(() => {
         if (!codigosItensPedido) return;
@@ -874,6 +890,54 @@ export function PedidoVenda() {
         nextNumItem.current += 1;
 
         return [item201, item203];
+    }
+
+    async function importarItensExcel(linhas) {
+        if (!cliente?.cod_pessoa || !operacao?.cod_oper || !CondPgto?.cod_cond_pgto) {
+            throw new Error('Selecione cliente, operação e condição de pagamento antes de importar.');
+        }
+        const codigos = [...new Set(linhas.map(linha => linha.codigo))];
+        if (itensPedido.some(item => codigos.includes(Number(item.cod_item)))) {
+            throw new Error('O arquivo contém produtos já presentes no pedido. Remova essas linhas antes de importar.');
+        }
+        const response = await getItens();
+        const catalogo = new Map((response.data?.items || []).map(item => [Number(item.cod_item), item]));
+        for (const linha of linhas) {
+            const produto = catalogo.get(linha.codigo);
+            if (!produto) throw new Error(`Linha ${linha.linha}: item ${linha.codigo} não encontrado no catálogo.`);
+            const multiplo = Number(produto.qtd_multiplo) > 0 ? Number(produto.qtd_multiplo) : 1;
+            const razao = linha.quantidade / multiplo;
+            if (Math.abs(razao - Math.round(razao)) > 1e-8) {
+                throw new Error(`Linha ${linha.linha}: a quantidade deve ser múltipla de ${multiplo}.`);
+            }
+        }
+        // Prepara tudo antes de alterar o pedido; consultas em sequência evitam sobrecarregar as APIs.
+        const preparados = [];
+        for (const codigo of codigos) {
+            const produto = catalogo.get(codigo);
+            const detalheResponse = await getItensDetalhados({ codItens: [codigo] });
+            const detalhe = detalheResponse.data?.items?.find(item => Number(item.cod_item) === codigo);
+            if (!detalhe) throw new Error(`Item ${codigo}: não foi possível obter custos e detalhes.`);
+            const pares = criarItensPedido({ ...produto,
+                estoque_matriz: produto.qtd_estoque_matriz, estoque_filial: produto.qtd_estoque_filial });
+            for (const item of pares) {
+                const linha = linhas.find(row => row.codigo === codigo && row.unidade === item.unidade);
+                const dados = await buscarDadosItem({ ...item, quantidade: linha?.quantidade ?? item.qtdMultiplo }, { detalheItem: detalhe });
+                if (linha) {
+                    if (dados.semTributacao) throw new Error(`Linha ${linha.linha}: item sem tributação para a unidade ${item.unidade}.`);
+                    if (dados.precoListaBloqueado && Math.abs(linha.valor - dados.valorLista) > 0.00001) {
+                        throw new Error(`Linha ${linha.linha}: preço de contrato bloqueado (${dados.valorLista}).`);
+                    }
+                    if (dados.precoListaPromocional && linha.valor < dados.valorMinimoLista) {
+                        throw new Error(`Linha ${linha.linha}: valor inferior ao mínimo promocional (${dados.valorMinimoLista}).`);
+                    }
+                }
+                preparados.push({ ...item, ...dados, selecionado: Boolean(linha),
+                    valorLista: linha?.valor ?? dados.valorLista });
+            }
+        }
+        setFreteSelecionado({ 201: null, 203: null });
+        setItensPedido(prev => [...prev, ...preparados]);
     }
 
     async function adicionarItem(itemLov) {
@@ -2912,8 +2976,9 @@ export function PedidoVenda() {
                                     {getCodigoUnidadeCompra(compra)} - {formatarDataHistoricoCliente(compra.dta_emissao)} - {format.moeda(compra.vlr_unitario)} - Qtd.: {compra.qtd_lancamento != null ? Number(compra.qtd_lancamento).toLocaleString('pt-BR', { maximumFractionDigits: 4 }) : '-'}
                                 </div>
                             ))}
-                        </div>
+                        </div> 
                     )}
+                    <NotasItemCliente consulta={notasCliente} codCliente={cliente?.cod_pessoa} codItem={item.cod_item} />
                 </div>
             </div>
         );
@@ -3183,6 +3248,10 @@ export function PedidoVenda() {
             <div className="item-card">
                 <div className="pedido-title item-card-title-actions">
                     <h2>Itens do Pedido</h2>
+                    <div className="itens-acoes-botoes">
+                    <button type="button" className="btn-recalcular-itens" title="Importar itens do Excel"
+                        aria-label="Importar itens do Excel" disabled={loading || loadingDadosCliente}
+                        onClick={() => setImportacaoAberta(true)}><FaUpload /></button>
                     <button
                         type="button"
                         className="btn-recalcular-itens"
@@ -3191,7 +3260,9 @@ export function PedidoVenda() {
                     >
                         Recalcular itens
                     </button>
+                    </div>
                 </div>
+                {importacaoAberta && <ModalImportarItens onClose={() => setImportacaoAberta(false)} onImportar={importarItensExcel} />}
                 <div className="itens-table-wrapper">
                     <div className="tabelas-itens-layout">
                         <section className="tabela-itens-bloco tabela-itens-principal">
@@ -3361,6 +3432,7 @@ export function PedidoVenda() {
                     codOper={operacao.cod_oper}
                     codCondPgto={CondPgto.cod_cond_pgto}
                     ultimasComprasMap={ultimasComprasClienteMap}
+                    notasCliente={notasCliente}
                     onSelect={(item) => adicionarItem(item)}
                 />
                 <LoadingOverlay isOpen={loading || loadingDadosCliente} />

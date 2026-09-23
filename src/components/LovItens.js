@@ -1,3 +1,4 @@
+import { NotasItemCliente } from './NotasItemCliente';
 import { parametros } from '../config/parametrosAplicacao';
 import '../style/lovStyle.css';
 import { FaX, FaChevronLeft, FaChevronRight } from "react-icons/fa6";
@@ -73,7 +74,7 @@ async function mapComConcorrencia(itens, limite, processar, estaAtivo = () => tr
     return resultados;
 }
 
-export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], codCliente = null, codOper = null, codCondPgto = null, ultimasComprasMap = {} }) {
+export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], codCliente = null, codOper = null, codCondPgto = null, ultimasComprasMap = {}, notasCliente = null }) {
     const [filtro, setFiltro] = useState(FILTRO_PADRAO);
     const [itensSelecionados, setItensSelecionados] = useState({});
     const [quantidades, setQuantidades] = useState({});
@@ -701,6 +702,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                                                 </div>
                                                             </>
                                                         ) : null}
+                                                        <NotasItemCliente consulta={notasCliente} codCliente={codCliente} codItem={item.cod_item} />
                                                     </div>
                                                 </div>
                                             ) : null}

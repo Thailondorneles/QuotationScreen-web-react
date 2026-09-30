@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { unimedApi } from '../config/apis.js';
+import { getPortadorPosicao } from './definePortador.js';
 
 const pedidosErpApiBaseUrl = process.env.REACT_APP_SIMFRETE_API_BASE_URL;
 
@@ -15,8 +16,15 @@ const pedidosErpApi = axios.create({
     }
 });
 
-export function enviarPedidoErp(payload) {
-    return pedidosErpApi.post('/api/pedidos/enviar-erp', payload);
+export async function enviarPedidoErp(payload) {
+    const portadorPosicao = await getPortadorPosicao(payload.pePedidos || {});
+    return pedidosErpApi.post('/api/pedidos/enviar-erp', {
+        ...payload,
+        pePedidos: {
+            ...payload.pePedidos,
+            ...portadorPosicao
+        }
+    });
 }
 
 export async function consultarPedidosPorSequencia(numSeq) {

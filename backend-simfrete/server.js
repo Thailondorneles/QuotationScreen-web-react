@@ -150,7 +150,8 @@ app.use('/api/unimed', async (req, res) => {
     .split('?')[0];
   const targetPath = encodedPath.replace(/^\/+/, '');
   const atualizarParametro = req.method === 'PUT' && /^parsConf\/\d+$/.test(targetPath);
-  if (req.method !== 'GET' && !atualizarParametro) {
+  const salvarPedido = req.method === 'POST' && targetPath === 'EsPePedidosIns';
+  if (req.method !== 'GET' && !atualizarParametro && !salvarPedido) {
     return res.status(405).json({ erro: 'Metodo nao permitido' });
   }
   if (atualizarParametro && typeof req.body?.parametro !== 'string') {
@@ -164,13 +165,17 @@ app.use('/api/unimed', async (req, res) => {
   try {
     const response = atualizarParametro
       ? await unimedApi.put(targetPath, { parametro: req.body.parametro })
+      : salvarPedido ? await unimedApi.post(targetPath, req.body)
       : await unimedApi.get(targetPath, { params: req.query });
 
     return res.status(response.status).json(response.data);
   } catch (err) {
     console.error('Erro ao consultar servico unimed:', err?.response?.data || err.message);
     return res.status(err?.response?.status || 500).json({
-      erro: 'Erro ao consultar servico unimed'
+      erro: 'Erro ao acessar servico unimed',
+      origem: 'ORDS',
+      recurso: targetPath,
+      metodo: req.method
     });
   }
 });
@@ -199,14 +204,71 @@ app.post('/api/cotacao', async (req, res) => {
   }
 });
 
+app.post('/api/pedidos/sequencia', async (_req, res) => {
+  let connection;
+  try {
+    connection = await getOracleConnection();
+    res.json({ numSeqPedido: await gerarNumeroSequencia(connection) });
+  } catch (err) {
+    console.error('Erro ao reservar sequencia:', err.message);
+    res.status(500).json({ erro: 'Nao foi possivel reservar o sequencial do pedido.' });
+  } finally {
+    if (connection) await connection.close();
+  }
+});
+
+const integracoesEmAndamento = new Set();
+
+async function consultarUnidadesIntegradas(connection, pedido) {
+  const result = await connection.execute(
+    `SELECT DISTINCT JSON_VALUE(PAYLOAD, '$.pePedidos.codUnidade' RETURNING NUMBER) AS UNIDADE
+       FROM ES_PEDIDO_ERP_INTEGRACAO
+      WHERE JSON_VALUE(PAYLOAD, '$.numSeqPedido' RETURNING NUMBER) = :pedido AND STATUS = 'INTEGRADO'`,
+    { pedido }, { outFormat: oracledb.OUT_FORMAT_OBJECT }
+  );
+  return result.rows.map(row => row.UNIDADE);
+}
+
 app.post('/api/pedidos/enviar-erp', async (req, res) => {
   let connection;
   let numSeq;
+  let erpConfirmado = false;
   let etapa = 'inicio';
+  const numSeqPedido = Number(req.body.numSeqPedido);
+  if (!Number.isSafeInteger(numSeqPedido) || numSeqPedido <= 0) {
+    return res.status(400).json({ erro: 'Salve a cotacao e informe numSeqPedido antes de integrar.' });
+  }
+  const unidade = Number(req.body.pePedidos?.codUnidade);
+  if (![201, 203].includes(unidade)) return res.status(400).json({ erro: 'Unidade invalida.' });
+  const chaveIntegracao = `${numSeqPedido}:${unidade}`;
+  if (integracoesEmAndamento.has(chaveIntegracao)) return res.status(409).json({ erro: 'Envio desta unidade em andamento.' });
+  integracoesEmAndamento.add(chaveIntegracao);
 
   try {
     etapa = 'conectar_oracle';
     connection = await getOracleConnection();
+
+    const cabecalho = await connection.execute(
+      'SELECT NUM_SEQ_PEDIDO FROM ES_PE_PEDIDOS WHERE NUM_SEQ_PEDIDO = :id FOR UPDATE',
+      { id: numSeqPedido }
+    );
+    if (!cabecalho.rows.length) return res.status(409).json({ erro: 'Cotacao ainda nao salva.' });
+
+    // O NUM_SEQ do controle identifica a tentativa; numSeqPedido identifica a cotacao.
+    const anteriores = await connection.execute(
+      `SELECT NUM_SEQ, STATUS FROM ES_PEDIDO_ERP_INTEGRACAO
+       WHERE JSON_VALUE(PAYLOAD, '$.numSeqPedido' RETURNING NUMBER) = :pedido
+         AND JSON_VALUE(PAYLOAD, '$.pePedidos.codUnidade' RETURNING NUMBER) = :unidade
+       ORDER BY NUM_SEQ DESC`,
+      { pedido: numSeqPedido, unidade }, { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+    if (anteriores.rows.some(row => row.STATUS === 'INTEGRADO')) {
+      const integradas = await consultarUnidadesIntegradas(connection, numSeqPedido);
+      return res.json({ sucesso: true, numSeq: numSeqPedido, jaIntegrado: true, unidadesIntegradas: integradas });
+    }
+    if (anteriores.rows.length) {
+      return res.status(409).json({ erro: 'Existe uma tentativa anterior desta unidade. Confira o controle de integracao e o ERP antes de reenviar.' });
+    }
 
     etapa = 'gerar_numero_sequencia';
     numSeq = await gerarNumeroSequencia(connection);
@@ -225,7 +287,7 @@ app.post('/api/pedidos/enviar-erp', async (req, res) => {
           ...(req.body.pePedidos?.peObservacoes || [])
             .filter(obs => Number(obs.numSeq) !== 99),
           {
-            txtObs: String(numSeq),
+            txtObs: String(numSeqPedido),
             indPedido: 0,
             indNf: 0,
             indRegistro: 0,
@@ -236,9 +298,10 @@ app.post('/api/pedidos/enviar-erp', async (req, res) => {
         ]
       }
     };
+    delete payloadErp.numSeqPedido;
 
     etapa = 'inserir_controle_integracao';
-    const insertPromise = connection.execute(
+    await connection.execute(
       `INSERT INTO ES_PEDIDO_ERP_INTEGRACAO
         (NUM_SEQ, STATUS, PAYLOAD, USUARIO)
        VALUES
@@ -246,23 +309,15 @@ app.post('/api/pedidos/enviar-erp', async (req, res) => {
       {
         numSeq,
         status: 'ENVIANDO',
-        payload: clobBind(payloadErp),
+        payload: clobBind({ ...payloadErp, numSeqPedido }),
         usuario: req.body.usuario || null
       },
       { autoCommit: true }
     );
 
     etapa = 'post_erp';
-    const [response] = await Promise.all([
-      erpApi.post(erpPedidosUrl, payloadErp),
-      insertPromise
-    ]);
-
-    res.json({
-      sucesso: true,
-      numSeq,
-      retornoErp: response.data
-    });
+    const response = await erpApi.post(erpPedidosUrl, payloadErp);
+    erpConfirmado = true;
 
     etapa = 'atualizar_integracao_sucesso';
     await connection.execute(
@@ -278,6 +333,8 @@ app.post('/api/pedidos/enviar-erp', async (req, res) => {
       },
       { autoCommit: true }
     );
+    const integradas = await consultarUnidadesIntegradas(connection, numSeqPedido);
+    res.json({ sucesso: true, numSeq: numSeqPedido, numSeqIntegracao: numSeq, retornoErp: response.data, unidadesIntegradas: integradas });
   } catch (err) {
     const erro = err?.response?.data || err.message;
     const statusErro = err?.response?.status || 500;
@@ -299,7 +356,7 @@ app.post('/api/pedidos/enviar-erp', async (req, res) => {
                   DATA_ENVIO = SYSDATE
             WHERE NUM_SEQ = :numSeq`,
           {
-            status: 'ERRO',
+            status: erpConfirmado ? 'INTEGRADO' : 'ERRO',
             erro: clobBind(erro),
             numSeq
           },
@@ -322,6 +379,7 @@ app.post('/api/pedidos/enviar-erp', async (req, res) => {
       detalhe: erro
     });
   } finally {
+    integracoesEmAndamento.delete(chaveIntegracao);
     if (connection) {
       try {
         await connection.close();

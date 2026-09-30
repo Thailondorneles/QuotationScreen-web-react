@@ -1050,7 +1050,7 @@ label {
 
 
 .tabela-unidade-resumo[data-unidade="203"] .itens-grid thead th {
-    background: #f47920;
+    background: var(--ambiente-cor, #2f8c1d);
 }
 
 .tabela-bloco-cabecalho .item-selection-trigger {
@@ -1406,6 +1406,38 @@ label {
 
 .endereco-input-date {
     width: 100px;
+}
+
+.data-carga-calendario {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 28px;
+    flex-shrink: 0;
+}
+
+.data-carga-calendario input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.data-carga-calendario input::-webkit-calendar-picker-indicator {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+}
+
+.data-carga-calendario:focus-within {
+    outline: 2px solid var(--ambiente-cor, #2e8b1c);
+    outline-offset: 2px;
 }
 
 .endereco-select {

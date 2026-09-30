@@ -41,6 +41,7 @@ Revisão atual: [Auditoria do ambiente e melhorias recomendadas — 23/09/2026](
 | [11 — Glossário e dicionário de dados](11-glossario-dados.md) | Termos de negócio, estados e principais objetos |
 | [12 — Registro de riscos e roadmap técnico](12-registro-riscos-roadmap.md) | Riscos priorizados, critérios de aceite e evolução recomendada |
 | [14 — Otimização de consultas](14-otimizacao-consultas-frontend.md) | Melhorias aplicadas no frontend e contratos propostos para consultas em lote no ORDS |
+| [15 — Organização da tela de pedido](15-organizacao-pedido-venda.md) | Componentes, hooks, regras de negócio e dependências preservadas na refatoração |
 
 ## Fluxo executivo
 

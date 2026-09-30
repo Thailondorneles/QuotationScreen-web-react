@@ -20,6 +20,7 @@
     padding: 12px;
     font-weight: bold;
     border-bottom: 1px solid #ddd;
+    color: var(--ambiente-cor, #2e8b1c);
 }
 
 .modal-conteudo {
@@ -37,6 +38,17 @@
 .modal-acoes button {
     padding: 6px 18px;
     cursor: pointer;
+}
+
+.modal-mensagem .modal-acoes button {
+    background: var(--ambiente-cor, #2e8b1c);
+    color: #fff;
+    border: 1px solid var(--ambiente-cor, #2e8b1c);
+    border-radius: 4px;
+}
+
+.modal-mensagem .modal-acoes button:hover:not(:disabled) {
+    filter: brightness(0.92);
 }
 
 .modal-acoes-confirmacao {

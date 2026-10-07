@@ -1,5 +1,8 @@
 # Revisão do ambiente — 23/09/2026
 
+> **07/10/2026:** referencias a conexao direta, pool, SQL e log Oracle neste documento descrevem a implementacao anterior. O backend atual usa HTTP para dados e auditoria: consulte [Acesso a dados por APIs](16-acesso-dados-apis.md). Nao configure credenciais ou bibliotecas Oracle neste projeto.
+
+
 ## Escopo e resultado
 
 Revisão do frontend, serviços, backend, configuração Docker/Nginx e documentação. Nenhuma alteração funcional foi feita nesta revisão. Não houve envio real ao ERP, alteração de parâmetros, escrita no Oracle nem cotação real no SimFrete.

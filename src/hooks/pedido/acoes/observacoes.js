@@ -33,6 +33,7 @@ export function criarAcoesObservacoes({
         }
 
         setOpenObsModal(false);
+        setObsEditando(null);
     }
 
     function removerObs(seq) {

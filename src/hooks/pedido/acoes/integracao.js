@@ -1,6 +1,7 @@
 import { parametros } from "../../../config/parametrosAplicacao";
 import { getItensClassificacao } from "../../../services/itens.js";
-import { enviarPedidoErp, consultarPedidosPorSequencia } from "../../../services/pedidosErp.js";
+import { enviarPedidoErp, consultarPedidosPorSequencia, consultarPedidosExistentes } from "../../../services/pedidosErp.js";
+import { salvarIntegracaoPedido, consultarPedido } from "../../../services/pedidosWeb";
 
 // Recebe os dados e callbacks do render atual; não mantém estado próprio.
 export function criarAcoesIntegracao({
@@ -14,7 +15,7 @@ export function criarAcoesIntegracao({
     setOpenLovUnidadesPedido,
     operacaoPersistencia,
     setLoading,
-    persistirCabecalho,
+    persistirPedido,
     montarPayloadsPedidoErp,
     cabecalhoSalvo,
     setModalSucesso,
@@ -131,23 +132,54 @@ export function criarAcoesIntegracao({
         operacaoPersistencia.current = true;
         try {
             setLoading(true);
-            const numSeqPedido = await persistirCabecalho();
+            const numSeqPedido = await persistirPedido();
             const payloads = montarPayloadsPedidoErp(unidadesSelecionadas, situacoesPorUnidade);
 
+            const pedidosAnteriores = await consultarPedidosExistentes(numSeqPedido);
             const resultados = await Promise.allSettled(payloads.map(payload => enviarPedidoErp({ ...payload, numSeqPedido })));
-            const pedidosConsultados = await consultarPedidosPorSequencia(numSeqPedido);
-            const consultas = payloads.map(payload => pedidosConsultados.filter(pedido => Number(pedido.cod_unidade) === Number(payload.pePedidos.codUnidade)));
-            const anterior = cabecalhoSalvo.current;
-            const matriz = pedidosConsultados.find(p => Number(p.cod_unidade) === 201)?.num_pedido ?? anterior.numPedidoMatriz;
-            const filial = pedidosConsultados.find(p => Number(p.cod_unidade) === 203)?.num_pedido ?? anterior.numPedidoFilial;
-            const unidadesConfirmadas = new Set([
-                ...(matriz != null ? [201] : []), ...(filial != null ? [203] : []),
-                ...resultados.filter(r => r.status === 'fulfilled').flatMap(r => r.value.data.unidadesIntegradas || []),
-                ...payloads.filter((_, index) => resultados[index].status === 'fulfilled').map(p => Number(p.pePedidos.codUnidade))
-            ]);
-            await persistirCabecalho({ numPedidoMatriz: matriz, numPedidoFilial: filial, statusCotacao: Math.max(Number(anterior.statusCotacao), unidadesConfirmadas.size) });
+            // Descarta os pedidos que j? existiam antes deste envio.
+            const consultas = await Promise.all(resultados.map(async (resultado, index) => {
+                if (resultado.status !== 'fulfilled') return [];
+                const retorno = resultado.value.data;
+                const unidade = Number(payloads[index].pePedidos.codUnidade);
+                if (retorno.jaIntegrado) {
+                    let numeroPedido = retorno.numeroPedido;
+                    if (numeroPedido == null) {
+                        const salvo = await consultarPedido(numSeqPedido);
+                        numeroPedido = unidade === 201 ? salvo.numPedidoMatriz : salvo.numPedidoFilial;
+                    }
+                    if (!/^\d+\/\d+$/.test(String(numeroPedido))) {
+                        console.error('[Integracao ERP] Retorno sem numero/complemento valido:', { unidade, retorno, numeroPedido });
+                        throw new Error(`A unidade ${unidade} foi indicada como já integrada, mas não retornou um número/complemento válido. Confira o pedido no NL e reinicie o backend com o código atualizado antes de tentar novamente.`);
+                    }
+                    const [numero, complemento] = String(numeroPedido).split('/');
+                    return [{ cod_unidade: unidade, num_pedido: numero, cod_compl: complemento }];
+                }
+                return consultarPedidosPorSequencia(numSeqPedido, [unidade], pedidosAnteriores);
+            }));
+            const pedidosConsultados = consultas.flat();
+            if (pedidosConsultados.some(pedido => !/^\d+\/\d+$/.test(`${pedido.num_pedido}/${pedido.cod_compl}`))) {
+                throw new Error('O retorno do NL contém número/complemento inválido. A atualização da integração não foi enviada.');
+            }
+            const anterior = cabecalhoSalvo.current || {};
+            const numeroCompleto = unidade => {
+                const pedido = pedidosConsultados.find(p => Number(p.cod_unidade) === unidade);
+                return pedido ? `${pedido.num_pedido}/${pedido.cod_compl}` : null;
+            };
+            const integracao = {
+                numSeqPedido,
+                numPedidoMatriz: numeroCompleto(201) ?? anterior.numPedidoMatriz ?? null,
+                numPedidoFilial: numeroCompleto(203) ?? anterior.numPedidoFilial ?? null
+            };
+            if (pedidosConsultados.length) {
+                await salvarIntegracaoPedido(integracao);
+                cabecalhoSalvo.current = { ...anterior, ...integracao, statusCotacao: 1 };
+            }
             const falhas = resultados.filter(resultado => resultado.status === 'rejected');
             if (falhas.length) throw new Error(`Falha em ${falhas.length} envio(s). Confira os pedidos integrados antes de repetir. ${falhas.map(f => f.reason.response?.data?.erro || f.reason.message).join(' ')}`);
+            if (consultas.some(pedidos => !pedidos.length)) {
+                throw new Error('O envio ao NL foi confirmado, mas o número/complemento de alguma unidade ainda não está disponível. A integração dessa unidade não foi registrada na cotação. Confira os pedidos no NL antes de repetir o envio.');
+            }
             const detalhes = consultas.flatMap((pedidos, index) => pedidos.length
                 ? pedidos.map(pedido =>
                     `Unidade ${pedido.cod_unidade} — Pedido ${pedido.num_pedido} — Complemento ${pedido.cod_compl}`

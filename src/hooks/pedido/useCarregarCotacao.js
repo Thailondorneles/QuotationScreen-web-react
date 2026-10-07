@@ -5,13 +5,21 @@ import { getRepresentantesByIdCliente } from "../../services/representantes.js";
 import { getClienteByFilter, getClienteDetalhado } from "../../services/clientes.js";
 import { getCondPgtoByFilter } from "../../services/condPgto.js";
 import { getOperacoesByFilter } from "../../services/operacoes.js";
+import { carregarItensCotacao } from './acoes/carregarItensCotacao';
+import { consultarObservacoesPedido } from '../../services/observacoesPedidoWeb';
 
 export function useCarregarCotacao({
     idRota,
+    buscarDadosItem,
+    setItensPedido,
+    setObservacoes,
+    nextId,
+    nextNumItem,
     setCarregandoPedido,
     setErroCarregamentoPedido,
     sequenciaPedido,
     cabecalhoSalvo,
+    assinaturaSalva,
     clienteRestaurado,
     setCliente,
     setClienteDetalhado,
@@ -38,6 +46,7 @@ export function useCarregarCotacao({
     useEffect(() => {
         if (!idRota) return;
         let ativo = true;
+        assinaturaSalva.current = null;
         setCarregandoPedido(true);
         setErroCarregamentoPedido('');
         async function carregar() {
@@ -48,7 +57,8 @@ export function useCarregarCotacao({
                     const resposta = await promessa;
                     return resposta.data?.items?.find(item => String(item[campo]) === String(codigo)) || null;
                 };
-                const [cli, detalhes, rep, oper, cond, remessa, operRemessa] = await Promise.all([
+                const [cadastros, itens, observacoes] = await Promise.all([
+                    Promise.all([
                     buscar(getClienteByFilter({ filtro: pedido.codCliente }), 'cod_pessoa', pedido.codCliente),
                     getClienteDetalhado({ codPessoa: pedido.codCliente }),
                     pedido.codRep == null ? null : buscar(getRepresentantesByIdCliente({ cliente: pedido.codCliente, representante: pedido.codRep }), 'cod_pessoa_rep', pedido.codRep),
@@ -56,9 +66,17 @@ export function useCarregarCotacao({
                     buscar(getCondPgtoByFilter({ filtro: pedido.codCondPgto }), 'cod_cond_pgto', pedido.codCondPgto),
                     pedido.codClienteRemessa == null ? null : buscar(getClienteByFilter({ filtro: pedido.codClienteRemessa }), 'cod_pessoa', pedido.codClienteRemessa),
                     pedido.codOperRemessa == null ? null : buscar(getOperacoesByFilter({ filtro: pedido.codOperRemessa }), 'cod_oper', pedido.codOperRemessa)
+                    ]),
+                    carregarItensCotacao(pedido, buscarDadosItem, () => ativo),
+                    consultarObservacoesPedido(pedido.numSeqPedido)
                 ]);
+                const [cli, detalhes, rep, oper, cond, remessa, operRemessa] = cadastros;
                 if (!ativo) return;
-                if (!cli) throw new Error('O cliente salvo não foi encontrado no cadastro.');
+                if (!cli) throw new Error('O cliente salvo nao foi encontrado no cadastro.');
+                nextId.current = Math.max(0, ...itens.map(item => item.seq)) + 1;
+                nextNumItem.current = Math.max(0, ...itens.map(item => item.numItem)) + 1;
+                setItensPedido(itens);
+                setObservacoes(observacoes);
                 sequenciaPedido.current = pedido.numSeqPedido;
                 cabecalhoSalvo.current = pedido;
                 clienteRestaurado.current = cli;
@@ -84,6 +102,7 @@ export function useCarregarCotacao({
                 setOperacaoTriangulacao(operRemessa || { cod_oper: pedido.codOperRemessa });
                 setCodOperacaoTriangulacaoDigitado(pedido.codOperRemessa ?? '');
                 setDataCargaDigitada(dataCargaParaBr(pedido.dtaCarga));
+
             } catch (error) {
                 if (ativo) setErroCarregamentoPedido(error.message || 'Não foi possível carregar a cotação.');
             } finally {

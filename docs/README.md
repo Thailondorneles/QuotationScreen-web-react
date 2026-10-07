@@ -1,5 +1,8 @@
 # Documentação do Simulador de Pedido de Venda
 
+> **07/10/2026:** referencias a conexao direta, pool, SQL e log Oracle neste documento descrevem a implementacao anterior. O backend atual usa HTTP para dados e auditoria: consulte [Acesso a dados por APIs](16-acesso-dados-apis.md). Nao configure credenciais ou bibliotecas Oracle neste projeto.
+
+
 ## Objetivo
 
 Este conjunto de documentos descreve o funcionamento atual do simulador de pedido de venda, desde a seleção do cliente até a emissão de proposta e a integração com o ERP.

@@ -1,5 +1,8 @@
 # 08 — Suporte e troubleshooting
 
+> **07/10/2026:** referencias a conexao direta, pool, SQL e log Oracle neste documento descrevem a implementacao anterior. O backend atual usa HTTP para dados e auditoria: consulte [Acesso a dados por APIs](16-acesso-dados-apis.md). Nao configure credenciais ou bibliotecas Oracle neste projeto.
+
+
 ## 1. Objetivo e escopo
 
 Este guia orienta o diagnóstico e a recuperação de incidentes na tela de Pedido de Venda, nas consultas ORDS, na cotação SimFrete, na emissão de propostas e na integração com o ERP.

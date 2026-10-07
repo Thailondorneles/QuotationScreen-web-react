@@ -234,6 +234,7 @@ export function criarAcoesPrecificacao({
             qtdM2: detalheItem.qtd_m2 ?? item.qtdM2,
             pesoBruto: detalheItem.qtd_peso_bruto ?? item.pesoBruto,
             valorLista,
+            valorListaOriginal: item.valorListaOriginal ?? valorLista,
             codListaPreco,
             infoListaPreco,
             precoListaPromocional,

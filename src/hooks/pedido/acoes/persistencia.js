@@ -1,8 +1,15 @@
+import { reservarSequenciaPedido } from '../../../services/sequenciaPedido';
 import { dataCargaParaIso } from "../../../utils/dataCarga";
-import { reservarSequenciaPedido, salvarCabecalhoPedido } from "../../../services/pedidosWeb";
+import { salvarCabecalhoPedido } from "../../../services/pedidosWeb";
+import { salvarItensPedido } from '../../../services/itensPedidoWeb';
+import { montarItensPersistencia } from '../../../domain/pedido/itensPersistencia';
+import { salvarObservacoesPedido } from '../../../services/observacoesPedidoWeb';
+import { montarObservacoesPersistencia } from '../../../domain/pedido/observacoesPersistencia';
 
 // Recebe os dados e callbacks do render atual; não mantém estado próprio.
 export function criarAcoesPersistencia({
+    itensPedido,
+    observacoes,
     cliente,
     operacao,
     CondPgto,
@@ -10,6 +17,8 @@ export function criarAcoesPersistencia({
     dataCargaDigitada,
     sequenciaPedido,
     cabecalhoSalvo,
+    assinaturaSalva,
+    assinaturaAtual,
     representante,
     clienteConsumidor,
     modalidadeIntegracao,
@@ -86,8 +95,8 @@ export function criarAcoesPersistencia({
         const anterior = cabecalhoSalvo.current || {};
         const payload = {
             numSeqPedido: sequenciaPedido.current,
-            numPedidoMatriz: anterior.numPedidoMatriz ?? null,
-            numPedidoFilial: anterior.numPedidoFilial ?? null,
+            numPedidoMatriz: null,
+            numPedidoFilial: null,
             codCliente: numero(cliente.cod_pessoa), codRep: numero(representante?.cod_pessoa_rep),
             codOper: numero(operacao.cod_oper), codCondPgto: numero(CondPgto.cod_cond_pgto),
             indConsumidor: clienteConsumidor ? 1 : 0, codModalidade: Number(modalidadeIntegracao),
@@ -96,7 +105,7 @@ export function criarAcoesPersistencia({
             desNumOcCliente: ordemCompra || null,
             codClienteRemessa: numero(clienteTriangulacao?.cod_pessoa),
             codOperRemessa: numero(operacaoTriangulacao?.cod_oper),
-            statusCotacao: anterior.statusCotacao ?? 0, dtaCarga: dataCargaParaIso(dataCargaDigitada),
+            statusCotacao: 0, dtaCarga: dataCargaParaIso(dataCargaDigitada),
             codPortadorMatriz: anterior.codPortadorMatriz ?? 161,
             codPortadorFilial: anterior.codPortadorFilial ?? 203,
             codPosicaoMatriz: anterior.codPosicaoMatriz ?? 22,
@@ -108,12 +117,27 @@ export function criarAcoesPersistencia({
         return payload.numSeqPedido;
     }
 
+    async function persistirPedido() {
+        if (sequenciaPedido.current && assinaturaSalva.current === assinaturaAtual) {
+            return sequenciaPedido.current;
+        }
+        const itens = montarItensPersistencia(itensPedido);
+        const numSeqPedido = await persistirCabecalho();
+        await salvarItensPedido({ numSeqPedido, itens });
+        await salvarObservacoesPedido({
+            numSeqPedido,
+            observacoes: montarObservacoesPersistencia(observacoes)
+        });
+        assinaturaSalva.current = assinaturaAtual;
+        return numSeqPedido;
+    }
+
     async function salvarCotacao() {
         if (operacaoPersistencia.current) return;
         operacaoPersistencia.current = true;
         setLoading(true);
         try {
-            await persistirCabecalho();
+            await persistirPedido();
             navigate(`/${location.search}`);
         } catch (error) {
             setModalErro({ aberto: true, mensagem: error.response?.data?.erro || error.message });
@@ -130,6 +154,7 @@ export function criarAcoesPersistencia({
     function limparTelaPedidoVenda() {
         sequenciaPedido.current = null;
         cabecalhoSalvo.current = null;
+        assinaturaSalva.current = null;
         clienteRestaurado.current = null;
         setCotacoesFrete({ 201: [], 203: [] });
         setDataCargaDigitada('');
@@ -192,5 +217,5 @@ export function criarAcoesPersistencia({
         limparEnderecoCep();
     }
 
-    return { persistirCabecalho, salvarCotacao, novaCotacao, limparTelaPedidoVenda };
+    return { persistirCabecalho, persistirPedido, salvarCotacao, novaCotacao, limparTelaPedidoVenda };
 }

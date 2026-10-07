@@ -1,12 +1,12 @@
 import { unimedApi } from "../config/apis.js";
-import { consultarComCache } from './consultaCache';
+import { consultarComCache, getConsultaCached } from './consultaCache';
 
 const LOTES_CACHE_TTL = 5 * 60 * 1000;
 let lotesCache = null;
 let lotesRequest = null;
 
-export function getItens() {
-    return unimedApi.get("itens");
+export function getItens(params) {
+    return getConsultaCached('itens', params ? { params } : {});
 }
 
 export function getItensDetalhados({ codItens }) {

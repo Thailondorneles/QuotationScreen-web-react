@@ -5,6 +5,7 @@ import { ParametrosContext } from '../../config/ParametrosContext';
 export function useEstadoPedido(idRota) {
     const sequenciaPedido = useRef(null);
     const cabecalhoSalvo = useRef(null);
+    const assinaturaSalva = useRef(null);
     const clienteRestaurado = useRef(null);
     const operacaoPersistencia = useRef(false);
     const [carregandoPedido, setCarregandoPedido] = useState(Boolean(idRota));
@@ -116,6 +117,7 @@ export function useEstadoPedido(idRota) {
     return {
         sequenciaPedido,
         cabecalhoSalvo,
+        assinaturaSalva,
         clienteRestaurado,
         operacaoPersistencia,
         carregandoPedido,

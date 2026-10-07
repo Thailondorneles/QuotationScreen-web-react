@@ -1,3 +1,5 @@
+import { assinaturaCotacao } from '../../domain/pedido/assinaturaCotacao';
+import { useConfirmarSaida } from './useConfirmarSaida';
 import { useCarregarCotacao } from './useCarregarCotacao';
 import { useConsultasItensPedido } from './useConsultasItensPedido';
 import { useDadosClientePedido } from './useDadosClientePedido';
@@ -31,6 +33,8 @@ export function usePedidoVenda() {
     const location = useLocation();
     const { numSeqPedido: idRota } = useParams();
     const estado = useEstadoPedido(idRota);
+    const assinaturaAtual = assinaturaCotacao(estado);
+    useConfirmarSaida({ ...estado, idRota, assinaturaAtual });
     const {
         itensPedido,
         freteSelecionado,
@@ -71,6 +75,7 @@ export function usePedidoVenda() {
 
     const acoesPersistencia = criarAcoesPersistencia({
         ...estado,
+        assinaturaAtual,
         navigate,
         location,
         limparEnderecoCep
@@ -128,7 +133,7 @@ export function usePedidoVenda() {
         getPercentualMinimoSobraPorClassificacao,
         getNomeClassificacaoSobra,
         validarPedidoErp,
-        persistirCabecalho,
+        persistirPedido,
         montarPayloadsPedidoErp
     });
 
@@ -145,9 +150,9 @@ export function usePedidoVenda() {
             ? prev.map(item => ({ ...item, sobraDesejada: null })) : prev);
     }, [opcaoFrete, cobrancaFrete, freteSelecionado]);
 
-    useCarregarCotacao({ ...estado, idRota });
+    useCarregarCotacao({ ...estado, idRota, buscarDadosItem });
 
-    async function persistirCabecalho(...args) { return acoesPersistencia.persistirCabecalho(...args); }
+    async function persistirPedido(...args) { return acoesPersistencia.persistirPedido(...args); }
 
     async function salvarCotacao(...args) { return acoesPersistencia.salvarCotacao(...args); }
 

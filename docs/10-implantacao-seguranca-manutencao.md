@@ -1,5 +1,8 @@
 # 10 — Implantação, segurança e manutenção
 
+> **07/10/2026:** referencias a conexao direta, pool, SQL e log Oracle neste documento descrevem a implementacao anterior. O backend atual usa HTTP para dados e auditoria: consulte [Acesso a dados por APIs](16-acesso-dados-apis.md). Nao configure credenciais ou bibliotecas Oracle neste projeto.
+
+
 ## 1. Visão operacional
 
 A solução é composta por:
@@ -8,7 +11,7 @@ A solução é composta por:
 |---|---|---|
 | Frontend | React 18 | Tela, cálculos, propostas e montagem do payload |
 | Servidor web | Nginx 1.27 | Arquivos estáticos, fallback SPA e proxy `/api/*` |
-| Backend | Node.js 20 + Express | Proxy ORDS, SimFrete, Oracle e ERP |
+| Backend | Node.js 20 + Express | Proxy ORDS, SimFrete e ERP |
 | Banco | Oracle | sequência e auditoria de integração |
 | Integrações | ORDS, SimFrete e ERP/NL | dados, frete e criação do pedido |
 
@@ -30,18 +33,16 @@ backend-simfrete/server.js
 - npm compatível com os lockfiles;
 - acesso de rede ao backend/serviços necessários;
 - variáveis do frontend;
-- variáveis e Oracle Instant Client para executar o backend completo.
 
 ### Produção em containers
 
 - Podman e provedor de `podman compose`;
 - porta 80 disponível ou mapeamento ajustado;
-- diretório do Oracle Instant Client no host;
-- acesso DNS/rede do backend para ORDS, SimFrete, Oracle e ERP;
+- acesso DNS/rede do backend para ORDS, SimFrete e ERP;
 - credenciais armazenadas fora do repositório;
 - tabela e sequence de integração existentes no Oracle.
 
-O backend exige todas as configurações de SimFrete, ORDS, ERP e Oracle na inicialização, mesmo que uma sessão use apenas consultas cadastrais.
+O backend exige todas as configurações de SimFrete, ORDS e ERP na inicialização, mesmo que uma sessão use apenas consultas cadastrais.
 
 ## 3. Variáveis de ambiente
 
@@ -69,12 +70,6 @@ Alterá-las requer novo `npm run build` ou rebuild da imagem do frontend.
 | `ERP_PEDIDOS_URL` | Sim | Endpoint do ERP/NL | interna |
 | `ERP_NL_TOKEN` | Sim | Token do ERP | secreta |
 | `ERP_NL_APLICACAO` | Sim | Identificador da aplicação | restrita |
-| `ORACLE_USER` | Sim | Usuário Oracle | secreta |
-| `ORACLE_PASSWORD` | Sim | Senha Oracle | secreta |
-| `ORACLE_CONNECT_STRING` | Sim | Conexão Oracle | secreta |
-| `ORACLE_CLIENT_LIB_DIR` | Condicional | Diretório do Instant Client dentro do processo | interna |
-| `ORACLE_POOL_MIN` | Não | Mínimo do pool; padrão 1 | baixa |
-| `ORACLE_POOL_MAX` | Não | Máximo do pool; padrão 4 | baixa |
 
 Arquivos `.env` reais estão ignorados pelo Git. Mantenha apenas `.env.example` sem valores secretos.
 
@@ -158,22 +153,7 @@ O `backend-simfrete/Dockerfile`:
 - backend exposto apenas na rede interna, porta 3001;
 - frontend publicado em `80:80`;
 - `restart: unless-stopped` nos dois serviços;
-- Instant Client montado como somente leitura;
 - frontend depende da criação do backend, mas não de um health check de prontidão.
-
-Valores padrão do volume Oracle:
-
-```text
-host:      /opt/oracle/instantclient_23_26
-container: /opt/oracle/instantclient_23_26
-```
-
-Podem ser alterados por:
-
-```text
-ORACLE_CLIENT_LIB_DIR_HOST
-ORACLE_CLIENT_LIB_DIR_CONTAINER
-```
 
 ## 6. Nginx e roteamento
 
@@ -200,7 +180,6 @@ O Nginx atual escuta HTTP na porta 80 e não configura TLS, HSTS, CSP ou outros 
 
 1. Identifique e registre a revisão atualmente publicada.
 2. Confirme backup seguro das configurações, sem copiá-las para o repositório.
-3. Valide espaço em disco, acesso à registry e montagem do Instant Client.
 4. Confirme conectividade com dependências.
 5. Planeje uma janela compatível com o risco da alteração.
 
@@ -237,14 +216,6 @@ Smoke test mínimo:
 ### Comportamento atual
 
 `GET /health` retorna `{ "ok": true }` sem consultar dependências.
-
-O backend cria o pool Oracle sob demanda:
-
-```text
-poolMin padrão: 1
-poolMax padrão: 4
-poolIncrement: 1
-```
 
 O corpo JSON é limitado a 1 MB.
 
@@ -345,14 +316,12 @@ Prioridades recomendadas:
 | Frequência | Atividade |
 |---|---|
 | Diária | monitorar erros, `ENVIANDO` antigos e disponibilidade |
-| Semanal | revisar espaço, logs, falhas recorrentes e pool Oracle |
 | Mensal | revisar dependências npm, imagens base e vulnerabilidades |
 | Trimestral | testar restore/rollback, rotacionar segredos conforme política e revisar acessos |
 | Por release | build, testes, smoke, contrato ORDS/ERP e plano de reversão |
 
 Também devem ser controlados:
 
-- compatibilidade do Oracle Instant Client;
 - mudanças de contrato no ORDS;
 - validade do token ERP e credenciais SimFrete;
 - capacidade e índices da tabela `ES_PEDIDO_ERP_INTEGRACAO`;
@@ -381,7 +350,6 @@ Respostas ORDS não possuem validação de schema no frontend. Uma mudança de n
 
 - registre commit/tag da versão ativa;
 - preserve arquivos de ambiente em local seguro;
-- registre versões das imagens e do Instant Client;
 - confirme a compatibilidade do schema Oracle;
 - não inclua `.env` em artefatos ou backup compartilhado sem criptografia.
 
@@ -415,7 +383,6 @@ Qualquer correção de pedido integrado deve seguir o processo funcional do ERP.
 - [ ] build concluído;
 - [ ] testes relevantes executados;
 - [ ] variáveis conferidas sem expor valores;
-- [ ] Instant Client montado;
 - [ ] dependências acessíveis;
 - [ ] plano de rollback definido;
 - [ ] impacto em payload e regras avaliado.

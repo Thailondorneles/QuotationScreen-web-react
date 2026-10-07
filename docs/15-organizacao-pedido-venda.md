@@ -32,9 +32,21 @@ Os módulos de ações estão separados em `clientes`, `operacoes`, `precificaca
 - A ordem, os corpos, as dependências e as funções de cancelamento dos efeitos foram preservados. A restauração de uma cotação continua protegida por `clienteRestaurado` para não substituir os dados salvos pelos padrões do cliente.
 - Referências de cache, `nextId`, `nextNumItem` e `recalculoClienteId` continuam pertencendo à mesma instância da cotação.
 - `components/pedido/estilos.js` mantém a ordem original de carregamento dos estilos. Alterar essa ordem pode modificar a precedência de seletores globais.
-- Salvar, remover, enviar ao ERP e emitir proposta mantêm os fluxos e contratos anteriores. A persistência disponível continua sendo a do cabeçalho.
+- O salvamento grava o cabeçalho e depois todos os itens por `EsPeItensIns`, inclusive unidades desmarcadas. O POST substitui a lista inteira e a API gerencia a versão atual. Falhas nos itens impedem sair da tela ou iniciar a integração; o cabeçalho já gravado permanece para uma nova tentativa.
+- `services/itensPedidoWeb.js` consulta `EsPeItens/:numSeqPedido` com paginação. `acoes/carregarItensCotacao.js` recupera cadastros e impostos, preserva quantidade, preço, custo cotado e seleção salvos e ordena por `numItem`. Os contadores são restaurados para que novos produtos não reutilizem números existentes.
+- `domain/pedido/itensPersistencia.js` monta o JSON de todas as alternativas. O preço original da lista é capturado em `acoes/precificacao.js` antes da negociação. Fretes, observações e endereços ainda dependem de suas próprias APIs de persistência.
 
 ## Verificação da separação
+
+### Persistência e confirmação no NL
+
+- `useConfirmarSaida` compara as entradas com o estado inicial carregado ou a última gravação bem-sucedida. Usa o bloqueio do React Router para Voltar/navegação interna e `beforeunload` para fechar, recarregar ou sair para outro site. O navegador define a mensagem nesse último caso.
+- A restauração consulta cadastros do cabeçalho e itens em paralelo; catálogo e detalhes dos produtos também são independentes. A paginação do catálogo permanece necessária enquanto não houver uma consulta de cadastro por códigos. Os cálculos por item mantêm a concorrência limitada existente.
+
+- Salvar ou integrar grava primeiro o cabeçalho (`EsPePedidosIns`, status 0) e sincroniza todos os itens (`EsPeItensIns`). Uma falha nessa etapa impede o envio ao NL.
+- Após o envio, `ConsultaPedidosSeq` recupera número e complemento das unidades. A consulta aguarda as unidades esperadas e preserva os retornos parciais.
+- `POST EsPePedidos/integracao` recebe somente `numSeqPedido`, `numPedidoMatriz` e `numPedidoFilial`. Os números completos são strings como `"85432/1"`; unidade sem pedido recebe `null`. A API deve gravar esses valores e definir status 1. O cabeçalho não é reenviado após o NL.
+- Falhas parciais registram os números disponíveis e mostram a pendência. Sem número/complemento confirmado, a tela não anuncia conclusão da integração. O proxy do backend precisa ser reiniciado após a liberação desse novo POST.
 
 Foram comparados com uma cópia anterior à refatoração:
 

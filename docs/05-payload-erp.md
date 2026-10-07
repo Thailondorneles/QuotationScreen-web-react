@@ -1,5 +1,8 @@
 # 05 — Contrato do payload ERP
 
+> **07/10/2026:** referencias a conexao direta, pool, SQL e log Oracle neste documento descrevem a implementacao anterior. O backend atual usa HTTP para dados e auditoria: consulte [Acesso a dados por APIs](16-acesso-dados-apis.md). Nao configure credenciais ou bibliotecas Oracle neste projeto.
+
+
 ## 1. Regra de geração
 
 O frontend gera um JSON independente para cada unidade escolhida que possua itens marcados.

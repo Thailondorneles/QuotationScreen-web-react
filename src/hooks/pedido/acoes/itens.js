@@ -46,6 +46,7 @@ export function criarAcoesItens({
             estoque: 0,
             vlrMedio: 0,
             valorLista: 0,
+            valorListaOriginal: null,
             codListaPreco: null,
             infoListaPreco: null,
             precoListaPromocional: false,

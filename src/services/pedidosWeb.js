@@ -1,7 +1,5 @@
-import axios from 'axios';
 import { unimedApi } from '../config/apis';
 
-const backend = axios.create({ baseURL: process.env.REACT_APP_SIMFRETE_API_BASE_URL, timeout: 30000 });
 
 export function normalizarPedido(registro) {
     return Object.fromEntries(Object.entries(registro).map(([chave, valor]) => [
@@ -27,21 +25,6 @@ export async function consultarPedido(id) {
     return pedido;
 }
 
-export async function reservarSequenciaPedido() {
-    try {
-        const { data } = await backend.post('/api/pedidos/sequencia');
-        if (!Number.isSafeInteger(Number(data?.numSeqPedido)) || Number(data.numSeqPedido) <= 0) {
-            throw new Error('O backend não retornou um sequencial válido.');
-        }
-        return data.numSeqPedido;
-    } catch (error) {
-        if (error.response?.status === 404) {
-            throw new Error('A rota POST /api/pedidos/sequencia não foi encontrada no backend. Reinicie o backend-simfrete com o código atualizado e confira o endereço configurado para ele.');
-        }
-        throw new Error(`Não foi possível reservar o sequencial: ${error.response?.data?.erro || error.message}`);
-    }
-}
-
 export async function salvarCabecalhoPedido(payload) {
     try {
         const { data } = await unimedApi.post('EsPePedidosIns', payload);
@@ -54,5 +37,37 @@ export async function salvarCabecalhoPedido(payload) {
             throw new Error(`POST EsPePedidosIns não encontrado ${origem} (404). Confira a publicação do endpoint e o caminho /ords/nl/unimed/EsPePedidosIns. O sequencial foi mantido para uma nova tentativa.`);
         }
         throw new Error(`Não foi possível salvar o cabeçalho: ${error.response?.data?.erro || error.message}`);
+    }
+}
+
+export async function salvarIntegracaoPedido(payload) {
+    try {
+        for (const campo of ['numPedidoMatriz', 'numPedidoFilial']) {
+            if (payload[campo] != null && !/^\d+\/\d+$/.test(String(payload[campo]))) {
+                throw new Error(`${campo} inválido: esperado número/complemento. Nenhuma atualização foi enviada.`);
+            }
+        }
+        console.log('[EsPePedidos/integracao] Requisição:', {
+            metodo: 'POST',
+            url: unimedApi.getUri({ url: 'EsPePedidos/integracao' })
+        });
+        console.log('[EsPePedidos/integracao] JSON enviado:', JSON.stringify(payload, null, 2));
+        const { data } = await unimedApi.post('EsPePedidos/integracao', payload);
+        if (data?.success === false || data?.sucesso === false || data?.erro) {
+            throw new Error(data.erro || 'Atualização recusada pela API.');
+        }
+        if (typeof data === 'string' && /<!doctype|<html/i.test(data)) {
+            throw new Error('A API retornou uma página HTML.');
+        }
+        return data;
+    } catch (error) {
+        console.error('[EsPePedidos/integracao] Falha no POST:', {
+            metodo: 'POST',
+            url: unimedApi.getUri({ url: 'EsPePedidos/integracao' }),
+            status: error.response?.status,
+            resposta: error.response?.data,
+            mensagem: error.message
+        });
+        throw new Error(`O NL já retornou os pedidos, mas não foi possível registrar a integração da cotação ${payload.numSeqPedido}. Confira os pedidos antes de repetir o envio. ${error.response?.data?.erro || error.message}`);
     }
 }

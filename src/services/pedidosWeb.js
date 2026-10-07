@@ -1,6 +1,5 @@
 import { unimedApi } from '../config/apis';
 
-
 export function normalizarPedido(registro) {
     return Object.fromEntries(Object.entries(registro).map(([chave, valor]) => [
         chave.includes('_') ? chave.toLowerCase().replace(/_([a-z])/g, (_, letra) => letra.toUpperCase()) : chave,
@@ -47,11 +46,7 @@ export async function salvarIntegracaoPedido(payload) {
                 throw new Error(`${campo} inválido: esperado número/complemento. Nenhuma atualização foi enviada.`);
             }
         }
-        console.log('[EsPePedidos/integracao] Requisição:', {
-            metodo: 'POST',
-            url: unimedApi.getUri({ url: 'EsPePedidos/integracao' })
-        });
-        console.log('[EsPePedidos/integracao] JSON enviado:', JSON.stringify(payload, null, 2));
+
         const { data } = await unimedApi.post('EsPePedidos/integracao', payload);
         if (data?.success === false || data?.sucesso === false || data?.erro) {
             throw new Error(data.erro || 'Atualização recusada pela API.');
@@ -61,13 +56,7 @@ export async function salvarIntegracaoPedido(payload) {
         }
         return data;
     } catch (error) {
-        console.error('[EsPePedidos/integracao] Falha no POST:', {
-            metodo: 'POST',
-            url: unimedApi.getUri({ url: 'EsPePedidos/integracao' }),
-            status: error.response?.status,
-            resposta: error.response?.data,
-            mensagem: error.message
-        });
+
         throw new Error(`O NL já retornou os pedidos, mas não foi possível registrar a integração da cotação ${payload.numSeqPedido}. Confira os pedidos antes de repetir o envio. ${error.response?.data?.erro || error.message}`);
     }
 }

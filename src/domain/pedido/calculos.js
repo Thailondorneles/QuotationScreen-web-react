@@ -73,8 +73,10 @@ export function criarCalculosPedido({
         if (divisor <= 0) return null;
 
         const custoTotal = Number(item.vlrMedio || 0) * qtd;
-        const frete = Number(item.valorFrete || 0);
-        return (custoTotal + frete - (cobrancaCalculada.porItem[item.seq] || 0) + impostosFixos) / divisor / qtd;
+        const frete = cobrancaCalculada.valorFixo
+            ? (cobrancaCalculada.porItem[item.seq] || 0) : Number(item.valorFrete || 0);
+        const freteCobrado = cobrancaCalculada.valorFixo ? 0 : (cobrancaCalculada.porItem[item.seq] || 0);
+        return (custoTotal + frete - freteCobrado + impostosFixos) / divisor / qtd;
     }
 
     function calcularPercentualMaximoSobra(item) {
@@ -151,9 +153,11 @@ export function criarCalculosPedido({
         const valorFunrural = valorVendaTotal * (perFunrural / 100);
 
         const sobraBruta = valorVendaTotal - valorCustoTotal;
-        const frete = Number(item.valorFrete || 0);
+        const frete = cobrancaCalculada.valorFixo
+            ? (cobrancaCalculada.porItem[item.seq] || 0) : Number(item.valorFrete || 0);
         const { sobraReal, sobraPercentual } = calcularSobraComFrete(
-            valorVendaTotal, valorCustoTotal, totalImpostos, frete, cobrancaCalculada.porItem[item.seq] || 0
+            valorVendaTotal, valorCustoTotal, totalImpostos, frete,
+            cobrancaCalculada.valorFixo ? 0 : (cobrancaCalculada.porItem[item.seq] || 0)
         ); // não subtrai Funrural
         return {
             valorVendaTotal,

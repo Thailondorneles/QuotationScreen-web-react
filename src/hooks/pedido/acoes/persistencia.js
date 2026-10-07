@@ -5,11 +5,23 @@ import { salvarItensPedido } from '../../../services/itensPedidoWeb';
 import { montarItensPersistencia } from '../../../domain/pedido/itensPersistencia';
 import { salvarObservacoesPedido } from '../../../services/observacoesPedidoWeb';
 import { montarObservacoesPersistencia } from '../../../domain/pedido/observacoesPersistencia';
+import { montarEnderecoPersistencia } from '../../../domain/pedido/enderecoPersistencia';
+import { salvarEnderecoPedido } from '../../../services/enderecoPedidoWeb';
 
 // Recebe os dados e callbacks do render atual; não mantém estado próprio.
 export function criarAcoesPersistencia({
     itensPedido,
     observacoes,
+    codCepDigitado,
+    codUfDigitado,
+    codCidadeDigitado,
+    tipoLogradouroSelecionado,
+    logradouroDigitado,
+    numeroEnderecoDigitado,
+    complementoEnderecoDigitado,
+    bairroDigitado,
+    referenciaEnderecoDigitado,
+    getCodigoTipoLogradouro,
     cliente,
     operacao,
     CondPgto,
@@ -122,12 +134,20 @@ export function criarAcoesPersistencia({
             return sequenciaPedido.current;
         }
         const itens = montarItensPersistencia(itensPedido);
+        const endereco = montarEnderecoPersistencia({
+            codCepDigitado, codUfDigitado, codCidadeDigitado, tipoLogradouroSelecionado,
+            logradouroDigitado, numeroEnderecoDigitado, complementoEnderecoDigitado,
+            bairroDigitado, referenciaEnderecoDigitado
+        }, getCodigoTipoLogradouro);
         const numSeqPedido = await persistirCabecalho();
         await salvarItensPedido({ numSeqPedido, itens });
         await salvarObservacoesPedido({
             numSeqPedido,
             observacoes: montarObservacoesPersistencia(observacoes)
         });
+        if (Object.values(endereco).some(valor => valor != null)) {
+            await salvarEnderecoPedido({ numSeqPedido, endereco });
+        }
         assinaturaSalva.current = assinaturaAtual;
         return numSeqPedido;
     }

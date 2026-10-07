@@ -149,7 +149,7 @@ export function criarAcoesIntegracao({
                         numeroPedido = unidade === 201 ? salvo.numPedidoMatriz : salvo.numPedidoFilial;
                     }
                     if (!/^\d+\/\d+$/.test(String(numeroPedido))) {
-                        console.error('[Integracao ERP] Retorno sem numero/complemento valido:', { unidade, retorno, numeroPedido });
+
                         throw new Error(`A unidade ${unidade} foi indicada como já integrada, mas não retornou um número/complemento válido. Confira o pedido no NL e reinicie o backend com o código atualizado antes de tentar novamente.`);
                     }
                     const [numero, complemento] = String(numeroPedido).split('/');

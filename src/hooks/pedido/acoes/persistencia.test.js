@@ -10,6 +10,7 @@ jest.mock('../../../services/sequenciaPedido', () => ({ reservarSequenciaPedido:
 jest.mock('../../../services/pedidosWeb', () => ({ salvarCabecalhoPedido: jest.fn() }));
 jest.mock('../../../services/itensPedidoWeb', () => ({ salvarItensPedido: jest.fn() }));
 jest.mock('../../../services/observacoesPedidoWeb', () => ({ salvarObservacoesPedido: jest.fn() }));
+jest.mock('../../../services/enderecoPedidoWeb', () => ({ salvarEnderecoPedido: jest.fn() }));
 jest.mock('../../../services/pedidosErp', () => ({ enviarPedidoErp: jest.fn() }));
 jest.mock('../../../services/itens', () => ({}));
 jest.mock('../../../domain/pedido/itensPersistencia', () => ({ montarItensPersistencia: () => [] }));

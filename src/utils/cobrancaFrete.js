@@ -33,12 +33,13 @@ export function calcularCobrancaFrete(itens, fretes, opcao, cobranca = { tipo: '
     const unidades = [...new Set(selecionados.map(item => item.unidade))];
     const custos = unidades.map(unidade => numero(fretes[unidade]?.valor));
     const custoTotal = custos.reduce((soma, custo) => soma + custo, 0);
-    const total = cobranca.tipo === 'VALOR' ? numero(cobranca.valor)
-        : custoTotal * Math.min(100, numero(cobranca.valor)) / 100;
+    const total = custoTotal * Math.min(100, numero(cobranca.valor)) / 100;
     const pesosUnidades = custoTotal > 0 ? custos : unidades.map(unidade => selecionados
         .filter(item => item.unidade === unidade)
         .reduce((soma, item) => soma + numero(item.quantidade), 0));
-    const parcelas = ratearValor(total, pesosUnidades);
+    const parcelas = cobranca.tipo === 'VALOR'
+        ? unidades.map(() => Math.round(numero(cobranca.valor) * 100) / 100)
+        : ratearValor(total, pesosUnidades);
     unidades.forEach((unidade, indice) => {
         porUnidade[unidade] = parcelas[indice];
         const grupo = selecionados.filter(item => item.unidade === unidade);
@@ -46,5 +47,5 @@ export function calcularCobrancaFrete(itens, fretes, opcao, cobranca = { tipo: '
         if (!pesos.some(Boolean)) pesos = grupo.map(item => numero(item.quantidade));
         ratearValor(parcelas[indice], pesos).forEach((valor, i) => { porItem[grupo[i].seq] = valor; });
     });
-    return { porItem, porUnidade, total: parcelas.reduce((soma, valor) => soma + valor, 0) };
+    return { porItem, porUnidade, valorFixo: cobranca.tipo === 'VALOR', total: parcelas.reduce((soma, valor) => soma + valor, 0) };
 }

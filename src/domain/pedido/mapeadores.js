@@ -83,7 +83,8 @@ export function criarMapeadoresPedido({
             codCompl: 0,
             desEndereco: endereco || logradouroDigitado,
             desLogradouro: logradouroDigitado,
-            codLogradouro: getCodigoTipoLogradouro(tipoLogradouroSelecionado),
+            codTipoLogradouro: getCodigoTipoLogradouro(tipoLogradouroSelecionado),
+            desReferencia: referenciaEnderecoDigitado,
             desBairro: bairroDigitado,
             codCidade: apenasNumeros(codCidadeDigitado)
                 ? Number(apenasNumeros(codCidadeDigitado))
@@ -117,7 +118,12 @@ export function criarMapeadoresPedido({
             codSituacao,
             dtaEmissao: dataErp,
             dtaDigitacao: dataErp,
-            tipFrete: 1,
+            tipFrete: opcaoFrete === 'COBRAR_NF' ? 3 : 1,
+            indDestaqueFrete: 1,
+            perFretePago: opcaoFrete === 'COBRAR_NF' && cobrancaFrete.tipo === 'PERCENTUAL'
+                ? valorDecimalErp(cobrancaFrete.valor) : null,
+            vlrFretePago: opcaoFrete === 'COBRAR_NF' && cobrancaFrete.tipo === 'VALOR'
+                ? valorDecimalErp(cobrancaFrete.valor) : null,
             vlrFrete: valorDecimalErp(itensUnidade.reduce((total, item) => total + (cobrancaCalculada.porItem[item.seq] || 0), 0)),
             codCondPgto: String(CondPgto.cod_cond_pgto),
             codOper: String(operacao.cod_oper),

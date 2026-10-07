@@ -19,18 +19,13 @@ export async function consultarItensPedido(numSeqPedido) {
 
 export async function salvarItensPedido(payload) {
     try {
-        console.log('[EsPeItensIns] JSON enviado:', JSON.stringify(payload, null, 2));
+
         const { data } = await unimedApi.post('EsPeItensIns', payload);
         if (data?.sucesso === false || data?.erro) throw new Error(data.erro || 'Gravação recusada.');
         if (typeof data === 'string' && /<!doctype|<html/i.test(data)) throw new Error('A API retornou uma página HTML.');
         return data;
     } catch (error) {
-        console.error('[EsPeItensIns] Falha no POST:', {
-            url: unimedApi.getUri({ url: 'EsPeItensIns' }),
-            status: error.response?.status,
-            resposta: error.response?.data,
-            mensagem: error.message
-        });
+
         throw new Error(`O cabeçalho foi salvo, mas não foi possível salvar os itens. A cotação permanece aberta para tentar novamente. ${error.response?.data?.erro || error.message}`);
     }
 }

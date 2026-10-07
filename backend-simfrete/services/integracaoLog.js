@@ -17,10 +17,7 @@ async function registrarIntegracaoLog(api, { numSeq, status, payload, respostaEr
     return true;
   } catch (error) {
     // Nao repetir: a API pode ter gravado antes de uma falha de comunicacao.
-    console.error('[EsPePedidosIntegracaoLog] Falha ao registrar resultado:', {
-      numSeq, status, statusHttp: error.response?.status,
-      erro: error.response?.data || error.message
-    });
+
     return false;
   }
 }

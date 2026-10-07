@@ -9,11 +9,11 @@ const { registrarIntegracaoLog } = require('./services/integracaoLog');
 dotenv.config({ quiet: true });
 
 process.on('unhandledRejection', (reason) => {
-  console.error('Erro assincrono nao tratado:', reason);
+
 });
 
 process.on('uncaughtException', (err) => {
-  console.error('Excecao nao tratada:', err);
+
   process.exit(1);
 });
 
@@ -23,14 +23,6 @@ const host = process.env.HOST || '0.0.0.0';
 const simFreteUrl = 'https://centralunimed.simfrete.com/CotacaoService/consultar';
 const unimedApiBaseUrl = process.env.UNIMED_API_BASE_URL;
 const erpPedidosUrl = process.env.ERP_PEDIDOS_URL;
-
-console.log('Iniciando backend-simfrete...');
-console.log('Configuracao carregada:', {
-  port,
-  host,
-  unimedApiBaseUrl: Boolean(unimedApiBaseUrl),
-  erpPedidosUrl: Boolean(erpPedidosUrl)
-});
 
 if (!process.env.SIMFRETE_USER || !process.env.SIMFRETE_PASS) {
   throw new Error('SIMFRETE_USER e SIMFRETE_PASS devem estar configurados.');
@@ -79,7 +71,7 @@ app.use('/api/unimed', async (req, res) => {
     .split('?')[0];
   const targetPath = encodedPath.replace(/^\/+/, '');
   const atualizarParametro = req.method === 'PUT' && /^parsConf\/\d+$/.test(targetPath);
-  const salvarPedido = req.method === 'POST' && ['EsPePedidosIns', 'EsPeItensIns', 'EsPeObservacoes', 'EsPePedidos/integracao'].includes(targetPath);
+  const salvarPedido = req.method === 'POST' && ['EsPePedidosIns', 'EsPeItensIns', 'EsPeObservacoes', 'EsPeEnderecos', 'EsPePedidos/integracao'].includes(targetPath);
   if (req.method !== 'GET' && !atualizarParametro && !salvarPedido) {
     return res.status(405).json({ erro: 'Metodo nao permitido' });
   }
@@ -99,7 +91,7 @@ app.use('/api/unimed', async (req, res) => {
 
     return res.status(response.status).json(response.data);
   } catch (err) {
-    console.error('Erro ao consultar servico unimed:', err?.response?.data || err.message);
+
     return res.status(err?.response?.status || 500).json({
       erro: 'Erro ao acessar servico unimed',
       origem: 'ORDS',
@@ -126,7 +118,7 @@ app.post('/api/cotacao', async (req, res) => {
     );
     res.json(response.data);
   } catch (err) {
-    console.error('Erro ao cotar frete:', err?.response?.data || err.message);
+
     res.status(500).json({
       erro: 'Erro ao cotar frete'
     });
@@ -207,13 +199,7 @@ app.post('/api/pedidos/enviar-erp', async (req, res) => {
   } catch (err) {
     const erro = err?.response?.data || err.message;
     const statusErro = err?.response?.status || 500;
-    console.error('Erro ao integrar pedido com o ERP:', {
-      etapa,
-      numSeq: numSeqPedido,
-      statusErro,
-      erro
-    });
-    console.error(err.stack);
+
     if (etapa === 'post_erp') {
       await registrarIntegracaoLog(unimedApi, {
         numSeq: numSeqPedido, status: 'ERRO', payload: payloadErp,
@@ -239,10 +225,10 @@ app.post('/api/pedidos/enviar-erp', async (req, res) => {
 });
 
 const server = app.listen(port, host, () => {
-  console.log(`Backend rodando em http://${host}:${port}`);
+
 });
 
 server.on('error', (err) => {
-  console.error('Erro ao iniciar servidor HTTP:', err);
+
   process.exit(1);
 });

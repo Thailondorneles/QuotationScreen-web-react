@@ -7,12 +7,28 @@ import { getCondPgtoByFilter } from "../../services/condPgto.js";
 import { getOperacoesByFilter } from "../../services/operacoes.js";
 import { carregarItensCotacao } from './acoes/carregarItensCotacao';
 import { consultarObservacoesPedido } from '../../services/observacoesPedidoWeb';
+import { consultarEnderecoPedido } from '../../services/enderecoPedidoWeb';
+import { getTodosTiposLogradouro } from '../../services/tipLogradouro';
+import { getCidadesByFilter } from '../../services/cidades';
+import { getUfByFilter } from '../../services/uf';
 
 export function useCarregarCotacao({
     idRota,
     buscarDadosItem,
     setItensPedido,
     setObservacoes,
+    setCodCepDigitado,
+    setCodUfDigitado,
+    setCodCidadeDigitado,
+    setTipoLogradouroSelecionado,
+    setTiposLogradouro,
+    setLogradouroDigitado,
+    setNumeroEnderecoDigitado,
+    setComplementoEnderecoDigitado,
+    setBairroDigitado,
+    setReferenciaEnderecoDigitado,
+    setCidade,
+    setUf,
     nextId,
     nextNumItem,
     setCarregandoPedido,
@@ -57,7 +73,7 @@ export function useCarregarCotacao({
                     const resposta = await promessa;
                     return resposta.data?.items?.find(item => String(item[campo]) === String(codigo)) || null;
                 };
-                const [cadastros, itens, observacoes] = await Promise.all([
+                const [cadastros, itens, observacoes, dadosEndereco] = await Promise.all([
                     Promise.all([
                     buscar(getClienteByFilter({ filtro: pedido.codCliente }), 'cod_pessoa', pedido.codCliente),
                     getClienteDetalhado({ codPessoa: pedido.codCliente }),
@@ -68,7 +84,19 @@ export function useCarregarCotacao({
                     pedido.codOperRemessa == null ? null : buscar(getOperacoesByFilter({ filtro: pedido.codOperRemessa }), 'cod_oper', pedido.codOperRemessa)
                     ]),
                     carregarItensCotacao(pedido, buscarDadosItem, () => ativo),
-                    consultarObservacoesPedido(pedido.numSeqPedido)
+                    consultarObservacoesPedido(pedido.numSeqPedido),
+                    (async () => {
+                        const endereco = await consultarEnderecoPedido(pedido);
+                        if (!endereco) return null;
+                        const [tipos, cidade, uf] = await Promise.all([
+                            getTodosTiposLogradouro(),
+                            endereco.codCidade ? getCidadesByFilter({ filtro: endereco.codCidade, limit: 1 }) : null,
+                            endereco.codUf ? getUfByFilter({ filtro: endereco.codUf, limit: 1 }) : null
+                        ]);
+                        const tipo = tipos.find(item => String(item.cod_tipo) === String(endereco.codTipLogradouro));
+                        if (endereco.codTipLogradouro != null && !tipo) throw new Error('O tipo de logradouro salvo não foi encontrado no cadastro.');
+                        return { endereco, tipos, tipo, cidade, uf };
+                    })()
                 ]);
                 const [cli, detalhes, rep, oper, cond, remessa, operRemessa] = cadastros;
                 if (!ativo) return;
@@ -77,6 +105,21 @@ export function useCarregarCotacao({
                 nextNumItem.current = Math.max(0, ...itens.map(item => item.numItem)) + 1;
                 setItensPedido(itens);
                 setObservacoes(observacoes);
+                if (dadosEndereco) {
+                    const { endereco, tipos, tipo, cidade, uf } = dadosEndereco;
+                    setTiposLogradouro(tipos);
+                    setTipoLogradouroSelecionado(tipo?.des_tipo || '');
+                    setCodCepDigitado(endereco.numCep ?? '');
+                    setCodUfDigitado(endereco.codUf ?? '');
+                    setCodCidadeDigitado(endereco.codCidade ?? '');
+                    setLogradouroDigitado(endereco.desLogradouro ?? '');
+                    setNumeroEnderecoDigitado(endereco.numLogradouro ?? '');
+                    setComplementoEnderecoDigitado(endereco.desComplLogradouro ?? '');
+                    setBairroDigitado(endereco.desBairro ?? '');
+                    setReferenciaEnderecoDigitado(endereco.desReferencia ?? '');
+                    setCidade(cidade?.data?.items?.[0] ?? null);
+                    setUf(uf?.data?.items?.[0] ?? null);
+                }
                 sequenciaPedido.current = pedido.numSeqPedido;
                 cabecalhoSalvo.current = pedido;
                 clienteRestaurado.current = cli;

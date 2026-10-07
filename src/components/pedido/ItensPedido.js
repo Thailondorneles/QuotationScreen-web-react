@@ -101,10 +101,10 @@ export function ItensPedido({
                     {freteFoiCotado ? (
                         <>
                             <div className="frete-valor-row">
-                                <div className="frete-valor">
+                                {!cobrancaCalculada.valorFixo && <div className="frete-valor">
                                     <strong>{format.percentual(percentualFrete)}</strong>
                                     <small>{format.moeda(totais.frete)}</small>
-                                </div>
+                                </div>}
                                 <div className="lov-info-wrap frete-info-inline">
                                     <span className="lov-info-icon">i</span>
                                     <div className="lov-tooltip-info frete-tooltip">

@@ -23,7 +23,7 @@ export function carregarParametrosAplicacao() {
             .then(response => aplicarParametros(response.data?.items))
             .catch(() => {
                 aplicarParametros([]);
-                console.warn('Parâmetros indisponíveis. A aplicação usará os valores padrão até atualizar a página.');
+
             });
     }
     return carregamento;

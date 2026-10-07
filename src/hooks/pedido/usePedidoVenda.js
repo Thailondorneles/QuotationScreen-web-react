@@ -75,6 +75,7 @@ export function usePedidoVenda() {
 
     const acoesPersistencia = criarAcoesPersistencia({
         ...estado,
+        getCodigoTipoLogradouro,
         assinaturaAtual,
         navigate,
         location,

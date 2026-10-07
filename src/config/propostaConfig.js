@@ -1,7 +1,9 @@
+import { parametros } from './parametrosAplicacao';
+
 export const EMPRESA_PROPOSTA = {
-    nome: 'Unimed Central de Serviços - RS',
-    telefone: '(51) 3462-6400',
-    email: 'vendas@centralrs.unimed.com.br',
+    get nome() { return parametros.EMPRESA_NOME; },
+    get telefone() { return parametros.EMPRESA_TELEFONE; },
+    get email() { return parametros.EMPRESA_EMAIL; },
     unidades: {
         201: {
             nome: 'Matriz',
@@ -13,5 +15,3 @@ export const EMPRESA_PROPOSTA = {
         }
     }
 };
-
-export const DIAS_VALIDADE_PROPOSTA = 15;

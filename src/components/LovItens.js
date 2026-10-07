@@ -1,3 +1,5 @@
+import { NotasItemCliente } from './NotasItemCliente';
+import { parametros } from '../config/parametrosAplicacao';
 import '../style/lovStyle.css';
 import { FaX, FaChevronLeft, FaChevronRight } from "react-icons/fa6";
 import { FaStar, FaHourglassHalf } from "react-icons/fa";
@@ -10,7 +12,6 @@ const CACHE_TTL = 5 * 60 * 1000;
 const FILTRO_PADRAO = 'POLIMAX';
 let cacheItens = null;
 let requisicaoItens = null;
-let acordosCache = new Map();
 
 function normalizarTextoBusca(valor) {
     return String(valor ?? '')
@@ -58,12 +59,12 @@ function obterTimestampUltimaCompra(compras) {
     return Number.isNaN(timestamp) ? null : timestamp;
 }
 
-async function mapComConcorrencia(itens, limite, processar) {
+async function mapComConcorrencia(itens, limite, processar, estaAtivo = () => true) {
     const resultados = Array(itens.length);
     let proximoIndice = 0;
 
     async function worker() {
-        while (proximoIndice < itens.length) {
+        while (estaAtivo() && proximoIndice < itens.length) {
             const indice = proximoIndice++;
             resultados[indice] = await processar(itens[indice]);
         }
@@ -73,9 +74,11 @@ async function mapComConcorrencia(itens, limite, processar) {
     return resultados;
 }
 
-export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], codCliente = null, codOper = null, codCondPgto = null, ultimasComprasMap = {} }) {
+export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], codCliente = null, codOper = null, codCondPgto = null, ultimasComprasMap = {}, notasCliente = null }) {
     const [filtro, setFiltro] = useState(FILTRO_PADRAO);
     const [itensSelecionados, setItensSelecionados] = useState({});
+    const [quantidades, setQuantidades] = useState({});
+    const [erroQuantidade, setErroQuantidade] = useState('');
     const [menuSelecionarOpen, setMenuSelecionarOpen] = useState(false);
     const [ordenacao, setOrdenacao] = useState({ coluna: null, direcao: null });
     const [todosItens, setTodosItens] = useState([]);
@@ -88,7 +91,6 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
     const [atualizadoEm, setAtualizadoEm] = useState(0);
     const [lotesProximosMap, setLotesProximosMap] = useState({});
     const ultimaRequisicao = useRef(0);
-    const precosImpostosCache = useRef(new Map());
     const proximaOrdemSelecao = useRef(1);
 
     const itensExistentesCodigos = useMemo(
@@ -125,13 +127,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
     }
 
     async function obterPrecoImpostosGlobal(codItem, unidade) {
-        const chave = `${codCliente}-${codOper}-${codCondPgto}-${codItem}-${unidade}`;
-        if (precosImpostosCache.current.has(chave)) {
-            const cached = precosImpostosCache.current.get(chave);
-            return typeof cached === 'function' ? await cached() : await cached;
-        }
-
-        const requisicao = getImpostosCached({
+        return getImpostosCached({
             codOper,
             codUnidade: unidade,
             codPessoa: codCliente,
@@ -141,11 +137,14 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
             .then(response => response.data?.vlr_item ?? null)
             .catch(() => null);
 
-        precosImpostosCache.current.set(chave, requisicao);
-        const preco = await requisicao;
-        precosImpostosCache.current.set(chave, preco);
-        return preco;
     }
+
+    useEffect(() => {
+        // Antecipa somente o catálogo enquanto o vendedor preenche o pedido.
+        // A abertura da LOV compartilha esta requisição e o cache de cinco minutos.
+        carregarTodosItens().catch(() => {});
+        // eslint-disable-next-line
+    }, []);
 
     async function buscar({ filtro: valorFiltro, novoOffset = 0 }) {
         const filtroBusca = normalizarFiltroItem(valorFiltro);
@@ -180,6 +179,8 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                     cod_item: item.cod_item,
                     cod_completo: item.cod_completo,
                     des_item: item.des_item,
+                    cod_um: item.cod_um,
+                    qtd_multiplo: item.qtd_multiplo,
                     principios_ativos: item.principios_ativos,
                     estoque_matriz: Number(item.qtd_estoque_matriz ?? 0),
                     estoque_filial: Number(item.qtd_estoque_filial ?? 0),
@@ -189,6 +190,10 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
 
             if (!acc[item.cod_item].cod_completo && item.cod_completo) {
                 acc[item.cod_item].cod_completo = item.cod_completo;
+            }
+
+            if (!acc[item.cod_item].cod_um && item.cod_um) {
+                acc[item.cod_item].cod_um = item.cod_um;
             }
 
             if (!acc[item.cod_item].principios_ativos && item.principios_ativos) {
@@ -269,10 +274,6 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
     const precisaAtualizar = Date.now() - atualizadoEm >= CACHE_TTL;
 
     useEffect(() => {
-        buscar({ filtro: FILTRO_PADRAO, novoOffset: 0 }).catch(() => {});
-    }, []);
-
-    useEffect(() => {
         if (!isOpen) return;
 
         getItensLotesCached()
@@ -287,6 +288,8 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
     useEffect(() => {
         if (isOpen) {
             setItensSelecionados({});
+            setQuantidades({});
+            setErroQuantidade('');
             proximaOrdemSelecao.current = 1;
             setMenuSelecionarOpen(false);
             if (precisaAtualizar) {
@@ -316,26 +319,14 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
             setAcordosMap(map);
 
             const buscarAcordo = async codItem => {
-                const chave = `${codCliente}-${codItem}`;
-
-                if (acordosCache.has(chave)) {
-                    const cached = acordosCache.get(chave);
-                    const acordos = (cached && typeof cached.then === 'function') ? await cached : cached;
-                    return { codItem, acordos: acordos || [] };
-                }
-
-                const p = getItensAcordos({ codItem, codCliente, offset: 0, limit: 25 })
+                const acordos = await getItensAcordos({ codItem, codCliente, offset: 0, limit: 25 })
                     .then(resp => resp.data.items || [])
                     .catch(() => []);
 
-                acordosCache.set(chave, p);
-
-                const acordos = await p;
-                acordosCache.set(chave, acordos);
                 return { codItem, acordos };
             };
 
-            const resultados = await mapComConcorrencia(itensParaBuscar, 5, buscarAcordo);
+            const resultados = await mapComConcorrencia(itensParaBuscar, 2, buscarAcordo, () => ativo);
 
             if (!ativo) return;
 
@@ -359,19 +350,20 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
 
         let ativo = true;
         setLoadingValores(true);
+        setPrecosImpostosMap({});
 
         // use obterPrecoImpostosGlobal (shared helper) to fetch prices
 
         (async () => {
             try {
-                const resultados = await mapComConcorrencia(itensPaginados, 4, async item => {
+                const resultados = await mapComConcorrencia(itensPaginados, 2, async item => {
                     const [lista201, lista203] = await Promise.all([
                         obterPrecoImpostosGlobal(item.cod_item, 201),
                         obterPrecoImpostosGlobal(item.cod_item, 203)
                     ]);
 
                     return { codItem: item.cod_item, lista201, lista203 };
-                });
+                }, () => ativo);
 
                 if (!ativo) return;
 
@@ -451,10 +443,27 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
 
         if (!selecionados.length) return;
 
-        onSelect(selecionados);
+        const itensComQuantidade = [];
+        for (const item of selecionados) {
+            const multiplo = obterMultiplo(item);
+            const quantidade = Number(String(quantidades[item.cod_item] ?? multiplo).replace(',', '.'));
+            const razao = quantidade / multiplo;
+            if (!Number.isFinite(quantidade) || quantidade <= 0 || Math.abs(razao - Math.round(razao)) > 1e-8) {
+                setErroQuantidade(`Informe uma quantidade positiva e múltipla de ${multiplo.toLocaleString('pt-BR')} para o item ${item.cod_item}.`);
+                return;
+            }
+            itensComQuantidade.push({ ...item, quantidade });
+        }
+
+        onSelect(itensComQuantidade);
         setLovOpen(false);
         setItensSelecionados({});
         setMenuSelecionarOpen(false);
+    }
+
+    function obterMultiplo(item) {
+        const valor = Number(item.qtd_multiplo);
+        return Number.isFinite(valor) && valor > 0 ? valor : 1;
     }
 
     function alternarOrdenacao(coluna) {
@@ -549,6 +558,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                         Adicionar selecionados
                     </button>
                 </div>
+                {erroQuantidade && <div role="alert" className="lov-quantidade-erro">{erroQuantidade}</div>}
                 <div className="lov-list-frame">
                     {loading && (
                         <div className="lov-loading">
@@ -563,10 +573,12 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                 <th className="lov-check-col"></th>
                                 <th>{cabecalhoOrdenavel('cod_item', 'Código')}</th>
                                 <th>{cabecalhoOrdenavel('des_item', 'Descrição')}</th>
+                                <th className="lov-um-col" title="Unidade de medida">UM</th>
                                 <th>{cabecalhoOrdenavel('principios_ativos', 'Princípio ativo')}</th>
                                 <th>{cabecalhoOrdenavel('cod_completo', 'Marca')}</th>
                                  <th>{cabecalhoOrdenavel('estoque_matriz', 'Estoque Matriz')}</th>
                                  <th>{cabecalhoOrdenavel('estoque_filial', 'Estoque Filial')}</th>
+                                 <th className="lov-quantidade-col">Quantidade</th>
                                  <th className="lov-value-col">Lista 201</th>
                                  <th className="lov-value-col">Lista 203</th>
                                   <th className="lov-date-col">{cabecalhoOrdenavel('ultima_compra', 'Últ. compra')}</th>
@@ -580,7 +592,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                 const marcaPropria = itemEhMarcaPropria(item);
                                 const temAcordos = Array.isArray(acordosMap[item.cod_item]) && acordosMap[item.cod_item].length;
                                 const comprasItem = Array.isArray(ultimasComprasMap[item.cod_item])
-                                    ? ultimasComprasMap[item.cod_item].slice(0, 5)
+                                    ? ultimasComprasMap[item.cod_item].slice(0, parametros.HISTORICO_COMPRAS_POR_ITEM)
                                     : [];
                                 const temUltimaCompra = comprasItem.length > 0;
                                 const loteProximo = lotesProximosMap[String(item.cod_item)];
@@ -598,7 +610,10 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                                     temUltimaCompra && !temAcordos ? 'lov-row-ultima-compra' : '',
                                                     loteProximo ? 'lov-row-lote-proximo' : ''
                                                 ].filter(Boolean).join(' ')}
-                                                onClick={() => !existe && alternarItem(item.cod_item, item)}
+                                                onClick={event => {
+                                                    if (event.target.closest('.lov-quantidade-col')) return;
+                                                    if (!existe) alternarItem(item.cod_item, item);
+                                                }}
                                             >
                                             <td className="lov-check-col">
                                                     <input
@@ -611,6 +626,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                                 </td>                                                                                              
                                                 <td>{item.cod_item}{loteProximo && <FaHourglassHalf className="lov-lote-proximo-marca" title={`Lote com validade próxima: ${formatarData(loteProximo.dta_validade)}`} aria-label="Lote com validade próxima" />}</td>
                                                 <td>{item.des_item}</td>
+                                                <td className="lov-um-col">{item.cod_um || '-'}</td>
                                         <td>{item.principios_ativos || '-'}</td>
                                         <td>
                                             {marcaPropria && (
@@ -624,6 +640,23 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                         </td>
                                          <td>{item.estoque_matriz}</td>
                                          <td>{item.estoque_filial}</td>
+                                         <td className="lov-quantidade-col" onClick={event => event.stopPropagation()}>
+                                             <input
+                                                 type="text"
+                                                 inputMode="decimal"
+                                                 onClick={event => event.stopPropagation()}
+                                                 aria-label={`Quantidade do item ${item.cod_item}`}
+                                                 disabled={existe}
+                                                 title={`Múltiplo: ${obterMultiplo(item)}`}
+                                                 value={quantidades[item.cod_item] ?? String(obterMultiplo(item)).replace('.', ',')}
+                                                 onChange={event => {
+                                                     const valor = event.target.value;
+                                                     if (!/^\d*(?:[.,]\d*)?$/.test(valor)) return;
+                                                     setQuantidades(prev => ({ ...prev, [item.cod_item]: valor }));
+                                                     setErroQuantidade('');
+                                                 }}
+                                             />
+                                         </td>
                                          <td className="lov-value-col">
                                             {loadingLista201 ? (
                                                 <span className="lov-spinner" style={{ width: 16, height: 16, borderWidth: 2 }}></span>
@@ -670,12 +703,13 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                                                 <div className="lov-tooltip-ultima-compra">
                                                                     {comprasItem.map((compra, index) => (
                                                                         <div className="lov-historico-compra-linha" key={`${compra.dta_emissao}-${compra.vlr_unitario}-${index}`}>
-                                                                            {compra.cod_unidade ?? compra.codUnidade ?? compra.cod_empresa ?? compra.codEmpresa ?? compra.unidade ?? '-'} - {formatarData(compra.dta_emissao)} - {formatarMoeda(compra.vlr_unitario)}
+                                                                            {compra.cod_unidade ?? '-'} - {formatarData(compra.dta_emissao)} - {formatarMoeda(compra.vlr_unitario)} - Qtd.: {compra.qtd_lancamento != null ? Number(compra.qtd_lancamento).toLocaleString('pt-BR', { maximumFractionDigits: 4 }) : '-'}
                                                                         </div>
                                                                     ))}
                                                                 </div>
                                                             </>
                                                         ) : null}
+                                                        <NotasItemCliente consulta={notasCliente} codCliente={codCliente} codItem={item.cod_item} />
                                                     </div>
                                                 </div>
                                             ) : null}

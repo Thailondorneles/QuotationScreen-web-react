@@ -10,7 +10,7 @@ export function LovCondPgto({ isOpen, setLovOpen, codCond, onSelect }) {
     const lov = useLovPagination({
         limit: 25,
         fetchFn: ({ filtro, offset, limit }) => {
-            if (filtro && filtro.trim() !== '') {
+            if (String(filtro ?? '').trim() !== '') {
                 return getCondPgtoByFilter({ filtro, offset, limit });
             }
             return getCondPgto({ offset, limit });
@@ -18,8 +18,8 @@ export function LovCondPgto({ isOpen, setLovOpen, codCond, onSelect }) {
     });
 
     useEffect(() => {
-        if (isOpen || codCond) {
-            lov.buscar({ filtro: codCond, novoOffset: 0 });
+        if (isOpen) {
+            lov.buscar({ filtro: codCond, novoOffset: 0 }).catch(() => {});
         }
         // eslint-disable-next-line
     }, [isOpen, codCond]);

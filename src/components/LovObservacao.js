@@ -12,7 +12,7 @@ export function LovObservacao({ isOpen, onClose, onSave, obs }) {
     });
 
     useEffect(() => {
-        if (obs) {
+        if (isOpen && obs) {
             setDescricao(obs.descricao);
             setFlags({
                 pedido: obs.pedido,
@@ -29,7 +29,7 @@ export function LovObservacao({ isOpen, onClose, onSave, obs }) {
                 financeiro: false
             });
         }
-    }, [obs]);
+    }, [obs, isOpen]);
 
     if (!isOpen) return null;
 

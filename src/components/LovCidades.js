@@ -20,8 +20,8 @@ export function LovCidades({ isOpen, setLovOpen, codIbge, onSelect }) {
     });
 
     useEffect(() => {
-        if (isOpen || codIbge) {
-            lov.buscar({ filtro: codIbge, novoOffset: 0 });
+        if (isOpen) {
+            lov.buscar({ filtro: codIbge, novoOffset: 0 }).catch(() => {});
         }
     }, [isOpen, codIbge]);
 

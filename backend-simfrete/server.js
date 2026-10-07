@@ -2,39 +2,20 @@ const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const oracledb = require('oracledb');
 const http = require('http');
 const https = require('https');
+const { registrarIntegracaoLog } = require('./services/integracaoLog');
 
 dotenv.config({ quiet: true });
 
 process.on('unhandledRejection', (reason) => {
-  console.error('Erro assincrono nao tratado:', reason);
+
 });
 
 process.on('uncaughtException', (err) => {
-  console.error('Excecao nao tratada:', err);
+
   process.exit(1);
 });
-
-let oracleClientIniciado = false;
-
-function iniciarOracleClient() {
-  if (oracleClientIniciado) {
-    return;
-  }
-
-  const libDir = process.env.ORACLE_CLIENT_LIB_DIR;
-
-  if (!libDir) {
-    oracleClientIniciado = true;
-    return;
-  }
-
-  oracledb.initOracleClient({ libDir });
-  oracleClientIniciado = true;
-  console.log(`Oracle Client inicializado em: ${libDir}`);
-}
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -42,17 +23,6 @@ const host = process.env.HOST || '0.0.0.0';
 const simFreteUrl = 'https://centralunimed.simfrete.com/CotacaoService/consultar';
 const unimedApiBaseUrl = process.env.UNIMED_API_BASE_URL;
 const erpPedidosUrl = process.env.ERP_PEDIDOS_URL;
-let oraclePool;
-
-console.log('Iniciando backend-simfrete...');
-console.log('Configuracao carregada:', {
-  port,
-  host,
-  unimedApiBaseUrl: Boolean(unimedApiBaseUrl),
-  erpPedidosUrl: Boolean(erpPedidosUrl),
-  oracleConnectString: Boolean(process.env.ORACLE_CONNECT_STRING),
-  oracleClientLibDir: process.env.ORACLE_CLIENT_LIB_DIR || null
-});
 
 if (!process.env.SIMFRETE_USER || !process.env.SIMFRETE_PASS) {
   throw new Error('SIMFRETE_USER e SIMFRETE_PASS devem estar configurados.');
@@ -64,10 +34,6 @@ if (!unimedApiBaseUrl) {
 
 if (!erpPedidosUrl || !process.env.ERP_NL_TOKEN || !process.env.ERP_NL_APLICACAO) {
   throw new Error('ERP_PEDIDOS_URL, ERP_NL_TOKEN e ERP_NL_APLICACAO devem estar configurados.');
-}
-
-if (!process.env.ORACLE_USER || !process.env.ORACLE_PASSWORD || !process.env.ORACLE_CONNECT_STRING) {
-  throw new Error('ORACLE_USER, ORACLE_PASSWORD e ORACLE_CONNECT_STRING devem estar configurados.');
 }
 
 const unimedApi = axios.create({
@@ -92,51 +58,6 @@ const erpApi = axios.create({
   }
 });
 
-async function getOracleConnection() {
-  iniciarOracleClient();
-
-  if (oraclePool) {
-    return oraclePool.getConnection();
-  }
-
-  oraclePool = await oracledb.createPool({
-    user: process.env.ORACLE_USER,
-    password: process.env.ORACLE_PASSWORD,
-    connectString: process.env.ORACLE_CONNECT_STRING,
-    poolMin: Number(process.env.ORACLE_POOL_MIN || 1),
-    poolMax: Number(process.env.ORACLE_POOL_MAX || 4),
-    poolIncrement: 1
-  });
-  console.log('Pool Oracle iniciado.');
-
-  return oraclePool.getConnection();
-}
-
-async function gerarNumeroSequencia(connection) {
-  const result = await connection.execute(
-    'SELECT SEQ_PEDIDO_ERP_INTEGRACAO.NEXTVAL AS NUM_SEQ FROM DUAL',
-    [],
-    { outFormat: oracledb.OUT_FORMAT_OBJECT }
-  );
-
-  return result.rows[0].NUM_SEQ;
-}
-
-function toClobValue(value) {
-  if (value === undefined || value === null) {
-    return null;
-  }
-
-  return typeof value === 'string' ? value : JSON.stringify(value);
-}
-
-function clobBind(value) {
-  return {
-    val: toClobValue(value),
-    type: oracledb.CLOB
-  };
-}
-
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 
@@ -145,29 +66,37 @@ app.get('/health', (_req, res) => {
 });
 
 app.use('/api/unimed', async (req, res) => {
-  if (req.method !== 'GET') {
-    return res.status(405).json({ erro: 'Metodo nao permitido' });
-  }
-
   const encodedPath = req.originalUrl
     .slice(req.baseUrl.length)
     .split('?')[0];
   const targetPath = encodedPath.replace(/^\/+/, '');
+  const atualizarParametro = req.method === 'PUT' && /^parsConf\/\d+$/.test(targetPath);
+  const salvarPedido = req.method === 'POST' && ['EsPePedidosIns', 'EsPeItensIns', 'EsPeObservacoes', 'EsPeEnderecos', 'EsPePedidos/integracao'].includes(targetPath);
+  if (req.method !== 'GET' && !atualizarParametro && !salvarPedido) {
+    return res.status(405).json({ erro: 'Metodo nao permitido' });
+  }
+  if (atualizarParametro && typeof req.body?.parametro !== 'string') {
+    return res.status(400).json({ erro: 'Informe o valor do parametro como texto.' });
+  }
 
   if (!targetPath) {
     return res.status(400).json({ erro: 'Recurso nao informado' });
   }
 
   try {
-    const response = await unimedApi.get(targetPath, {
-      params: req.query
-    });
+    const response = atualizarParametro
+      ? await unimedApi.put(targetPath, { parametro: req.body.parametro })
+      : salvarPedido ? await unimedApi.post(targetPath, req.body)
+      : await unimedApi.get(targetPath, { params: req.query });
 
     return res.status(response.status).json(response.data);
   } catch (err) {
-    console.error('Erro ao consultar servico unimed:', err?.response?.data || err.message);
+
     return res.status(err?.response?.status || 500).json({
-      erro: 'Erro ao consultar servico unimed'
+      erro: 'Erro ao acessar servico unimed',
+      origem: 'ORDS',
+      recurso: targetPath,
+      metodo: req.method
     });
   }
 });
@@ -189,27 +118,53 @@ app.post('/api/cotacao', async (req, res) => {
     );
     res.json(response.data);
   } catch (err) {
-    console.error('Erro ao cotar frete:', err?.response?.data || err.message);
+
     res.status(500).json({
       erro: 'Erro ao cotar frete'
     });
   }
 });
 
+const integracoesEmAndamento = new Set();
+
 app.post('/api/pedidos/enviar-erp', async (req, res) => {
-  let connection;
-  let numSeq;
   let etapa = 'inicio';
+  let payloadErp;
+  const numSeqPedido = Number(req.body.numSeqPedido);
+  if (!Number.isSafeInteger(numSeqPedido) || numSeqPedido <= 0) {
+    return res.status(400).json({ erro: 'Salve a cotacao e informe numSeqPedido antes de integrar.' });
+  }
+  const unidade = Number(req.body.pePedidos?.codUnidade);
+  if (![201, 203].includes(unidade)) return res.status(400).json({ erro: 'Unidade invalida.' });
+  const chaveIntegracao = `${numSeqPedido}:${unidade}`;
+  if (integracoesEmAndamento.has(chaveIntegracao)) return res.status(409).json({ erro: 'Envio desta unidade em andamento.' });
+  integracoesEmAndamento.add(chaveIntegracao);
 
   try {
-    etapa = 'conectar_oracle';
-    connection = await getOracleConnection();
-
-    etapa = 'gerar_numero_sequencia';
-    numSeq = await gerarNumeroSequencia(connection);
+    etapa = 'consultar_cotacao';
+    const { data } = await unimedApi.get(`EsPePedidos/${encodeURIComponent(numSeqPedido)}`);
+    if (!Array.isArray(data?.items) || data.hasMore) {
+      throw new Error('Resposta invalida ao consultar a versao atual da cotacao.');
+    }
+    const registros = data.items.filter(pedido => String(pedido.num_seq_pedido) === String(numSeqPedido));
+    if (!registros.length) return res.status(409).json({ erro: 'Cotacao ainda nao salva.' });
+    if (registros.length !== 1 || !Number.isSafeInteger(Number(registros[0].cod_vers_cotacao)) || Number(registros[0].cod_vers_cotacao) < 1) {
+      throw new Error('A API deve retornar somente a versao atual da cotacao.');
+    }
+    const atual = registros[0];
+    if (!Object.hasOwn(atual, 'num_pedido_matriz') || !Object.hasOwn(atual, 'num_pedido_filial')) {
+      throw new Error('A API nao retornou os numeros de pedido por unidade.');
+    }
+    const numeroExistente = unidade === 201 ? atual.num_pedido_matriz : atual.num_pedido_filial;
+    if (numeroExistente != null) {
+      if (!/^\d+\/\d+$/.test(String(numeroExistente))) {
+        return res.status(409).json({ erro: 'A versao atual possui numero/complemento invalido. Confira o pedido no NL e corrija o registro da cotacao antes de reenviar.' });
+      }
+      return res.json({ sucesso: true, numSeq: numSeqPedido, jaIntegrado: true, numeroPedido: numeroExistente });
+    }
 
     etapa = 'montar_payload_erp';
-    const payloadErp = {
+    payloadErp = {
       ...req.body,
       pePedidos: {
         ...req.body.pePedidos,
@@ -222,7 +177,7 @@ app.post('/api/pedidos/enviar-erp', async (req, res) => {
           ...(req.body.pePedidos?.peObservacoes || [])
             .filter(obs => Number(obs.numSeq) !== 99),
           {
-            txtObs: String(numSeq),
+            txtObs: String(numSeqPedido),
             indPedido: 0,
             indNf: 0,
             indRegistro: 0,
@@ -233,78 +188,23 @@ app.post('/api/pedidos/enviar-erp', async (req, res) => {
         ]
       }
     };
-
-    etapa = 'inserir_controle_integracao';
-    const insertPromise = connection.execute(
-      `INSERT INTO ES_PEDIDO_ERP_INTEGRACAO
-        (NUM_SEQ, STATUS, PAYLOAD, USUARIO)
-       VALUES
-        (:numSeq, :status, :payload, :usuario)`,
-      {
-        numSeq,
-        status: 'ENVIANDO',
-        payload: clobBind(payloadErp),
-        usuario: req.body.usuario || null
-      },
-      { autoCommit: true }
-    );
+    delete payloadErp.numSeqPedido;
 
     etapa = 'post_erp';
-    const [response] = await Promise.all([
-      erpApi.post(erpPedidosUrl, payloadErp),
-      insertPromise
-    ]);
-
-    res.json({
-      sucesso: true,
-      numSeq,
-      retornoErp: response.data
+    const response = await erpApi.post(erpPedidosUrl, payloadErp);
+    const logRegistrado = await registrarIntegracaoLog(unimedApi, {
+      numSeq: numSeqPedido, status: 'INTEGRADO', payload: payloadErp, respostaErp: response.data
     });
-
-    etapa = 'atualizar_integracao_sucesso';
-    await connection.execute(
-      `UPDATE ES_PEDIDO_ERP_INTEGRACAO
-          SET STATUS = :status,
-              RESPOSTA_ERP = :resposta,
-              DATA_ENVIO = SYSDATE
-        WHERE NUM_SEQ = :numSeq`,
-      {
-        status: 'INTEGRADO',
-        resposta: clobBind(response.data),
-        numSeq
-      },
-      { autoCommit: true }
-    );
+    res.json({ sucesso: true, numSeq: numSeqPedido, retornoErp: response.data, unidadesIntegradas: [unidade], logRegistrado });
   } catch (err) {
     const erro = err?.response?.data || err.message;
     const statusErro = err?.response?.status || 500;
-    console.error('Erro ao integrar pedido com o ERP:', {
-      etapa,
-      numSeq,
-      statusErro,
-      erro
-    });
-    console.error(err.stack);
 
-    if (connection && numSeq) {
-      try {
-        etapa = 'atualizar_integracao_erro';
-        await connection.execute(
-          `UPDATE ES_PEDIDO_ERP_INTEGRACAO
-              SET STATUS = :status,
-                  ERRO = :erro,
-                  DATA_ENVIO = SYSDATE
-            WHERE NUM_SEQ = :numSeq`,
-          {
-            status: 'ERRO',
-            erro: clobBind(erro),
-            numSeq
-          },
-          { autoCommit: true }
-        );
-      } catch (updateErr) {
-        console.error('Erro ao registrar falha de integracao:', updateErr.message);
-      }
+    if (etapa === 'post_erp') {
+      await registrarIntegracaoLog(unimedApi, {
+        numSeq: numSeqPedido, status: 'ERRO', payload: payloadErp,
+        respostaErp: err.response?.data ?? null, erro
+      });
     }
 
     if (res.headersSent) {
@@ -313,27 +213,22 @@ app.post('/api/pedidos/enviar-erp', async (req, res) => {
 
     return res.status(statusErro).json({
       sucesso: false,
-      numSeq,
+      numSeq: numSeqPedido,
       erro: 'Erro ao integrar pedido com o ERP',
       etapa,
       detalhe: erro
     });
   } finally {
-    if (connection) {
-      try {
-        await connection.close();
-      } catch (closeErr) {
-        console.error('Erro ao fechar conexao Oracle:', closeErr.message);
-      }
-    }
+    integracoesEmAndamento.delete(chaveIntegracao);
+
   }
 });
 
 const server = app.listen(port, host, () => {
-  console.log(`Backend rodando em http://${host}:${port}`);
+
 });
 
 server.on('error', (err) => {
-  console.error('Erro ao iniciar servidor HTTP:', err);
+
   process.exit(1);
 });

@@ -1,4 +1,6 @@
+import { parametros } from '../config/parametrosAplicacao';
 import { unimedApi } from "../config/apis.js";
+import { consultarComCache } from './consultaCache';
 
 export function getClientes() {
     return unimedApi.get("clientes");
@@ -31,6 +33,19 @@ export function getClienteByFilter({ filtro }) {
     return unimedApi.get(`clientes/${encodeURIComponent(filtro)}`);
 }
 
+export async function obterClienteParaProposta(cliente) {
+    const codigo = String(cliente.cod_pessoa);
+    const [response, clientes] = await Promise.all([
+        getClienteByFilter({ filtro: codigo }).catch(() => null),
+        getAllClientesCached()
+    ]);
+    const cadastro = clientes.find(item => String(item.cod_pessoa) === codigo) || {};
+    const contato = response?.data?.items?.find(item => String(item.cod_pessoa) === codigo) || {};
+    const cidade = [cadastro.des_cidade, cliente.des_cidade, contato.des_cidade]
+        .find(valor => String(valor ?? '').trim() !== '') || '';
+    return { ...cliente, ...contato, des_cidade: cidade };
+}
+
 export function getClienteDetalhado({ codPessoa }) {
     return unimedApi.get(`ClienteDetalhado/${encodeURIComponent(codPessoa)}`);
 }
@@ -48,7 +63,8 @@ export function getClientesHistorico({ filtro, offset = 0, limit = 25 }) {
 }
 
 export function getClientesUltimasCompras({ codCliente }) {
-    return unimedApi.get(`clientesUltimaCompra/${codCliente}`);
+    return consultarComCache(`historicoItens|${codCliente}`, () =>
+        unimedApi.get(`clientesUltimaCompra/${encodeURIComponent(codCliente)}`));
 }
 
 export function agruparUltimasComprasPorItem(items) {
@@ -69,7 +85,7 @@ export function agruparUltimasComprasPorItem(items) {
             codItem,
             compras
                 .sort((a, b) => new Date(b.dta_emissao) - new Date(a.dta_emissao))
-                .slice(0, 5)
+                .slice(0, parametros.HISTORICO_COMPRAS_POR_ITEM)
         ])
     );
 }

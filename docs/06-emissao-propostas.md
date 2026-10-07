@@ -1,5 +1,8 @@
 # 06 — Emissão de propostas
 
+> **07/10/2026:** referencias a conexao direta, pool, SQL e log Oracle neste documento descrevem a implementacao anterior. O backend atual usa HTTP para dados e auditoria: consulte [Acesso a dados por APIs](16-acesso-dados-apis.md). Nao configure credenciais ou bibliotecas Oracle neste projeto.
+
+
 ## 1. Objetivo
 
 Este documento descreve a emissão de propostas comerciais em PDF e Excel pelo simulador de pedido de venda. O foco é o comportamento efetivamente implementado: dados utilizados, validações, separação por unidade, arquitetura dos serviços, geração dos arquivos, download, tratamento de falhas e pontos de manutenção.

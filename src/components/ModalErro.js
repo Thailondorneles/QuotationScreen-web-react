@@ -4,7 +4,7 @@ export function ModalErro({ aberto, mensagem, onClose }) {
 
         return (
             <div className="modal-backdrop" role="presentation">
-                <div className="modal-erp" role="dialog" aria-modal="true" aria-labelledby="modal-mensagem-titulo">
+                <div className="modal-erp modal-mensagem" role="dialog" aria-modal="true" aria-labelledby="modal-mensagem-titulo">
                     <div className="modal-titulo" id="modal-mensagem-titulo">Mensagem do sistema</div>
 
                     <div className="modal-conteudo">

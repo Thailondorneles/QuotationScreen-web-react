@@ -107,10 +107,6 @@ export function LovClientes({ isOpen, setLovOpen, onSelect }) {
     const podeAvancar = offset + CLIENTES_POR_PAGINA < clientesFiltrados.length;
 
     useEffect(() => {
-        buscar({ filtro: '', novoOffset: 0 }).catch(() => {});
-    }, []);
-
-    useEffect(() => {
         if (isOpen && precisaAtualizar) {
             buscar({ filtro, novoOffset: offset }).catch(() => {});
         }

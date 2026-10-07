@@ -1,6 +1,6 @@
 .header{
-    border-bottom: 1px solid #327706;
-    background: #2e8b1c;
+    border-bottom: 1px solid var(--ambiente-cor, #327706);
+    background: var(--ambiente-cor, #2e8b1c);
     color: #fff;
     padding: 20px 25px;
     display: flex;

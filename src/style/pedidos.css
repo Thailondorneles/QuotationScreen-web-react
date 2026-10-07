@@ -1,0 +1,55 @@
+.pedidos-linha { cursor: pointer; }
+.itens-grid.pedidos-grid th,
+.itens-grid.pedidos-grid td {
+    width: auto;
+    font-size: 12px;
+    line-height: 1.4;
+}
+.itens-grid.pedidos-grid thead th { padding: 9px 10px; }
+.itens-grid.pedidos-grid tbody td { padding: 12px 10px; }
+.itens-grid.pedidos-grid th:nth-child(3),
+.itens-grid.pedidos-grid td:nth-child(3) {
+    width: 34%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: left;
+}
+.itens-grid .pedidos-linha:hover td,
+.itens-grid .pedidos-linha[aria-expanded="true"] td {
+    background: var(--ambiente-clara, #e8f4eb);
+}
+.pedidos-linha:focus-visible {
+    outline: 2px solid var(--ambiente-cor, #2e7d32);
+    outline-offset: -2px;
+}
+.pedidos-menu {
+    position: fixed;
+    z-index: 1000;
+    width: 150px;
+    padding: 3px;
+    box-sizing: border-box;
+    background: #fff;
+    border: 1px solid #ddd;
+    box-shadow: 0 2px 6px #0003;
+}
+.pedidos-menu button {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    height: auto;
+    margin: 0;
+    padding: 7px 12px;
+    border: 0;
+    background: transparent;
+    color: #333;
+    text-align: left;
+    font: 400 13px/1.3 Arial, sans-serif;
+    cursor: pointer;
+}
+.pedidos-menu button:hover,
+.pedidos-menu button:focus-visible {
+    background: var(--ambiente-clara, #e8f4eb);
+    color: var(--ambiente-escura, #256b2b);
+    outline: none;
+}

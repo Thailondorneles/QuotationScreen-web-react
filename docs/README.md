@@ -1,5 +1,8 @@
 # Documentação do Simulador de Pedido de Venda
 
+> **07/10/2026:** referencias a conexao direta, pool, SQL e log Oracle neste documento descrevem a implementacao anterior. O backend atual usa HTTP para dados e auditoria: consulte [Acesso a dados por APIs](16-acesso-dados-apis.md). Nao configure credenciais ou bibliotecas Oracle neste projeto.
+
+
 ## Objetivo
 
 Este conjunto de documentos descreve o funcionamento atual do simulador de pedido de venda, desde a seleção do cliente até a emissão de proposta e a integração com o ERP.
@@ -24,6 +27,8 @@ A documentação foi produzida a partir do código-fonte vigente em **18/08/2026
 
 ## Mapa da documentação
 
+Revisão atual: [Auditoria do ambiente e melhorias recomendadas — 23/09/2026](13-revisao-ambiente-2026-09-23.md).
+
 | Documento | Conteúdo |
 |---|---|
 | [01 — Visão geral e arquitetura](01-visao-geral-arquitetura.md) | Escopo, atores, componentes e visão sistêmica |
@@ -38,6 +43,8 @@ A documentação foi produzida a partir do código-fonte vigente em **18/08/2026
 | [10 — Implantação, segurança e manutenção](10-implantacao-seguranca-manutencao.md) | Ambientes, variáveis, containers e cuidados operacionais |
 | [11 — Glossário e dicionário de dados](11-glossario-dados.md) | Termos de negócio, estados e principais objetos |
 | [12 — Registro de riscos e roadmap técnico](12-registro-riscos-roadmap.md) | Riscos priorizados, critérios de aceite e evolução recomendada |
+| [14 — Otimização de consultas](14-otimizacao-consultas-frontend.md) | Melhorias aplicadas no frontend e contratos propostos para consultas em lote no ORDS |
+| [15 — Organização da tela de pedido](15-organizacao-pedido-venda.md) | Componentes, hooks, regras de negócio e dependências preservadas na refatoração |
 
 ## Fluxo executivo
 

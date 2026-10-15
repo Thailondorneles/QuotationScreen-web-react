@@ -1,4 +1,5 @@
 import { NotasItemCliente } from './NotasItemCliente';
+import LotesDisponiveisItem from './LotesDisponiveisItem';
 import { parametros } from '../config/parametrosAplicacao';
 import '../style/lovStyle.css';
 import { FaX, FaChevronLeft, FaChevronRight } from "react-icons/fa6";
@@ -625,7 +626,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                                     />
                                                 </td>                                                                                              
                                                 <td>{item.cod_item}{loteProximo && <FaHourglassHalf className="lov-lote-proximo-marca" title={`Lote com validade próxima: ${formatarData(loteProximo.dta_validade)}`} aria-label="Lote com validade próxima" />}</td>
-                                                <td>{item.des_item}</td>
+                                                <td>{item.des_item}<LotesDisponiveisItem codItem={item.cod_item} descricao={item.des_item} /></td>
                                                 <td className="lov-um-col">{item.cod_um || '-'}</td>
                                         <td>{item.principios_ativos || '-'}</td>
                                         <td>

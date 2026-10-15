@@ -1,0 +1,46 @@
+.lotes-info {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    margin: 0 0 0 6px;
+    padding: 3px;
+    border: 0;
+    background: transparent;
+    color: #1769aa;
+    cursor: pointer;
+    vertical-align: middle;
+}
+.lotes-info:focus-visible { outline: 2px solid #1769aa; }
+.lotes-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: #0006;
+}
+.lotes-dialog {
+    box-sizing: border-box;
+    width: 600px;
+    max-width: 100%;
+    max-height: 85vh;
+    overflow: auto;
+    padding: 20px;
+    border-radius: 6px;
+    background: #fff;
+    color: #222;
+    box-shadow: 0 6px 24px #0004;
+    font: 14px/1.5 Arial, sans-serif;
+}
+.lotes-titulo { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.lotes-titulo h3 { margin: 0; font-size: 17px; }
+.lotes-dialog button { width: auto; min-width: 0; padding: 5px 10px; cursor: pointer; }
+.lotes-tabela { overflow-x: auto; }
+.lotes-tabela table { width: 100%; border-collapse: collapse; }
+.lotes-tabela th, .lotes-tabela td { padding: 9px; border-bottom: 1px solid #ddd; text-align: left; }
+.lotes-tabela th { background: #f0f2f4; }

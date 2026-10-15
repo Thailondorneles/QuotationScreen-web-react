@@ -17,6 +17,20 @@ export async function listarPedidos(params) {
     return { items: extrairRegistros(data), hasMore: Boolean(data?.hasMore) };
 }
 
+export async function listarTodosPedidos() {
+    const items = [];
+    let hasMore;
+    do {
+        const pagina = await listarPedidos({ offset: items.length, limit: 500 });
+        if (pagina.hasMore && !pagina.items.length) {
+            throw new Error('A API retornou uma pagina vazia com mais pedidos pendentes.');
+        }
+        items.push(...pagina.items);
+        hasMore = pagina.hasMore;
+    } while (hasMore);
+    return items;
+}
+
 export async function consultarPedido(id) {
     const { data } = await unimedApi.get(`EsPePedidos/${encodeURIComponent(id)}`);
     const pedido = extrairRegistros(data).find(item => String(item.numSeqPedido) === String(id));

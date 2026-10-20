@@ -33,6 +33,22 @@ export function getItensLotes() {
     return unimedApi.get('itensLotes');
 }
 
+export async function getLotesDisponiveis(codItem) {
+    const lotes = [];
+    let hasMore;
+    do {
+        const { data } = await unimedApi.get(`itensLotesDisponiveis/${encodeURIComponent(codItem)}`, {
+            params: { offset: lotes.length, limit: 500 }
+        });
+        if (!Array.isArray(data?.items) || (data.hasMore && !data.items.length)) {
+            throw new Error('Resposta invalida ao consultar os lotes.');
+        }
+        lotes.push(...data.items);
+        hasMore = data.hasMore;
+    } while (hasMore);
+    return lotes;
+}
+
 export function getItensLotesCached() {
     if (lotesCache && lotesCache.expiraEm > Date.now()) {
         return Promise.resolve(lotesCache.itens);

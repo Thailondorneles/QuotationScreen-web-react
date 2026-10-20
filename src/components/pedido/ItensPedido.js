@@ -1,5 +1,6 @@
 import { parametros } from "../../config/parametrosAplicacao";
 import { NotasItemCliente } from "../NotasItemCliente";
+import LotesDisponiveisItem from "../LotesDisponiveisItem";
 import { FaTrash, FaHourglassHalf, FaUpload } from "react-icons/fa";
 import { ModalImportarItens } from "../ModalImportarItens";
 import { LovItens } from "../LovItens.js";
@@ -321,7 +322,7 @@ export function ItensPedido({
                                             <tr key={grupo.grupoId} className={classeLinha}>
                                                 <td>{itemBase.numItem}</td>
                                                 <td>{itemBase.cod_item}{loteProximo && <FaHourglassHalf className="item-lote-proximo-marca" title="Lote com validade próxima" aria-label="Lote com validade próxima" />}{possuiPrecoBloqueado && <span className="item-preco-bloqueado-marca" title="Preço de lista promocional ou contrato">$</span>}{possuiAcordo && <span className="item-acordo-marca">©</span>}{[grupo[201], grupo[203]].some(item => item && itemPossuiUltimaCompra(item)) && <span className="item-ultima-compra-marca">✓</span>}</td>
-                                                <td><span className="item-cell-text">{itemBase.descricao}</span>{semTributacao && <span className="item-sem-tributacao-marca">Item sem tributação</span>}</td>
+                                                <td><span className="item-cell-text">{itemBase.descricao}</span><LotesDisponiveisItem codItem={itemBase.cod_item} descricao={itemBase.descricao} />{semTributacao && <span className="item-sem-tributacao-marca">Item sem tributação</span>}</td>
                                                 <td><span className="item-cell-text">{itemBase.principiosAtivos || '-'}</span></td>
                                                 <td>{itemBase.marca || '-'}</td>
                                                 <td><button type="button" className="btn-remover-item" onClick={() => removerItem(grupo.grupoId)} title="Remover item"><FaTrash /></button></td>

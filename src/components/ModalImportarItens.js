@@ -17,8 +17,8 @@ export function ModalImportarItens({ onClose, onImportar }) {
     return <div className="importar-itens-overlay">
         <section role="dialog" aria-modal="true" aria-labelledby="importar-itens-titulo" className="importar-itens-modal">
             <h2 id="importar-itens-titulo">Importar itens do Excel</h2>
-            <p>Preencha uma linha por unidade e produto: unidade (201 ou 203), código do item, quantidade e valor unitário.</p>
-            <p>Os itens serão acrescentados ao pedido. Unidades ausentes ficam desmarcadas. Substitua os exemplos do modelo antes de importar.</p>
+            <p>Preencha uma linha por produto com o código do item e a quantidade.</p>
+            <p>Cada item será acrescentado nas unidades 201 e 203 com a mesma quantidade e os preços retornados pelas APIs de cada unidade. Substitua o exemplo do modelo antes de importar.</p>
             <button type="button" className="modal-btn modal-btn-sim" disabled={ocupado} onClick={() => executar(baixarModeloItens)}>Baixar modelo Excel</button>
             <label className="importar-itens-arquivo">Arquivo Excel (.xlsx)
                 <input autoFocus type="file" accept=".xlsx" disabled={ocupado} onChange={e => { setArquivo(e.target.files[0]); setErro(''); }} />

@@ -99,22 +99,16 @@ export function criarAcoesItens({
             if (!detalhe) throw new Error(`Item ${codigo}: não foi possível obter custos e detalhes.`);
             const pares = criarItensPedido({ ...produto,
                 estoque_matriz: produto.qtd_estoque_matriz, estoque_filial: produto.qtd_estoque_filial });
+            const linha = linhas.find(row => row.codigo === codigo);
             for (const item of pares) {
-                const linha = linhas.find(row => row.codigo === codigo && row.unidade === item.unidade);
-                const dados = await buscarDadosItem({ ...item, quantidade: linha?.quantidade ?? item.qtdMultiplo }, { detalheItem: detalhe });
-                if (linha) {
-                    if (dados.semTributacao) throw new Error(`Linha ${linha.linha}: item sem tributação para a unidade ${item.unidade}.`);
-                    if (dados.precoListaBloqueado && Math.abs(linha.valor - dados.valorLista) > 0.00001) {
-                        throw new Error(`Linha ${linha.linha}: preço de contrato bloqueado (${dados.valorLista}).`);
-                    }
-                    if (dados.precoListaPromocional && linha.valor < dados.valorMinimoLista) {
-                        throw new Error(`Linha ${linha.linha}: valor inferior ao mínimo promocional (${dados.valorMinimoLista}).`);
-                    }
+                const dados = await buscarDadosItem({ ...item, quantidade: linha.quantidade }, { detalheItem: detalhe });
+                if (dados.semTributacao) {
+                    throw new Error(`Linha ${linha.linha}: item sem tributação para a unidade ${item.unidade}.`);
                 }
-                preparados.push({ ...item, ...dados, selecionado: Boolean(linha),
-                    valorLista: linha?.valor ?? dados.valorLista });
+                preparados.push({ ...item, ...dados, quantidade: linha.quantidade, selecionado: true });
             }
         }
+
         setFreteSelecionado({ 201: null, 203: null });
         setItensPedido(prev => [...prev, ...preparados]);
     }

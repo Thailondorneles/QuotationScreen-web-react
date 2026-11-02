@@ -13,6 +13,7 @@ export function assinaturaCotacao(estado) {
     ];
     return JSON.stringify({
         campos: campos.map(campo => estado[campo]),
+        desConsultor: estado.clienteDetalhado?.des_consultor || null,
         itens: estado.itensPedido.map(item => {
             const { seq, groupId, numItem, unidade, cod_item, selecionado, quantidade,
                 valorLista, valorListaOriginal, vlrMedio, codListaPreco } = item;

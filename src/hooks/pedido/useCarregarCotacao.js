@@ -125,7 +125,12 @@ export function useCarregarCotacao({
                 clienteRestaurado.current = cli;
                 setCliente(cli);
                 const detalhe = detalhes.data?.items?.[0] || {};
-                setClienteDetalhado({ ...detalhe, ind_consumidor: pedido.indConsumidor });
+                setClienteDetalhado({
+                    ...detalhe,
+                    des_consultor: Object.prototype.hasOwnProperty.call(pedido, 'desConsultor')
+                        ? pedido.desConsultor : detalhe.des_consultor,
+                    ind_consumidor: pedido.indConsumidor
+                });
                 setPrazoMedioVenda(detalhe.pmv ?? null);
                 setCreditoCliente({ atingido: detalhe.atingido ?? null, limiteMensal: detalhe.vlr_lim_mensal ?? null, titulosVencidos: detalhe.qtd_titulos_vencidos ?? null });
                 setCodClienteDigitado(String(pedido.codCliente));

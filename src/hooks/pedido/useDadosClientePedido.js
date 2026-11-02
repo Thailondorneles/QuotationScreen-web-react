@@ -48,6 +48,7 @@ export function useDadosClientePedido({
         let carregamentoCancelado = false;
 
         setLoadingDadosCliente(true);
+        setClienteDetalhado(null);
 
         const representantePromise = carregarRepresentanteCliente(codCliente);
         const detalhesClientePromise = buscarDetalhesClientePedido(cliente);

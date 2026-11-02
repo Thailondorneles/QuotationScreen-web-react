@@ -434,6 +434,7 @@ export function usePedidoVenda() {
         abrirEmissaoProposta,
         abrirSelecaoUnidadesPedido,
         salvarCotacao,
+        excluirCotacao: acoesPersistencia.excluirCotacao,
         novaCotacao,
         navigate,
         location,

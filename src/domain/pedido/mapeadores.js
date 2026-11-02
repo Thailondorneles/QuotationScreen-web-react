@@ -139,6 +139,7 @@ export function criarMapeadoresPedido({
                 codReserva: 7,
                 qtdNegociada: Number(item.quantidade),
                 vlrUniBruto: valorDecimalErp(item.valorLista),
+                vlrMedioUnitario: valorDecimalErp(item.vlrMedio),
                 codUnidadeRetira: unidadePedido,
                 tipTransacao: 1,
                 qtdReservada: Number(item.quantidade),

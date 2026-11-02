@@ -1,15 +1,26 @@
 import { criarMapeadoresPedido } from './mapeadores';
 import { limparCamposVazios, valorDecimalErp } from './formatacao';
 
-function montarFrete(opcaoFrete, tipo, valor) {
+function montarFrete(opcaoFrete, tipo, valor, itens = []) {
     const mapeadores = criarMapeadoresPedido({
         opcaoFrete, cobrancaFrete: { tipo, valor }, observacoes: [],
         limparCamposVazios, valorDecimalErp, dataAtualErp: () => '07/10/2026',
         cobrancaCalculada: { porItem: {} }, CondPgto: { cod_cond_pgto: 1 },
         operacao: { cod_oper: 1 }, cliente: { cod_pessoa: 1 }, getUsuarioIntegracao: () => 'teste'
     });
-    return mapeadores.montarPayloadPedidoErpPorUnidade(201, []).pePedidos;
+    return mapeadores.montarPayloadPedidoErpPorUnidade(201, itens).pePedidos;
 }
+
+test('envia o custo médio unitário de cada item ao NL', () => {
+    const pedido = montarFrete('CIF', 'VALOR', '0', [
+        { cod_item: 7084, quantidade: 50, valorLista: 12, vlrMedio: 8.1615 },
+        { cod_item: 7085, quantidade: 10, valorLista: 20, vlrMedio: 9.25 }
+    ]);
+    expect(pedido.peItens).toEqual([
+        expect.objectContaining({ codItem: '7084', vlrMedioUnitario: '8,1615' }),
+        expect.objectContaining({ codItem: '7085', vlrMedioUnitario: '9,2500' })
+    ]);
+});
 
 test.each(['PERCENTUAL', 'VALOR'])('CIF envia tipo 1 e destaque 1 com cobrança %s', tipo => {
     const pedido = montarFrete('CIF', tipo, '100');

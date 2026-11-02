@@ -1,6 +1,6 @@
 import { reservarSequenciaPedido } from '../../../services/sequenciaPedido';
 import { dataCargaParaIso } from "../../../utils/dataCarga";
-import { salvarCabecalhoPedido } from "../../../services/pedidosWeb";
+import { salvarCabecalhoPedido, excluirPedido } from "../../../services/pedidosWeb";
 import { salvarItensPedido } from '../../../services/itensPedidoWeb';
 import { montarItensPersistencia } from '../../../domain/pedido/itensPersistencia';
 import { salvarObservacoesPedido } from '../../../services/observacoesPedidoWeb';
@@ -23,6 +23,7 @@ export function criarAcoesPersistencia({
     referenciaEnderecoDigitado,
     getCodigoTipoLogradouro,
     cliente,
+    clienteDetalhado,
     operacao,
     CondPgto,
     cobrancaFrete,
@@ -110,6 +111,7 @@ export function criarAcoesPersistencia({
             numPedidoMatriz: null,
             numPedidoFilial: null,
             codCliente: numero(cliente.cod_pessoa), codRep: numero(representante?.cod_pessoa_rep),
+            desConsultor: clienteDetalhado?.des_consultor || null,
             codOper: numero(operacao.cod_oper), codCondPgto: numero(CondPgto.cod_cond_pgto),
             indConsumidor: clienteConsumidor ? 1 : 0, codModalidade: Number(modalidadeIntegracao),
             tipFrete: opcaoFrete === 'COBRAR_NF' ? 1 : 0,
@@ -169,6 +171,28 @@ export function criarAcoesPersistencia({
 
     function novaCotacao() {
         navigate(`/${location.search}`);
+    }
+
+    async function excluirCotacao() {
+        const id = sequenciaPedido.current;
+        if (!id || operacaoPersistencia.current) return;
+        if (!window.confirm(`Deseja realmente excluir o pedido ${id}? Esta ação não pode ser desfeita.`)) return;
+        operacaoPersistencia.current = true;
+        setLoading(true);
+        try {
+            await excluirPedido(id);
+            assinaturaSalva.current = assinaturaAtual;
+            navigate(`/${location.search}`);
+        } catch (error) {
+            setModalErro({
+                aberto: true,
+                mensagem: 'Não foi possível excluir o pedido.',
+                detalhes: error.response?.data?.detalhes || error.response?.data || error.message
+            });
+        } finally {
+            operacaoPersistencia.current = false;
+            setLoading(false);
+        }
     }
 
     function limparTelaPedidoVenda() {
@@ -237,5 +261,5 @@ export function criarAcoesPersistencia({
         limparEnderecoCep();
     }
 
-    return { persistirCabecalho, persistirPedido, salvarCotacao, novaCotacao, limparTelaPedidoVenda };
+    return { persistirCabecalho, persistirPedido, salvarCotacao, excluirCotacao, novaCotacao, limparTelaPedidoVenda };
 }

@@ -11,6 +11,7 @@ export function CabecalhoPedido({
     setCodClienteDigitado,
     buscarClientePorCodigo,
     cliente,
+    clienteDetalhado,
     statusHistoricoCliente,
     formatarDataHistoricoCliente,
     historicoCliente,
@@ -144,12 +145,17 @@ export function CabecalhoPedido({
 
                     {/* Representante */}
                     <label>Representante:</label>
-                    <div className="field-group full">
+                    <div className="field-group full representante-consultor">
                         <input type="text" className='input-cod' value={codRepresentanteDigitado}
                             onChange={(e) => setCodRepresentanteDigitado(e.target.value)}
                             onBlur={() => buscarRepresentantePorCodigo(codRepresentanteDigitado)}
                         />
                         <input type="text" className='input-desc' value={representante?.des_pessoa || ''} readOnly />
+                        <div className="consultor-pedido">
+                            <label htmlFor="pedido-consultor">Consultor:</label>
+                            <input id="pedido-consultor" type="text" className="input-desc"
+                                value={cliente ? clienteDetalhado?.des_consultor || '' : ''} readOnly />
+                        </div>
                         <FaSearch className="icon" onClick={() => { if (!cliente) { alert('Selecione um cliente primeiro'); return; } setOpenLovRepresentantes(true); }} />
                         <LovRepresentantes
                             isOpen={openLovRepresentantes}

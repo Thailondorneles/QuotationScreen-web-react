@@ -37,6 +37,7 @@ function FormularioPedidoVenda() {
                 setCodClienteDigitado={pedido.setCodClienteDigitado}
                 buscarClientePorCodigo={pedido.buscarClientePorCodigo}
                 cliente={pedido.cliente}
+                clienteDetalhado={pedido.clienteDetalhado}
                 statusHistoricoCliente={pedido.statusHistoricoCliente}
                 formatarDataHistoricoCliente={pedido.formatarDataHistoricoCliente}
                 historicoCliente={pedido.historicoCliente}
@@ -149,6 +150,7 @@ function FormularioPedidoVenda() {
             <ModalErro
                 aberto={modalErro.aberto}
                 mensagem={modalErro.mensagem}
+                detalhes={modalErro.detalhes}
                 onClose={() => {
                     setModalErro({ aberto: false, mensagem: '', seqItem: null });
                     setTimeout(() => {
@@ -263,6 +265,8 @@ function FormularioPedidoVenda() {
                 loading={pedido.loading}
                 loadingDadosCliente={pedido.loadingDadosCliente}
                 salvarCotacao={pedido.salvarCotacao}
+                excluirCotacao={pedido.excluirCotacao}
+                pedidoSalvo={!!pedido.sequenciaPedido.current}
                 novaCotacao={pedido.novaCotacao}
             />
             <LovUnidadesPedido

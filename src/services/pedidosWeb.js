@@ -38,6 +38,17 @@ export async function consultarPedido(id) {
     return pedido;
 }
 
+export async function excluirPedido(id) {
+    const { data, status } = await unimedApi.delete(`EsPePedidos/${encodeURIComponent(id)}`, { data: {} });
+    if (typeof data === 'string' && /<!doctype|<html/i.test(data)) {
+        throw new Error('A API retornou uma página HTML em vez da confirmação de exclusão.');
+    }
+    if (status !== 200 || data?.success !== true || data?.erro) {
+        throw new Error(data?.erro || data?.mensagem || 'A API não confirmou a exclusão do pedido.');
+    }
+    return data;
+}
+
 export async function salvarCabecalhoPedido(payload) {
     try {
         const { data } = await unimedApi.post('EsPePedidosIns', payload);

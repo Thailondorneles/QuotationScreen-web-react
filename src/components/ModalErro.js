@@ -1,5 +1,5 @@
 import '../style/modalErro.css'
-export function ModalErro({ aberto, mensagem, onClose }) {
+export function ModalErro({ aberto, mensagem, detalhes, onClose }) {
         if (!aberto) return null;
 
         return (
@@ -9,6 +9,12 @@ export function ModalErro({ aberto, mensagem, onClose }) {
 
                     <div className="modal-conteudo">
                         {mensagem}
+                        {detalhes && <details style={{ marginTop: 12 }}>
+                            <summary style={{ cursor: 'pointer' }}>Mostrar detalhes</summary>
+                            <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '40vh', overflow: 'auto' }}>
+                                {typeof detalhes === 'string' ? detalhes : JSON.stringify(detalhes, null, 2)}
+                            </pre>
+                        </details>}
                     </div>
 
                     <div className="modal-acoes">

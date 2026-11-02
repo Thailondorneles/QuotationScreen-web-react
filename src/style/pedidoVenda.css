@@ -165,6 +165,33 @@ label {
   min-width: 0;
 }
 
+.consultor-pedido {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.consultor-pedido label {
+  flex-shrink: 0;
+}
+
+.representante-consultor > .input-desc {
+  flex: 1 1 0;
+}
+
+@media (max-width: 768px) {
+  .representante-consultor {
+    flex-wrap: wrap;
+  }
+
+  .representante-consultor .consultor-pedido {
+    flex-basis: 100%;
+    order: 1;
+  }
+}
+
 .icon {
   color: var(--ambiente-cor, #2e7d32);
   cursor: pointer;

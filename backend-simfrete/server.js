@@ -5,6 +5,7 @@ const dotenv = require('dotenv');
 const http = require('http');
 const https = require('https');
 const { registrarIntegracaoLog } = require('./services/integracaoLog');
+const { mensagemErroUnimed } = require('./services/erroUnimed');
 
 dotenv.config({ quiet: true });
 
@@ -72,7 +73,8 @@ app.use('/api/unimed', async (req, res) => {
   const targetPath = encodedPath.replace(/^\/+/, '');
   const atualizarParametro = req.method === 'PUT' && /^parsConf\/\d+$/.test(targetPath);
   const salvarPedido = req.method === 'POST' && ['EsPePedidosIns', 'EsPeItensIns', 'EsPeObservacoes', 'EsPeEnderecos', 'EsPePedidos/integracao'].includes(targetPath);
-  if (req.method !== 'GET' && !atualizarParametro && !salvarPedido) {
+  const excluirPedido = req.method === 'DELETE' && /^EsPePedidos\/\d+$/.test(targetPath);
+  if (req.method !== 'GET' && !atualizarParametro && !salvarPedido && !excluirPedido) {
     return res.status(405).json({ erro: 'Metodo nao permitido' });
   }
   if (atualizarParametro && typeof req.body?.parametro !== 'string') {
@@ -86,6 +88,7 @@ app.use('/api/unimed', async (req, res) => {
   try {
     const response = atualizarParametro
       ? await unimedApi.put(targetPath, { parametro: req.body.parametro })
+      : excluirPedido ? await unimedApi.delete(targetPath, { data: {} })
       : salvarPedido ? await unimedApi.post(targetPath, req.body)
       : await unimedApi.get(targetPath, { params: req.query });
 
@@ -93,7 +96,8 @@ app.use('/api/unimed', async (req, res) => {
   } catch (err) {
 
     return res.status(err?.response?.status || 500).json({
-      erro: 'Erro ao acessar servico unimed',
+      erro: excluirPedido ? mensagemErroUnimed(err) : 'Erro ao acessar servico unimed',
+      ...(excluirPedido ? { detalhes: mensagemErroUnimed(err) } : {}),
       origem: 'ORDS',
       recurso: targetPath,
       metodo: req.method

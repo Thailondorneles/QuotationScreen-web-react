@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from 'react';
 import { parametros } from "../../config/parametrosAplicacao";
 import { NotasItemCliente } from "../NotasItemCliente";
 import LotesDisponiveisItem from "../LotesDisponiveisItem";
@@ -63,6 +64,41 @@ export function ItensPedido({
     getCodigoUnidadeCompra,
     formatarDataHistoricoCliente
 }) {
+    const tabelasRef = useRef(null);
+
+    useLayoutEffect(() => {
+        const layout = tabelasRef.current;
+        if (!layout) return;
+        let frame;
+        const alinharLinhas = () => {
+            const tabelas = Array.from(layout.querySelectorAll('.itens-grid'));
+            // Mede a altura natural antes de compartilhar a maior altura de cada item.
+            // Frete e totais ficam fora das tabelas e não participam da medição.
+            const linhasPorTabela = tabelas.map(tabela => Array.from(tabela.rows));
+            linhasPorTabela.flat().forEach(linha => { linha.style.height = ''; });
+            if (window.matchMedia('(max-width: 1500px)').matches) return;
+            const alturas = linhasPorTabela[0]?.map((_, indice) =>
+                Math.max(...linhasPorTabela.map(linhas => linhas[indice]?.getBoundingClientRect().height || 0))
+            ) || [];
+            linhasPorTabela.forEach(linhas => linhas.forEach((linha, indice) => {
+                linha.style.height = `${alturas[indice]}px`;
+            }));
+        };
+        const agendarAlinhamento = () => {
+            cancelAnimationFrame(frame);
+            frame = requestAnimationFrame(alinharLinhas);
+        };
+        alinharLinhas();
+        const observer = new ResizeObserver(agendarAlinhamento);
+        layout.querySelectorAll('.itens-grid').forEach(tabela => observer.observe(tabela));
+        window.addEventListener('resize', agendarAlinhamento);
+        return () => {
+            observer.disconnect();
+            cancelAnimationFrame(frame);
+            window.removeEventListener('resize', agendarAlinhamento);
+        };
+    });
+
     function cabecalhoOrdenavelItens(coluna, texto) {
         const indicador = ordenacaoItens.coluna === coluna
             ? ordenacaoItens.direcao === 'asc' ? '↑' : '↓'
@@ -266,7 +302,7 @@ export function ItensPedido({
                 </div>
                 {importacaoAberta && <ModalImportarItens onClose={() => setImportacaoAberta(false)} onImportar={importarItensExcel} />}
                 <div className="itens-table-wrapper">
-                    <div className="tabelas-itens-layout">
+                    <div className="tabelas-itens-layout" ref={tabelasRef}>
                         <section className="tabela-itens-bloco tabela-itens-principal">
                             <div className="tabela-bloco-cabecalho">
                                 <div className="itens-legenda-titulo">

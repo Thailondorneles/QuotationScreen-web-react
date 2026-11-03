@@ -79,6 +79,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
     const [filtro, setFiltro] = useState(FILTRO_PADRAO);
     const [itensSelecionados, setItensSelecionados] = useState({});
     const [quantidades, setQuantidades] = useState({});
+    const inicioCliqueItem = useRef(null);
     const [erroQuantidade, setErroQuantidade] = useState('');
     const [menuSelecionarOpen, setMenuSelecionarOpen] = useState(false);
     const [ordenacao, setOrdenacao] = useState({ coluna: null, direcao: null });
@@ -604,6 +605,13 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                 return (
                                     <tr
                                                 key={item.cod_item}
+                                                onPointerDownCapture={event => {
+                                                    inicioCliqueItem.current = {
+                                                        quantidade: Boolean(event.target.closest('.lov-quantidade-col')),
+                                                        x: event.clientX,
+                                                        y: event.clientY
+                                                    };
+                                                }}
                                                 className={[
                                                     existe ? 'lov-row-disabled' : selecionado ? 'lov-row-selected' : '',
                                                     marcaPropria ? 'lov-row-marca-propria' : '',
@@ -613,6 +621,10 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                                                 ].filter(Boolean).join(' ')}
                                                 onClick={event => {
                                                     if (event.target.closest('.lov-quantidade-col')) return;
+                                                    const inicio = inicioCliqueItem.current;
+                                                    // Ao soltar fora do input, o navegador pode enviar o clique à linha.
+                                                    if (event.detail > 0 && inicio && (inicio.quantidade ||
+                                                        Math.hypot(event.clientX - inicio.x, event.clientY - inicio.y) > 5)) return;
                                                     if (!existe) alternarItem(item.cod_item, item);
                                                 }}
                                             >

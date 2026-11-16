@@ -160,7 +160,7 @@ export function criarAcoesPersistencia({
         setLoading(true);
         try {
             await persistirPedido();
-            navigate(`/${location.search}`);
+            navigate(`/pedidos${location.search}`);
         } catch (error) {
             setModalErro({ aberto: true, mensagem: error.response?.data?.erro || error.message });
         } finally {
@@ -170,7 +170,7 @@ export function criarAcoesPersistencia({
     }
 
     function novaCotacao() {
-        navigate(`/${location.search}`);
+        navigate(`/pedidos${location.search}`);
     }
 
     async function excluirCotacao() {
@@ -182,7 +182,7 @@ export function criarAcoesPersistencia({
         try {
             await excluirPedido(id);
             assinaturaSalva.current = assinaturaAtual;
-            navigate(`/${location.search}`);
+            navigate(`/pedidos${location.search}`);
         } catch (error) {
             setModalErro({
                 aberto: true,

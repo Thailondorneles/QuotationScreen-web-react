@@ -26,7 +26,7 @@ function FormularioPedidoVenda() {
     if (carregandoPedido) return <LoadingOverlay isOpen />;
     if (erroCarregamentoPedido) return <div className="pedido-venda-container"><div className="pedido-card">
         <p role="alert">{erroCarregamentoPedido}</p>
-        <button className="btn-adicionar" onClick={() => navigate(`/${location.search}`)}>Voltar para pedidos</button>
+        <button className="btn-adicionar" onClick={() => navigate(`/pedidos${location.search}`)}>Voltar para pedidos</button>
     </div></div>;
 
     return (

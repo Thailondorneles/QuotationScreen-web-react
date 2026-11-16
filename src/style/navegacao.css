@@ -1,0 +1,18 @@
+.header .menu-abrir { background: transparent; color: #fff; border: 1px solid #ffffff65; border-radius: 4px; padding: 10px; display: inline-flex; font-size: 21px; cursor: pointer; margin: 0 16px 0 0; }
+.header { justify-content: flex-start; }
+.header .logo { padding-left: 0; min-width: 145px; max-width: 220px; cursor: pointer; }
+.menu-principal { padding: 28px 20px; color: #333; }
+.menu-boas-vindas { max-width: 680px; margin: clamp(48px, 12vh, 140px) auto; text-align: center; padding: 0 16px; }
+.menu-boas-vindas-area { color: var(--ambiente-cor, #2e8b1c); font-size: 14px; }
+.menu-boas-vindas h1 { font-size: 30px; font-weight: 600; margin: 14px 0; }
+.menu-boas-vindas p { color: #666; font-size: 16px; line-height: 1.7; margin: 0; }
+.menu-camada { position: fixed; inset: 0; z-index: 2000; background: #0006; }
+.menu-lateral { width: min(310px, 88vw); height: 100%; overflow: auto; background: #fff; box-shadow: 4px 0 16px #0002; }
+.menu-lateral-topo { display: flex; align-items: center; justify-content: space-between; background: var(--ambiente-cor, #2e8b1c); color: #fff; padding: 22px; font-size: 20px; }
+.menu-lateral-topo button { color: inherit; background: transparent; border: 0; padding: 8px; cursor: pointer; display: flex; font-size: 20px; }
+.menu-lateral nav { display: grid; gap: 6px; padding: 18px 12px; }
+.menu-lateral nav a { display: flex; align-items: center; gap: 16px; padding: 16px; border-radius: 4px; text-decoration: none; color: #444; }
+.menu-lateral nav a:hover, .menu-lateral nav a.active { background: #eef5eb; color: var(--ambiente-cor, #2e8b1c); }
+.menu-lateral a:focus-visible, .menu-lateral button:focus-visible, .menu-abrir:focus-visible { outline: 3px solid #a5c98b; outline-offset: 3px; }
+@media (max-width: 1000px) { .menu-atalhos { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { .menu-principal { padding: 16px 12px; } }

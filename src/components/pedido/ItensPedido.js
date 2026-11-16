@@ -211,8 +211,8 @@ export function ItensPedido({
                 componente('Venda', 'base'),
                 opcaoFrete === 'COBRAR_NF' && Number(imp.indIpiFreteSoma) === 1 && componente('Frete')
             )},
-            Number(imp.indSubsMercadoria) === 1 && {
-                nome: imp.difal?.toUpperCase().includes('DIF') ? 'DIFAL' : 'ICMS ST',
+            Number(imp.indSubsMercadoria) === 1 && imp.difal?.toUpperCase().includes('DIF') && {
+                nome: 'DIFAL',
                 componentes: componentesAtivos(
                     componente(item.baseST ? 'Lista ST' : imp.idxSubsTrib ? 'Venda × índice' : 'Venda', 'base'),
                     opcaoFrete === 'COBRAR_NF' && Number(imp.indSubsFreteSoma) === 1 && componente('Frete'),
@@ -229,7 +229,6 @@ export function ItensPedido({
                 <div className="tooltip-info">
                     <strong>Detalhes do Item</strong>
                     <div className="tip-linha"><span className="tip-nome">ICMS:</span><span className="tip-valor">{format.moeda(valores.icms ?? 0)}</span><span className="tip-percent">{format.percentual(item.impostos?.perIcms)}</span></div>
-                    <div className="tip-linha"><span className="tip-nome">ICMS ST:</span><span className="tip-valor">{format.moeda(valores.st ?? 0)}</span><span className="tip-percent">{format.percentual(item.impostos?.perSubstTrib)}</span></div>
                     <div className="tip-linha"><span className="tip-nome">DIFAL:</span><span className="tip-valor">{format.moeda(valores.difal ?? 0)}</span><span className="tip-percent">{format.percentual(item.impostos?.perDifal)}</span></div>
                     <div className="tip-linha"><span className="tip-nome">PIS:</span><span className="tip-valor">{format.moeda(valores.pis ?? 0)}</span><span className="tip-percent">{format.percentual(item.impostos?.perPis)}</span></div>
                     <div className="tip-linha"><span className="tip-nome">COFINS:</span><span className="tip-valor">{format.moeda(valores.cofins ?? 0)}</span><span className="tip-percent">{format.percentual(item.impostos?.perCofins)}</span></div>

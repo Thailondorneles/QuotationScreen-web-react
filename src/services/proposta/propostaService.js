@@ -1,6 +1,8 @@
 export async function exportarPropostas(propostas, formato) {
     try {
-        const gerar = formato === 'excel'
+        const gerar = formato === 'contrato'
+            ? (await import('./contratoPdfService.js')).gerarContratoPdf
+            : formato === 'excel'
             ? (await import('./propostaExcelService.js')).gerarPropostaExcel
             : (await import('./propostaPdfService.js')).gerarPropostaPdf;
 

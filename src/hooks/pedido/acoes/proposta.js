@@ -5,6 +5,7 @@ import { exportarPropostas } from "../../../services/proposta/propostaService.js
 
 // Recebe os dados e callbacks do render atual; não mantém estado próprio.
 export function criarAcoesProposta({
+    sequenciaPedido,
     dataCargaDigitada,
     setModalErro,
     obterDadosPropostaTela,
@@ -30,6 +31,9 @@ export function criarAcoesProposta({
             const dadosProposta = obterDadosPropostaTela();
             dadosProposta.cliente = await obterClienteParaProposta(dadosProposta.cliente);
             const propostas = criarPropostasPorUnidade(dadosProposta);
+            if (formato === 'contrato') propostas.forEach(proposta => {
+                proposta.numero = sequenciaPedido?.current || '';
+            });
             await exportarPropostas(propostas, formato);
             setModalEmitirProposta(false);
         } catch (error) {

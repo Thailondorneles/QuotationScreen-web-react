@@ -2,24 +2,40 @@ import '../style/lovStyle.css';
 import { FaX, FaChevronLeft, FaChevronRight } from "react-icons/fa6";
 import { useEffect, useState } from 'react';
 import { useLovPagination } from '../hooks/useLovPagination';
-import { getCondPgtoByFilter, getCondPgto } from '../services/condPgto';
+import { getAllCondPgtoCached, filtrarCondicoesPagamento } from '../services/condPgto';
 
 export function LovCondPgto({ isOpen, setLovOpen, codCond, onSelect }) {
     const [filtro, setFiltro] = useState('');
+    const [filtroAplicado, setFiltroAplicado] = useState('');
+    const [erro, setErro] = useState('');
 
     const lov = useLovPagination({
         limit: 25,
-        fetchFn: ({ filtro, offset, limit }) => {
-            if (String(filtro ?? '').trim() !== '') {
-                return getCondPgtoByFilter({ filtro, offset, limit });
-            }
-            return getCondPgto({ offset, limit });
+        fetchFn: async ({ filtro, offset, limit }) => {
+            const condicoes = filtrarCondicoesPagamento(await getAllCondPgtoCached(), filtro);
+            return { data: {
+                items: condicoes.slice(offset, offset + limit),
+                count: condicoes.length,
+                hasMore: offset + limit < condicoes.length
+            } };
         }
     });
 
+    async function buscar(valorFiltro, novoOffset = 0) {
+        setErro('');
+        try {
+            await lov.buscar({ filtro: valorFiltro, novoOffset });
+            setFiltroAplicado(valorFiltro);
+        } catch {
+            setErro('Não foi possível carregar as condições de pagamento. Tente novamente.');
+        }
+    }
+
     useEffect(() => {
         if (isOpen) {
-            lov.buscar({ filtro: codCond, novoOffset: 0 }).catch(() => {});
+            const valorFiltro = String(codCond ?? '');
+            setFiltro(valorFiltro);
+            buscar(valorFiltro);
         }
         // eslint-disable-next-line
     }, [isOpen, codCond]);
@@ -39,18 +55,22 @@ export function LovCondPgto({ isOpen, setLovOpen, codCond, onSelect }) {
                     <label>Localizar:</label>
                     <input
                         value={filtro}
+                        placeholder="Código ou descrição"
                         onChange={e => setFiltro(e.target.value)}
                         onKeyDown={e =>
                             e.key === 'Enter' &&
-                            lov.buscar({ filtro, novoOffset: 0 })
+                            buscar(filtro)
                         }
                     />
-                    <button onClick={() => lov.buscar({ filtro, novoOffset: 0 })}>
+                    <button disabled={lov.loading} onClick={() => buscar(filtro)}>
                         BUSCAR
                     </button>
                 </div>
 
                 <div className="lov-list">
+                    {erro && <div role="alert">{erro}</div>}
+                    {lov.loading && <div className="lov-loading"><span className="lov-spinner"></span></div>}
+                    {!lov.loading && !erro && lov.data.length === 0 && <p>Nenhuma condição de pagamento encontrada.</p>}
                     <table>
                         <tbody>
                             {lov.data.map(cond => (
@@ -70,15 +90,15 @@ export function LovCondPgto({ isOpen, setLovOpen, codCond, onSelect }) {
                     </table>
                 </div>
                 <div className="lov-footer">
-                    <button disabled={!lov.podeVoltar} onClick={() => lov.buscar({ filtro, novoOffset: lov.offset - 25 })}>
+                    <button disabled={lov.loading || !lov.podeVoltar} onClick={() => buscar(filtroAplicado, lov.offset - 25)}>
                         <FaChevronLeft />
                     </button>
 
                     <span>
-                        {lov.offset + 1}-{lov.offset + lov.data.length}
+                        {lov.data.length ? lov.offset + 1 : 0}-{lov.offset + lov.data.length} de {lov.total}
                     </span>
 
-                    <button disabled={!lov.podeAvancar} onClick={() => lov.buscar({ filtro, novoOffset: lov.offset + 25 })}>
+                    <button disabled={lov.loading || !lov.podeAvancar} onClick={() => buscar(filtroAplicado, lov.offset + 25)}>
                         <FaChevronRight />
                     </button>
                 </div>

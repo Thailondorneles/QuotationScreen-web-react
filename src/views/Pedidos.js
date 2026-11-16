@@ -6,6 +6,13 @@ import '../style/pedidoVenda.css';
 import '../style/pedidos.css';
 
 const PEDIDOS_POR_PAGINA = 13;
+function periodoPadrao() {
+    const hoje = new Date();
+    const inicio = new Date(hoje);
+    inicio.setDate(inicio.getDate() - 30);
+    const isoLocal = data => `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`;
+    return { de: isoLocal(inicio), ate: isoLocal(hoje) };
+}
 const COLUNAS = [
     ['numSeqPedido', 'Sequencial'], ['codCliente', 'Cliente'], ['desPessoa', 'Descrição'],
     ['desRepresentante', 'Representante'], ['codUf', 'UF'], ['desCidade', 'Cidade'],
@@ -24,6 +31,8 @@ export function Pedidos() {
     const { search } = useLocation();
     const [pagina, setPagina] = useState(0);
     const [atualizacao, setAtualizacao] = useState(0);
+    const [periodo, setPeriodo] = useState(periodoPadrao);
+    const [periodoConsulta, setPeriodoConsulta] = useState(periodo);
     const [pedidos, setPedidos] = useState([]);
     const [filtros, setFiltros] = useState({});
     const pedidosFiltrados = useMemo(() => pedidos.filter(pedido => COLUNAS.every(([campo]) => {
@@ -81,7 +90,10 @@ export function Pedidos() {
         setCarregando(true);
         setMenu(null);
         setErro('');
-        listarTodosPedidos().then(resultado => {
+        listarTodosPedidos({
+            dataInicio: periodoConsulta.de.split('-').reverse().join('/'),
+            dataFim: periodoConsulta.ate.split('-').reverse().join('/')
+        }).then(resultado => {
             if (ativo) {
                 setPedidos(resultado);
                 setPagina(v => Math.min(v, Math.max(0, Math.ceil(resultado.length / PEDIDOS_POR_PAGINA) - 1)));
@@ -89,9 +101,25 @@ export function Pedidos() {
         }).catch(() => { if (ativo) setErro('Não foi possível carregar os pedidos.'); })
             .finally(() => { if (ativo) setCarregando(false); });
         return () => { ativo = false; };
-    }, [atualizacao]);
+    }, [atualizacao, periodoConsulta]);
     return <div className="pedido-venda-container"><div className="pedido-card">
         <h2 className="pedido-title">Pedidos</h2>
+        <form className="pedidos-periodo" onSubmit={event => {
+            event.preventDefault();
+            if (!periodo.de || !periodo.ate || periodo.de > periodo.ate) return;
+            setPagina(0);
+            setPeriodoConsulta({ ...periodo });
+        }}>
+            <label>Data inicial
+                <input type="date" required value={periodo.de} max={periodo.ate || undefined}
+                    onChange={event => setPeriodo(anterior => ({ ...anterior, de: event.target.value }))} />
+            </label>
+            <label>Data final
+                <input type="date" required value={periodo.ate} min={periodo.de || undefined}
+                    onChange={event => setPeriodo(anterior => ({ ...anterior, ate: event.target.value }))} />
+            </label>
+            <button type="submit" className="btn-adicionar" disabled={carregando}>Buscar</button>
+        </form>
         <div className="pedidos-toolbar">
         <div className="obs-footer pedidos-acoes">
             <button className="btn-adicionar" onClick={() => navigate(`/pedido${search}`)}>Nova cotação</button>

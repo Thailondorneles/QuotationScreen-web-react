@@ -66,8 +66,8 @@ export function criarCalculosPedido({
         if (!qtd || !Number.isFinite(margem)) return null;
 
         const itemSemPreco = { ...item, valorLista: 0 };
-        const impostosFixos = calcularValoresItem(itemSemPreco, 0).totalImpostos;
-        const impostosUmaUnidadeVenda = calcularValoresItem(itemSemPreco, 1).totalImpostos;
+        const impostosFixos = calcularValoresItem(itemSemPreco, 0).impostosSobreSobra;
+        const impostosUmaUnidadeVenda = calcularValoresItem(itemSemPreco, 1).impostosSobreSobra;
         const impostoVariavelPorReal = impostosUmaUnidadeVenda - impostosFixos;
         const divisor = 1 - impostoVariavelPorReal - margem;
         if (divisor <= 0) return null;
@@ -81,8 +81,8 @@ export function criarCalculosPedido({
 
     function calcularPercentualMaximoSobra(item) {
         const itemSemPreco = { ...item, valorLista: 0 };
-        const impostosFixos = calcularValoresItem(itemSemPreco, 0).totalImpostos;
-        const impostosUmaUnidadeVenda = calcularValoresItem(itemSemPreco, 1).totalImpostos;
+        const impostosFixos = calcularValoresItem(itemSemPreco, 0).impostosSobreSobra;
+        const impostosUmaUnidadeVenda = calcularValoresItem(itemSemPreco, 1).impostosSobreSobra;
         return (1 - (impostosUmaUnidadeVenda - impostosFixos)) * 100;
     }
 
@@ -142,11 +142,13 @@ export function criarCalculosPedido({
                 baseSubs += Number(imp.indSubsIpiSoma) === 1 ? ipi : 0;
                 baseSubs += Number(imp.indSubsPisSoma) === 1 ? pis : 0;
                 baseSubs += Number(imp.indSubsCofinsSoma) === 1 ? cofins : 0;
-                st = baseSubs * (Number(imp.perSubstTrib || 0) / 100);
+                st = baseSubs * (Number(imp.perSubstTrib || 0) / 100) - icms;
             }
         }
 
         const totalImpostos = icms + pis + cofins + ipi + difal + st + fcp;
+        // ST é cobrado do cliente à parte e repassado ao governo; não reduz a sobra.
+        const impostosSobreSobra = icms + pis + cofins + ipi + difal + fcp;
 
         // Funrural (ICMS desonerado) — não reduz a sobra, mas precisa ser mostrado e acumulado separadamente
         const perFunrural = Number(imp.perFunrural || imp.per_funrural || 0);
@@ -156,7 +158,7 @@ export function criarCalculosPedido({
         const frete = cobrancaCalculada.valorFixo
             ? (cobrancaCalculada.porItem[item.seq] || 0) : Number(item.valorFrete || 0);
         const { sobraReal, sobraPercentual } = calcularSobraComFrete(
-            valorVendaTotal, valorCustoTotal, totalImpostos, frete,
+            valorVendaTotal, valorCustoTotal, impostosSobreSobra, frete,
             cobrancaCalculada.valorFixo ? 0 : (cobrancaCalculada.porItem[item.seq] || 0)
         ); // não subtrai Funrural
         return {
@@ -175,6 +177,7 @@ export function criarCalculosPedido({
             baseSubs,
             valorFunrural,
             totalImpostos,
+            impostosSobreSobra,
             sobraBruta,
             sobraReal,
             sobraPercentual

@@ -1,4 +1,28 @@
 .pedidos-linha { cursor: pointer; }
+.pedidos-periodo {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+.pedidos-periodo label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13px;
+}
+.pedidos-periodo input {
+    box-sizing: border-box;
+    width: 170px;
+    height: 36px;
+    margin: 0;
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font: inherit;
+}
+.pedidos-periodo button { margin: 0; }
 .pedidos-filtro-cabecalho {
     display: inline-flex;
     align-items: center;

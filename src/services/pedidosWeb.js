@@ -17,11 +17,11 @@ export async function listarPedidos(params) {
     return { items: extrairRegistros(data), hasMore: Boolean(data?.hasMore) };
 }
 
-export async function listarTodosPedidos() {
+export async function listarTodosPedidos(params = {}) {
     const items = [];
     let hasMore;
     do {
-        const pagina = await listarPedidos({ offset: items.length, limit: 500 });
+        const pagina = await listarPedidos({ ...params, offset: items.length, limit: 500 });
         if (pagina.hasMore && !pagina.items.length) {
             throw new Error('A API retornou uma pagina vazia com mais pedidos pendentes.');
         }

@@ -87,6 +87,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
     const [filtroAplicado, setFiltroAplicado] = useState(FILTRO_PADRAO);
     const [offset, setOffset] = useState(0);
     const [loading, setLoading] = useState(false);
+    const [erroBusca, setErroBusca] = useState('');
     const [acordosMap, setAcordosMap] = useState({});
     const [precosImpostosMap, setPrecosImpostosMap] = useState({});
     const [loadingValores, setLoadingValores] = useState(false);
@@ -153,6 +154,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
         const idRequisicao = ultimaRequisicao.current + 1;
         ultimaRequisicao.current = idRequisicao;
         setLoading(true);
+        setErroBusca('');
 
         try {
             const itens = await carregarTodosItens();
@@ -166,6 +168,9 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
         } catch (erro) {
             if (idRequisicao === ultimaRequisicao.current) {
                 setTodosItens(cacheItens?.itens || []);
+                setErroBusca(erro.code === 'ECONNABORTED'
+                    ? 'A consulta de itens demorou demais. Tente buscar novamente.'
+                    : 'Não foi possível carregar os itens. Verifique a conexão com o servidor e tente buscar novamente.');
             }
         } finally {
             if (idRequisicao === ultimaRequisicao.current) {
@@ -561,6 +566,7 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                     </button>
                 </div>
                 {erroQuantidade && <div role="alert" className="lov-quantidade-erro">{erroQuantidade}</div>}
+                {erroBusca && <div role="alert" className="lov-quantidade-erro">{erroBusca}</div>}
                 <div className="lov-list-frame">
                     {loading && (
                         <div className="lov-loading">
@@ -588,6 +594,9 @@ export function LovItens({ isOpen, setLovOpen, onSelect, itensExistentes = [], c
                             </tr>
                         </thead>
                         <tbody>
+                            {!loading && !erroBusca && itensPaginados.length === 0 && (
+                                <tr><td colSpan={14}>Nenhum item encontrado. Altere ou limpe o filtro e busque novamente.</td></tr>
+                            )}
                             {itensPaginados.map(item => {
                                 const existe = itemJaExiste(item.cod_item);
                                 const selecionado = itemEstaSelecionado(item.cod_item);

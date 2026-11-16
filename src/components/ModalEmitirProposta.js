@@ -18,6 +18,10 @@ export function ModalEmitirProposta({ aberto, carregando, onSelecionar, onCancel
                             <strong>Excel</strong>
                             <span>Planilha editável com os itens e totais</span>
                         </button>
+                        <button type="button" disabled={carregando} onClick={() => onSelecionar('contrato')}>
+                            <strong>Contrato PDF</strong>
+                            <span>Termo de acordo comercial com cliente e itens selecionados</span>
+                        </button>
                     </div>
                     {carregando && <div className="modal-proposta-status">Gerando arquivos...</div>}
                 </div>

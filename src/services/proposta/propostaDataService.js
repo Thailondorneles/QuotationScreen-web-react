@@ -56,6 +56,7 @@ export function criarPropostasPorUnidade(dados) {
                     principioAtivo: item.principiosAtivos || item.principios_ativos || '',
                     marca: item.marca || item.cod_completo || '',
                     unidadeMedida: item.unidadeMedida || '',
+                    referenciaFabricante: primeiroValor(item.referenciaFabricante, item.ref_fabricante, item.cod_referencia),
                     quantidade,
                     valorUnitario,
                     valorTotal: quantidade * valorUnitario
@@ -79,6 +80,9 @@ export function criarPropostasPorUnidade(dados) {
             cliente: {
                 codigo: dados.cliente?.cod_pessoa || '',
                 nome: dados.cliente?.des_pessoa || '',
+                nomeFantasia: primeiroValor(dados.cliente?.des_fantasia, dados.clienteDetalhado?.des_fantasia),
+                contato: primeiroValor(dados.cliente?.des_contato, dados.clienteDetalhado?.des_contato),
+                uf: primeiroValor(dados.cliente?.cod_uf, dados.clienteDetalhado?.cod_uf, dados.endereco?.uf),
                 cidade: primeiroValor(dados.cliente?.des_cidade, dados.clienteDetalhado?.des_cidade),
                 cnpj: primeiroValor(dados.clienteDetalhado?.cnpj, dados.clienteDetalhado?.num_cnpj_cpf, dados.cliente?.cnpj),
                 telefone: primeiroValor(dados.clienteDetalhado?.telefone, dados.clienteDetalhado?.num_fone, dados.cliente?.num_fone, dados.cliente?.telefone),

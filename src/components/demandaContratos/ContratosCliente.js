@@ -1,6 +1,8 @@
+import { TabelaOrdenavel } from './TabelaOrdenavel';
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { carregarContratosCliente } from '../../services/demandaContratos/contratos';
 import { invalidarConsultas } from '../../services/consultaCache';
+import { SugestaoVisita } from './SugestaoVisita';
 import { mesesRecentes, resumirContratos, montarContratosDemanda, classificarEfetividade, valorContratadoVigencia, resumirMarca } from '../../domain/demandaContratos/contratos';
 
 const numero = valor => valor == null ? '—' : Number(valor).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
@@ -52,17 +54,17 @@ function TabelaItens({ itens, meses, reserva = false, porMarca = false }) {
     }, [itens, historico]);
     return <>
         <div className="demanda-tabela-acoes"><label><input type="checkbox" checked={historico} onChange={event => setHistorico(event.target.checked)} /> Mostrar consumo mês a mês</label><span>{itens.length} registro(s)</span></div>
-        <div className="demanda-tabela-scroll demanda-itens-rolagem" tabIndex={0} aria-label="Itens com rolagem"><table ref={tabelaRef} className={`demanda-tabela${historico ? ' demanda-com-historico' : ''}`}>
+        <div className="demanda-tabela-scroll demanda-itens-rolagem" tabIndex={0} aria-label="Itens com rolagem"><TabelaOrdenavel ref={tabelaRef} className={`demanda-tabela${historico ? ' demanda-com-historico' : ''}`}>
         <colgroup><col className="demanda-col-codigo" /><col className="demanda-col-item" /><col className="demanda-col-marca" /><col />{!reserva && <col />}<col />{historico && meses.map(mes => <col key={mes} />)}<col />{!reserva && <col />}<col /><col /></colgroup>
         <thead><tr><th scope="col">Código</th><th scope="col">Item</th><th scope="col">Marca</th><th scope="col">Pr. unit.</th>{!reserva && <th scope="col">Contrat./mês</th>}<th scope="col">Reserva/mês</th>
             {historico && meses.map((mes, i) => <th scope="col" key={mes}>{mesNome(mes)}{i === meses.length - 1 ? '*' : ''}</th>)}
             <th>Média 3m</th>{!reserva && <th>Efetividade</th>}<th title="Consumo total em quantidade × preço unitário do contrato">Consumido (R$)</th><th>Último consumo</th></tr></thead>
         <tbody>{itens.map((item, i) => <tr key={`${item.cod_item}-${i}`}>
-            <td>{item.cod_item}</td><td>{item.des_item}{porMarca && <small className="demanda-item-pedidos">{item.origem === '14' ? `14: ${item.num_pedido} · 37: ${item.pedido37 ?? 'Sem vínculo'}` : `37: ${item.num_pedido} · Sem pedido de reserva`}</small>}</td><td>{item.cod_completo || 'Não informada'}</td><td>{moeda(item.vlr_uni_bruto)}</td>{!reserva && <td>{numero(item.quantidadeContratada === undefined ? item.quantidade : item.quantidadeContratada)}</td>}<td>{numero(reserva ? item.quantidade : item.reservaMensal)}</td>
+            <td>{item.cod_item}</td><td>{item.des_item}{porMarca && <small className="demanda-item-pedidos">{item.origem === '14' ? `14: ${item.num_pedido} · 37: ${item.pedido37 ?? 'Sem vínculo'}` : `37: ${item.num_pedido} · Sem pedido de reserva`}</small>}</td><td>{item.cod_completo || 'Não informada'}</td><td>{moeda(item.vlr_uni_bruto)}</td>{!reserva && <td>{numero(item.quantidadeContratada ?? item.quantidade)}{item.quantidadeContratada === null && <small className="demanda-item-pedidos" title="Sem item correspondente no contrato 37. Esta quantidade do pedido 14 serve de referência aos cálculos.">Base: reserva</small>}</td>}<td>{numero(reserva ? item.quantidade : item.reservaMensal)}</td>
             {historico && meses.map(mes => <td key={mes}>{numero(item.consumos[mes] || 0)}</td>)}
             <td>{numero(item.media)}</td>{!reserva && <td><Efetividade media={item.media} valor={item.efetividade} /></td>}<td>{moeda(item.totalConsumido * (Number(item.vlr_uni_bruto) || 0))}</td><td>{mesNome(Object.keys(item.consumos).filter(mes => item.consumos[mes] > 0).sort().pop())}</td>
         </tr>)}</tbody>
-    </table></div></>;
+    </TabelaOrdenavel></div></>;
 }
 
 function TabelaMarcas({ marcas, meses }) {
@@ -85,7 +87,7 @@ function TabelaMarcas({ marcas, meses }) {
         .sort((a, b) => b.resumo.contratado - a.resumo.contratado || a.marca.localeCompare(b.marca));
     return <>
         <p className="demanda-orientacao">Clique na marca para ver os itens, com o acordado × o consumido e os valores.</p>
-        <div className="demanda-tabela-scroll demanda-marcas-rolagem" tabIndex={0} aria-label="Marcas com rolagem"><table ref={tabelaRef} className="demanda-tabela demanda-marcas-resumo">
+        <div className={`demanda-tabela-scroll demanda-marcas-rolagem${Object.values(abertas).some(Boolean) ? ' demanda-marcas-expandidas' : ''}`} tabIndex={0} aria-label="Marcas com rolagem"><TabelaOrdenavel ref={tabelaRef} className="demanda-tabela demanda-marcas-resumo">
             <thead><tr><th>Marca</th><th>Itens</th><th>Contratado /mês (qtd)</th><th>Consumo médio /mês (qtd)</th><th>Efetividade</th><th>Contratado /mês (R$)</th><th>Consumo médio /mês (R$)</th><th>Consumido no período (R$)</th></tr></thead>
             <tbody>{linhas.map(({ marca, itens, resumo }) => <Fragment key={marca}>
                 <tr data-marca={marca} className={abertas[marca] ? 'demanda-contrato-aberto' : undefined}>
@@ -94,9 +96,11 @@ function TabelaMarcas({ marcas, meses }) {
                     <td><BarraEfetividade itens={itens} valor={resumo.efetividade} /></td>
                     <td>{moeda(resumo.contratado)}</td><td>{moeda(resumo.consumoMedio)}</td><td>{moeda(resumo.consumido)}</td>
                 </tr>
-                {abertas[marca] && <tr><td colSpan={8} className="demanda-itens-expandidos"><TabelaItens itens={itens} meses={meses} porMarca /></td></tr>}
+                {abertas[marca] && <tr><td colSpan={8} className="demanda-itens-expandidos">
+                    <TabelaItens itens={itens} meses={meses} porMarca />
+                </td></tr>}
             </Fragment>)}</tbody>
-        </table></div>
+        </TabelaOrdenavel></div>
     </>;
 }
 
@@ -104,7 +108,7 @@ function TabelaContratos({ contratos, meses }) {
     const [abertos, setAbertos] = useState({});
     return <>
         <p className="demanda-orientacao">Clique no pedido para ver os itens do contrato.</p>
-        <div className="demanda-tabela-scroll"><table className="demanda-tabela demanda-contratos-resumo">
+        <div className="demanda-tabela-scroll"><TabelaOrdenavel className="demanda-tabela demanda-contratos-resumo">
             <thead><tr><th>Pedidos</th><th>Vigência</th><th>Itens</th><th>Contratado na vigência</th><th>Consumido</th><th>Efetividade</th></tr></thead>
             <tbody>{contratos.map(contrato => {
                 const aberto = !!abertos[contrato.chave];
@@ -125,11 +129,11 @@ function TabelaContratos({ contratos, meses }) {
                     {aberto && <tr><td colSpan={6} className="demanda-itens-expandidos"><TabelaItens itens={contrato.itens} meses={meses} /></td></tr>}
                 </Fragment>;
             })}</tbody>
-        </table></div>
+        </TabelaOrdenavel></div>
     </>;
 }
 
-export function ContratosCliente({ codigo }) {
+export function ContratosCliente({ codigo, cliente, representantes }) {
     const [resultado, setResultado] = useState(null);
     const [carregando, setCarregando] = useState(true);
     const [tentativa, setTentativa] = useState(0);
@@ -190,5 +194,8 @@ export function ContratosCliente({ codigo }) {
             <p className="demanda-orientacao">* Mês atual, parcial. Média dos últimos três meses fechados, limitada ao início do contrato. Para vencidos sem consumo posterior, considera os últimos meses da vigência. Efetividade = média mensal ÷ quantidade contratada.</p>
             <p className="demanda-orientacao">Dentro: de 90% a 110%. Acima: mais de 110%. Abaixo: menos de 90%. Sem consumo: média zero nos meses considerados. Vigência, preço e consumo vêm do pedido 14; a quantidade contratada vem do 37 vinculado. Sem reserva, utiliza os dados do 37. Consumido (R$) = consumo total × preço unitário. Contratado na vigência = quantidade mensal × meses de vigência × preço unitário.</p>
         </>}
-    </section></>;
+    </section>
+    {!carregando && resultado?.contratos !== null && resultado?.reservas !== null && resultado &&
+        <SugestaoVisita key={codigo} codigo={codigo} cliente={cliente} representantes={representantes} itensContratos={todosContratos.flatMap(contrato => contrato.itens)} />}
+    </>;
 }

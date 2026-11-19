@@ -73,7 +73,7 @@ export function InformacoesCliente() {
                 </dl>
             </section>
             </div></section>
-            <ContratosCliente key={dados.cod_pessoa} codigo={dados.cod_pessoa} />
+            <ContratosCliente key={dados.cod_pessoa} codigo={dados.cod_pessoa} cliente={dados} representantes={consulta.informacoes?.representantes || []} />
         </>}
         <LovClientes isOpen={buscaAberta} setLovOpen={setBuscaAberta} onSelect={cliente => { setBuscaAberta(false); consulta.consultar(cliente); }} />
     </>;

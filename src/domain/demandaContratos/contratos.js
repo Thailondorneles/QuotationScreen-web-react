@@ -17,8 +17,8 @@ export function classificarEfetividade(media, efetividade, tolerancia = 10) {
     if (media === null) return { chave: 'nao-iniciado', nome: 'Não iniciado' };
     if (media === 0) return { chave: 'sem-consumo', nome: 'Sem consumo' };
     if (efetividade === null) return { chave: 'sem-base', nome: 'Sem base' };
-    if (efetividade > 100 + tolerancia) return { chave: 'acima', nome: 'Acima' };
-    if (efetividade < 100 - tolerancia) return { chave: 'abaixo', nome: 'Abaixo' };
+    if (efetividade > 100 + tolerancia + 1e-9) return { chave: 'acima', nome: 'Acima' };
+    if (efetividade < 100 - tolerancia - 1e-9) return { chave: 'abaixo', nome: 'Abaixo' };
     return { chave: 'dentro', nome: 'Dentro' };
 }
 

@@ -111,6 +111,7 @@ export function parseCotacoesSimFrete(apiResponse) {
        ? r.resultadoCotacao.map(c => ({
             nome: c.trechos?.[0]?.sigla || 'N/D',
             prazo: c.prazo ?? null,
+            prazoTabelaUteis: typeof c.prazoTabelaUteis === 'boolean' ? c.prazoTabelaUteis : null,
             valor: Number(c.freteTotal || 0),
             cnpj: c.trechos?.[0]?.transportadora || null,
             tipoRateio: c.trechos?.[0]?.tipoRateio || null,

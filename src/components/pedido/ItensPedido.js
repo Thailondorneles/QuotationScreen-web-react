@@ -1,3 +1,4 @@
+import { formatarPrazoFrete } from '../../utils/prazoFrete';
 import { useLayoutEffect, useRef } from 'react';
 import { parametros } from "../../config/parametrosAplicacao";
 import { NotasItemCliente } from "../NotasItemCliente";
@@ -158,7 +159,7 @@ export function ItensPedido({
                                                             <div className="frete-tooltip-main">
                                                                 <div className="tip-linha">
                                                                     <span className="tip-nome" style={{flex: '1 1 auto'}}>{t.nome}</span>
-                                                                    <span className="tip-valor">{t.prazo ? `${t.prazo} dias` : '-'}</span>
+                                                                    <span className="tip-valor">{formatarPrazoFrete(t)}</span>
                                                                     <span className="tip-valor" style={{marginLeft: 12}}>{format.moeda(t.valor)}</span>
                                                                 </div>
                                                             </div>
@@ -256,7 +257,7 @@ export function ItensPedido({
                     <div className="tip-linha"><span className="tip-nome">Sobra:</span><span className="tip-valor">{format.moeda(valores.sobraReal ?? 0)}</span></div>
                     <div className="tip-linha"><span className="tip-nome">Transportadora:</span><span className="tip-valor">{freteItem?.nome || '-'}</span></div>
                     <div className="tip-linha"><span className="tip-nome">Frete cobrado:</span><span className="tip-valor">{format.moeda(cobrancaCalculada.porItem[item.seq] || 0)}</span></div>
-                    <div className="tip-linha"><span className="tip-nome">Prazo:</span><span className="tip-valor">{freteItem?.prazo != null ? `${freteItem.prazo} dias` : '-'}</span></div>
+                    <div className="tip-linha"><span className="tip-nome">Prazo:</span><span className="tip-valor">{formatarPrazoFrete(freteItem)}</span></div>
                     <div className="tip-linha"><span className="tip-nome">Última compra:</span><span className="tip-valor">{formatarDataUltimaCompraItem(item)}</span></div>
                     <div className="tip-linha"><span className="tip-nome">Ticket médio:</span><span className="tip-valor">{item.ticktMedio != null ? format.moeda(item.ticktMedio) : '-'}</span></div>
                     {possuiAcordo && (

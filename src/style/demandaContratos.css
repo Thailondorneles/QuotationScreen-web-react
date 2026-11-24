@@ -162,3 +162,71 @@
 @media (max-width: 750px) { .demanda-perfil-grid { grid-template-columns: 1fr; } .demanda-indicadores { grid-template-columns: repeat(2, minmax(0, 1fr)); } .demanda-cliente-nome { flex-wrap: wrap; } }
 @media (max-width: 900px) { .demanda-dados { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .demanda-dados { grid-template-columns: 1fr; } }
+
+.demanda-conteudo-aba { display: contents; }
+.demanda-conteudo-aba[hidden] { display: none; }
+.demanda-subabas { display: flex; gap: 12px; }
+.demanda-subabas button { background: transparent; border: 0; border-bottom: 2px solid transparent; padding: 12px 8px; cursor: pointer; color: #555; font: inherit; }
+.demanda-subabas button[aria-current="page"] { border-color: var(--ambiente-cor, #2e7d32); color: var(--ambiente-cor, #2e7d32); font-weight: bold; }
+.demanda-consulta-filtros { display: flex; flex-wrap: wrap; gap: 18px; align-items: end; margin-bottom: 24px; }
+.demanda-consulta-filtros label { display: flex; flex: 1; min-width: 180px; flex-direction: column; gap: 8px; color: #555; font-size: 13px; }
+.demanda-consulta-filtros input, .demanda-consulta-filtros select { padding: 12px; background: #f3f4f6; border: 0; border-bottom: 1px solid #b6c3d1; font: inherit; }
+.demanda-consulta-titulo { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.demanda-consulta-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0; }
+.demanda-consulta-chips button { padding: 9px 14px; border: 1px solid #ccd9ca; border-radius: 18px; background: white; color: #444; cursor: pointer; }
+.demanda-consulta-chips button[aria-pressed="true"] { background: var(--ambiente-cor, #2e7d32); border-color: var(--ambiente-cor, #2e7d32); color: white; }
+.demanda-consulta-rolagem { max-height: 840px; overflow: auto; }
+.demanda-consulta-tabela { width: 100%; min-width: 0; table-layout: fixed; }
+.demanda-consulta-tabela thead { position: sticky; top: 0; z-index: 1; }
+.demanda-consulta-tabela th:first-child, .demanda-consulta-tabela td:first-child { text-align: left; }
+.demanda-consulta-tabela th:nth-child(2), .demanda-consulta-tabela td:nth-child(2) { text-align: left; }
+.demanda-consulta-tabela th:not(:first-child):not(:nth-child(2)), .demanda-consulta-tabela td:not(:first-child):not(:nth-child(2)) { text-align: right; }
+.demanda-consulta-tabela th, .demanda-consulta-tabela td { padding: 10px 5px; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.demanda-consulta-tabela th { font-size: 11px; vertical-align: bottom; }
+.demanda-consulta-tabela small { display: block; margin-top: 4px; font-size: 11px; color: #666; font-weight: normal; }
+.demanda-contratos .pedido-card { min-width: 0; }
+.demanda-consulta-resultados { padding-left: 16px; padding-right: 16px; }
+.demanda-consulta-resultados .demanda-indicadores > div { min-width: 0; padding: 16px 12px; }
+.demanda-consulta-resultados .demanda-indicadores dd { overflow-wrap: anywhere; }
+.demanda-consulta-tabela .demanda-mes-consumo { padding: 7px 0; }
+.demanda-consulta-tabela .demanda-status { font-size: 11px; }
+.demanda-consulta-tabela .demanda-status strong { font-size: 12px; }
+.demanda-consulta-tabela .demanda-status span { max-width: 100%; box-sizing: border-box; white-space: normal; font-size: 10px; padding: 2px 4px; }
+.demanda-consulta-pedido { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.demanda-consulta-pedido > span { font-size: 10px; color: #666; }
+.demanda-consulta-pedido .demanda-unidade { padding: 1px 4px; border-radius: 3px; background: var(--ambiente-clara, #eef5eb); color: var(--ambiente-cor, #2e7d32); font-weight: bold; }
+.demanda-consulta-vazia { padding: 32px 20px; margin-top: 24px; border: 1px dashed #cbd9c7; border-radius: 4px; background: #fafcf9; text-align: center; }
+.demanda-consulta-vazia h3 { margin: 0 0 12px; font-size: 17px; }
+.demanda-consulta-vazia p { color: #666; font-size: 13px; }
+@media (max-width: 900px) { .demanda-consulta-tabela { min-width: 1050px; } }
+.demanda-consulta-tabela td.demanda-reserva-sugerida { background: #edf5e9; font-weight: bold; }
+.demanda-mes-consumo { display: block; padding: 10px 3px; border-radius: 3px; }
+.demanda-mes-acima { background: #fff0df; color: #a74b00; }
+.demanda-mes-dentro { background: #e6f2e2; color: #26751b; }
+.demanda-mes-abaixo { background: #e4f1f6; color: #19688b; }
+.demanda-mes-sem-consumo { color: #888; }
+.demanda-mes-fora { background: #fce7e7; color: #aa2020; }
+.demanda-consulta-legenda { display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0; font-size: 12px; }
+.demanda-consulta-legenda span { padding: 5px 8px; border-radius: 3px; }
+.demanda-consulta-tabela small.demanda-vigencia-vencida { color: #aa2020; font-weight: bold; }
+.demanda-consulta-tabela small.demanda-vigencia-alerta { color: #a74b00; font-weight: bold; }
+@media (max-width: 700px) { .demanda-consulta-titulo { align-items: start; flex-direction: column; } }
+.demanda-visao-geral { padding-left: 16px; padding-right: 16px; }
+.demanda-geral-indicadores { grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 1.6fr) minmax(0, 1.6fr) minmax(0, 1.2fr); margin: 20px 0; }
+.demanda-geral-indicadores > div { padding: 16px 12px; min-width: 0; }
+.demanda-geral-indicadores dd { font-size: clamp(16px, 1.35vw, 24px); overflow-wrap: anywhere; }
+.demanda-valor-parcial { display: block; margin-top: 6px; color: #a34d08; font-size: 11px; line-height: 1.4; font-weight: normal; }
+.demanda-geral-indicadores .demanda-indicador-vencidos dd, .demanda-geral-tabela td.demanda-geral-vencido { color: #c62828; font-weight: bold; }
+.demanda-geral-rolagem { max-height: 650px; overflow: auto; }
+.demanda-geral-tabela { min-width: 0; width: 100%; table-layout: fixed; }
+.demanda-geral-tabela thead th { position: sticky; top: 0; z-index: 1; padding: 10px 5px; font-size: 11px; }
+.demanda-geral-tabela td { padding: 12px 5px; font-size: 12px; overflow-wrap: anywhere; }
+.demanda-geral-tabela small { display: block; margin-top: 4px; color: #666; font-size: 11px; }
+.demanda-geral-tabela tbody tr { cursor: pointer; }
+.demanda-geral-tabela .demanda-geral-cliente { border: 0; padding: 0; background: transparent; color: inherit; text-align: left; font: inherit; cursor: pointer; }
+.demanda-geral-cliente:focus-visible { outline: 2px solid var(--ambiente-cor, #2e7d32); outline-offset: 3px; }
+.demanda-geral-tabela .demanda-barra-status { height: 7px; }
+.demanda-geral-tabela .demanda-efetividade-geral { gap: 6px; }
+@media (max-width: 1100px) { .demanda-geral-indicadores { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 900px) { .demanda-geral-tabela { min-width: 1000px; } }
+@media (max-width: 600px) { .demanda-geral-indicadores { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

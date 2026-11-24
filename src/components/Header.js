@@ -5,11 +5,14 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { FaBars, FaTimes, FaHome, FaSignOutAlt } from 'react-icons/fa';
 import { atalhosMenu } from '../views/MenuPrincipal';
 import { ParametrosContext } from '../config/ParametrosContext';
+import { sair } from '../services/sessao';
 import '../style/menuStyle.css';
 
 export function Header() {
   useContext(ParametrosContext);
   const [aberto, setAberto] = useState(false);
+  const [saindo, setSaindo] = useState(false);
+  const [erroSaida, setErroSaida] = useState('');
   const location = useLocation();
   const botaoRef = useRef(null);
   const painelRef = useRef(null);
@@ -32,6 +35,18 @@ export function Header() {
     document.body.style.overflow = 'hidden';
     return () => { document.removeEventListener('keydown', fechar); document.body.style.overflow = overflowAnterior; };
   }, [aberto]);
+
+  async function encerrarSessao() {
+    setSaindo(true);
+    setErroSaida('');
+    try {
+      await sair();
+    } catch {
+      setErroSaida('Não foi possível sair. Tente novamente.');
+      setSaindo(false);
+    }
+  }
+
   return (
     <>
     <header className={"header"}>
@@ -45,6 +60,10 @@ export function Header() {
           <NavLink to={{ pathname: '/', search: location.search }} end onClick={() => setAberto(false)}><FaHome />Menu principal</NavLink>
           {atalhosMenu.map(({ caminho, titulo, Icone }) => <NavLink key={caminho} to={{ pathname: caminho, search: location.search }} end onClick={() => setAberto(false)}><Icone />{titulo}</NavLink>)}
           <a href="http://nl.unimedcentralrs.com.br:8585/NLWeb/invoker" target="_blank" rel="noopener noreferrer"><FaSignOutAlt />Retornar ao NL</a>
+          <button type="button" onClick={encerrarSessao} disabled={saindo}>
+            <FaSignOutAlt />{saindo ? 'Saindo…' : 'Sair do sistema'}
+          </button>
+          {erroSaida && <p className="menu-erro" role="alert">{erroSaida}</p>}
         </nav>
       </aside>
     </div>}

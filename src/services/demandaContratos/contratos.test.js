@@ -1,8 +1,25 @@
-import { consultarDemandaSituacao, carregarContratosCliente } from './contratos';
+import { consultarDemandaSituacao, carregarContratosCliente, carregarVisaoGeral } from './contratos';
 import { unimedApi } from '../../config/apis';
 import { invalidarConsultas } from '../consultaCache';
 jest.mock('../../config/apis', () => ({ unimedApi: { get: jest.fn() } }));
 beforeEach(() => { invalidarConsultas('demandaContratos|'); jest.resetAllMocks(); });
+
+test('visão geral consulta ambas situações sem filtro de cliente e usa cache separado', async () => {
+    unimedApi.get.mockResolvedValue({ data: { items: [{ cod_cliente: 1 }], hasMore: false } });
+    const resultado = await carregarVisaoGeral();
+    expect(resultado.contratos).toHaveLength(1);
+    expect(resultado.reservas).toHaveLength(1);
+    expect(unimedApi.get).toHaveBeenCalledWith('demandaContratos', { params: { situacao: 37, offset: 0, limit: 2000 } });
+    await carregarVisaoGeral();
+    expect(unimedApi.get).toHaveBeenCalledTimes(2);
+    await consultarDemandaSituacao(37, 1);
+    expect(unimedApi.get).toHaveBeenCalledTimes(3);
+});
+
+test('normaliza o campo de unidade retornado pela API', async () => {
+    unimedApi.get.mockResolvedValue({ data: { items: [{ Cod_unidade: 201 }, { cod_unidade: 203 }, { COD_UNIDADE: 230 }], hasMore: false } });
+    expect((await consultarDemandaSituacao(37, 2484)).map(item => item.cod_unidade)).toEqual([201, 203, 230]);
+});
 
 test('carrega todas as páginas antes de filtrar pelo cliente', async () => {
     unimedApi.get.mockImplementation((url, { params }) => Promise.resolve({ data: {

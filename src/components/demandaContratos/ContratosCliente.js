@@ -10,12 +10,12 @@ const moeda = valor => Number(valor || 0).toLocaleString('pt-BR', { style: 'curr
 const data = valor => valor ? String(valor).slice(0, 10).split('-').reverse().join('/') : 'Não informada';
 const mesNome = chave => chave ? `${['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'][Number(chave.slice(5)) - 1]}/${chave.slice(2, 4)}` : 'Nunca';
 
-function Efetividade({ media, valor }) {
+export function Efetividade({ media, valor }) {
     const status = classificarEfetividade(media, valor);
     return <div className={`demanda-status demanda-status-${status.chave}`}><strong>{valor == null ? '—' : `${numero(valor)}%`}</strong><span>{status.nome}</span></div>;
 }
 
-function BarraEfetividade({ itens, valor }) {
+export function BarraEfetividade({ itens, valor }) {
     const contagens = new Map();
     itens.forEach(item => {
         const status = classificarEfetividade(item.media, item.efetividade);

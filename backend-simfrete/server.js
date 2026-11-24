@@ -1,11 +1,11 @@
 const express = require('express');
 const axios = require('axios');
-const cors = require('cors');
 const dotenv = require('dotenv');
 const http = require('http');
 const https = require('https');
 const { registrarIntegracaoLog } = require('./services/integracaoLog');
 const { mensagemErroUnimed } = require('./services/erroUnimed');
+const { criarSessao } = require('./services/sessao');
 
 dotenv.config({ quiet: true });
 
@@ -59,18 +59,34 @@ const erpApi = axios.create({
   }
 });
 
-app.use(cors());
+const sessao = criarSessao({
+  baseURL: process.env.AUTH_ORDS_BASE_URL || unimedApiBaseUrl,
+  appOrigin: process.env.AUTH_APP_ORIGIN || 'http://localhost:3000',
+  allowHttp: process.env.AUTH_ORDS_ALLOW_HTTP === 'true',
+  authorization: process.env.AUTH_ORDS_AUTHORIZATION,
+  inatividade: Number(process.env.SESSAO_INATIVIDADE_MINUTOS || 30),
+  limite: Number(process.env.SESSAO_LIMITE_ABSOLUTO_MINUTOS || 480),
+});
+
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true });
 });
 
+app.use('/api/auth', sessao.router);
+app.use('/api', sessao.exigirSessao);
+
 app.use('/api/unimed', async (req, res) => {
   const encodedPath = req.originalUrl
     .slice(req.baseUrl.length)
     .split('?')[0];
   const targetPath = encodedPath.replace(/^\/+/, '');
+  // Mantém o proxy no módulo Unimed e reserva a autenticação às rotas internas.
+  if (targetPath && (!/^(?!auth(?:\/|$))[a-z][a-z0-9]*(?:\/|$)/i.test(targetPath) ||
+      /(?:^|\/)\.{1,2}(?:\/|$)|\\|%(?:2f|5c|2e|25)/i.test(targetPath))) {
+    return res.sendStatus(404);
+  }
   const atualizarParametro = req.method === 'PUT' && /^parsConf\/\d+$/.test(targetPath);
   const salvarPedido = req.method === 'POST' && ['EsPePedidosIns', 'EsPeItensIns', 'EsPeObservacoes', 'EsPeEnderecos', 'EsPePedidos/integracao'].includes(targetPath);
   const excluirPedido = req.method === 'DELETE' && /^EsPePedidos\/\d+$/.test(targetPath);

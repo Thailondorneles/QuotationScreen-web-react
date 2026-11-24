@@ -4,8 +4,9 @@ import { routes } from './routes.js';
 import LoadingOverlay from './components/LoadingOverlay';
 import { carregarParametrosAplicacao } from './services/parametros';
 import { ParametrosContext } from './config/ParametrosContext';
+import { SessaoAplicacao } from './components/SessaoAplicacao';
 
-function App() {
+function AplicacaoAutenticada() {
   const [carregandoParametros, setCarregandoParametros] = useState(true);
 
   useEffect(() => {
@@ -26,6 +27,10 @@ function App() {
       <LoadingOverlay isOpen={carregandoParametros} />
     </>
     );
+}
+
+function App() {
+  return <SessaoAplicacao><AplicacaoAutenticada /></SessaoAplicacao>;
 }
 
 export default App;

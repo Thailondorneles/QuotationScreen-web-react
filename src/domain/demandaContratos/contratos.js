@@ -118,7 +118,8 @@ export function montarContratosDemanda(contratos37, reservas14, hoje = new Date(
     const linhas = reservas14.map(reserva => {
         const contrato = indice37.get(`${reserva.cod_cliente}|${reserva.num_pedido_vinculado}|${reserva.cod_item}`);
         if (contrato) usados.add(chave(contrato));
-        return { ...reserva, qtd_negociada: contrato ? contrato.qtd_negociada : reserva.qtd_negociada,
+        return { ...reserva, cod_unidade: reserva.cod_unidade ?? contrato?.cod_unidade ?? null,
+            qtd_negociada: contrato ? contrato.qtd_negociada : reserva.qtd_negociada,
             reservaMensal: Number(reserva.qtd_negociada) || 0,
             pedido37: contrato?.num_pedido ?? reserva.num_pedido_vinculado ?? null,
             quantidadeContratada: contrato ? Number(contrato.qtd_negociada) || 0 : null,

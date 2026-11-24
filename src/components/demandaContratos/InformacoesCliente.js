@@ -13,8 +13,16 @@ function Campo({ titulo, valor }) {
     return <div className="demanda-campo"><dt>{titulo}</dt><dd>{valor || 'Não informado'}</dd></div>;
 }
 
-export function InformacoesCliente() {
+export function InformacoesCliente({ consulta }) {
+    return consulta ? <ConteudoInformacoes consulta={consulta} /> : <InformacoesClienteLocal />;
+}
+
+function InformacoesClienteLocal() {
     const consulta = useInformacoesCliente();
+    return <ConteudoInformacoes consulta={consulta} />;
+}
+
+function ConteudoInformacoes({ consulta }) {
     const [buscaAberta, setBuscaAberta] = useState(false);
     const dados = consulta.informacoes?.cliente || consulta.cliente;
     return <>

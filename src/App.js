@@ -1,36 +1,41 @@
 import { RouterProvider } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { routes } from './routes.js';
-import LoadingOverlay from './components/LoadingOverlay';
-import { carregarParametrosAplicacao } from './services/parametros';
+import { carregarParametrosAplicacao, carregarTemaAmbiente } from './services/parametros';
 import { ParametrosContext } from './config/ParametrosContext';
 import { SessaoAplicacao } from './components/SessaoAplicacao';
 
-function AplicacaoAutenticada() {
-  const [carregandoParametros, setCarregandoParametros] = useState(true);
+async function prepararAplicacao() {
+  await carregarTemaAmbiente().catch(() => {});
+  await carregarParametrosAplicacao();
+}
 
+function abrirMenuPrincipal() {
+  return routes.navigate({ pathname: '/', search: window.location.search }, { replace: true });
+}
+
+function App() {
+  const [temaPronto, setTemaPronto] = useState(false);
   useEffect(() => {
     let ativo = true;
-    carregarParametrosAplicacao().finally(() => {
-      if (ativo) setCarregandoParametros(false);
+    carregarTemaAmbiente().catch(() => {}).finally(() => {
+      if (ativo) setTemaPronto(true);
     });
     return () => { ativo = false; };
   }, []);
 
   return (
     <>
-      <div style={{ display: 'contents' }} inert={carregandoParametros ? '' : undefined} aria-busy={carregandoParametros}>
-        <ParametrosContext.Provider value={!carregandoParametros}>
-          <RouterProvider router={routes}/>
-        </ParametrosContext.Provider>
+      {!temaPronto && <p role="status" className="carregando-ambiente">Carregando ambiente…</p>}
+      <div style={{ display: temaPronto ? 'contents' : 'none' }}>
+        <SessaoAplicacao prepararAplicacao={prepararAplicacao} abrirMenuPrincipal={abrirMenuPrincipal}>
+          <ParametrosContext.Provider value={true}>
+            <RouterProvider router={routes} />
+          </ParametrosContext.Provider>
+        </SessaoAplicacao>
       </div>
-      <LoadingOverlay isOpen={carregandoParametros} />
     </>
-    );
-}
-
-function App() {
-  return <SessaoAplicacao><AplicacaoAutenticada /></SessaoAplicacao>;
+  );
 }
 
 export default App;

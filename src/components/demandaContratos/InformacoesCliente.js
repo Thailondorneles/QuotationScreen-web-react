@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FaSearch, FaEraser } from 'react-icons/fa';
 import { LovClientes } from '../LovClientes';
+import { getClientesDaCarteira } from '../../services/demandaContratos/carteira';
 import { useInformacoesCliente } from '../../hooks/demandaContratos/useInformacoesCliente';
 import { ContratosCliente } from './ContratosCliente';
 
@@ -83,6 +84,6 @@ function ConteudoInformacoes({ consulta }) {
             </div></section>
             <ContratosCliente key={dados.cod_pessoa} codigo={dados.cod_pessoa} cliente={dados} representantes={consulta.informacoes?.representantes || []} />
         </>}
-        <LovClientes isOpen={buscaAberta} setLovOpen={setBuscaAberta} onSelect={cliente => { setBuscaAberta(false); consulta.consultar(cliente); }} />
+        <LovClientes carregarClientes={getClientesDaCarteira} isOpen={buscaAberta} setLovOpen={setBuscaAberta} onSelect={cliente => { setBuscaAberta(false); consulta.consultar(cliente); }} />
     </>;
 }

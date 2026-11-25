@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { FaSearch, FaEraser } from 'react-icons/fa';
 import { LovClientes } from '../LovClientes';
+import { getClientesDaCarteira } from '../../services/demandaContratos/carteira';
 import { carregarContratosCliente } from '../../services/demandaContratos/contratos';
 import { prepararConsulta, filtrarConsulta, resumirConsulta } from '../../domain/demandaContratos/consultaCliente';
 import { classificarEfetividade } from '../../domain/demandaContratos/contratos';
@@ -140,6 +141,6 @@ export function ConsultaPorCliente({ consulta, ativa }) {
             <div className="demanda-consulta-legenda" aria-label="Cores do consumo mensal"><span className="demanda-mes-dentro">Dentro (90% a 110%)</span><span className="demanda-mes-acima">Acima</span><span className="demanda-mes-abaixo">Abaixo</span><span className="demanda-mes-fora">Consumo com contrato vencido</span><span>· Fora da vigência</span></div>
             <p className="demanda-orientacao">Dentro: 90% a 110%. Acima: mais de 110%. Abaixo: menos de 90%. Sem consumo: média zero. Vigência, preço e consumo vêm do pedido 14; quantidade contratada do 37 vinculado. Sem correspondência, a reserva serve de referência. Projeção = média × meses de vigência. Total inclui todo o histórico de consumo recebido.</p>
         </section>}
-        <LovClientes isOpen={lov} setLovOpen={setLov} onSelect={selecionado => { setLov(false); consulta.consultar(selecionado); }} />
+        <LovClientes carregarClientes={getClientesDaCarteira} isOpen={lov} setLovOpen={setLov} onSelect={selecionado => { setLov(false); consulta.consultar(selecionado); }} />
     </>;
 }

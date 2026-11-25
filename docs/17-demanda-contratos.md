@@ -2,7 +2,7 @@
 
 Primeira etapa: `/demanda-contratos`, disponível no menu lateral, em **Clientes → Informações de Clientes**.
 
-Reutiliza `LovClientes`, o cadastro de clientes, as consultas complementares e os representantes. Mantém o cabeçalho, os cartões e os campos do pedido de venda. A tela é de consulta; não altera cadastros no NL.
+Reutiliza a interface de `LovClientes` com um carregador exclusivo da carteira. O Express deriva `cod_rep_externo` da sessão e verifica o vínculo do cliente também nas consultas por código. A lupa de Pedidos usa o serviço original. A tela de Demandas consulta dados do NL e permite exportações locais.
 
 ## Organização
 
@@ -15,10 +15,10 @@ Reutiliza `LovClientes`, o cadastro de clientes, as consultas complementares e o
 
 | Informação | Consulta |
 | --- | --- |
-| Seleção por código, nome ou CNPJ | `clientes`, via `LovClientes` |
-| Consulta por código e contato | `clientes/:filtro`, com seleção pelo código exato |
-| Dados complementares e consultor | `ClienteDetalhado/:codPessoa` |
-| Representantes | `representantesCliente/:filtro` |
+| Seleção por código, nome ou CNPJ | `/api/unimed/carteira/clientes` |
+| Consulta por código e contato | `/api/unimed/carteira/clientes/:codigo` |
+| Dados complementares e consultor | `/api/unimed/carteira/ClienteDetalhado/:codigo` |
+| Representantes | `/api/unimed/carteira/representantesCliente/:codigo` |
 
 Consultas complementares rodam em paralelo. Falhas parciais preservam o cadastro disponível e exibem aviso com nova tentativa. Campos sem informação aparecem como “Não informado”.
 
@@ -27,6 +27,7 @@ Consultas complementares rodam em paralelo. Falhas parciais preservam o cadastro
 - `GET demandaContratos?cod_cliente=:cliente&situacao=37`: contratos, com quantidade mensal, vigência, marca e consumo.
 - `GET demandaContratos?cod_cliente=:cliente&situacao=14`: pedidos de reserva, apresentados separadamente.
 - Usa a instância `unimedApi` e o proxy existentes; não fixa o IP da API no componente.
+- Na Visão Geral, o Express envia apenas o representante da sessão, sem filtro de cliente. Na consulta por código, exige também que o cliente pertença à carteira.
 - Envia o filtro de cliente em todas as páginas ORDS. O cache de cinco minutos é separado por situação e cliente; “Consultar novamente” invalida o cache.
 - `txt_livre1` contém pares `MM/AAAA;quantidade;`. Meses ausentes contam como zero na janela de média; o mês corrente não entra na média.
 - Média dos últimos três meses fechados, limitada ao mês de início. Para vencidos sem consumo posterior, usa os últimos meses da vigência. Efetividade por item = média / quantidade negociada × 100.
@@ -41,6 +42,8 @@ Arquivos: `services/demandaContratos/contratos.js`, `domain/demandaContratos/con
 ## Sugestão de visita
 
 Exibida abaixo de “Itens por marca”. Consulta `GET notasSaida` com `cod_cliente`, `data_inicio`, `data_fim`, `offset` e `limit`, usando o proxy existente e todas as páginas ORDS. Período: mês corrente parcial mais cinco meses anteriores, do primeiro dia do mês inicial até hoje. Cache separado por cliente e período, com atualização manual.
+
+O Express verifica a carteira do cliente antes de encaminhar `notasSaida`. Para separar vendas de representantes diferentes que atendem o mesmo cliente, o ORDS ainda precisa aplicar um filtro de representante nessa consulta.
 
 - **Potencial para novo contrato:** todos os códigos com ao menos uma venda positiva no período que não aparecem nos contratos vigentes do cliente. Não exige frequência mínima de compra. Contratos vencidos não impedem a sugestão.
 - **Itens de contrato para ampliar:** todos os registros vigentes cuja média de consumo contratual supera a quantidade mensal de referência. O limite é estritamente 100%, inclusive excessos abaixo da tolerância visual de 10%. Sem vínculo, preserva a base da reserva conforme a regra da tela.

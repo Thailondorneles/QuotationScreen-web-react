@@ -1,5 +1,4 @@
-import { getClienteByFilter, getClienteDetalhado } from '../clientes';
-import { getRepresentantesByCliente } from '../representantes';
+import { getClienteDaCarteira, getDetalhesDaCarteira, getRepresentantesDaCarteira } from './carteira';
 
 function lerItens(resposta) {
     if (!Array.isArray(resposta?.data?.items)) throw new Error('Resposta inválida na consulta do cliente.');
@@ -7,16 +6,16 @@ function lerItens(resposta) {
 }
 
 export async function buscarClienteDemanda(codigo) {
-    const itens = lerItens(await getClienteByFilter({ filtro: codigo }));
+    const itens = lerItens(await getClienteDaCarteira(codigo));
     return itens.find(item => String(item.cod_pessoa) === String(codigo)) || null;
 }
 
 export async function carregarInformacoesCliente(cliente, { cadastroJaConsultado = false } = {}) {
     const codigo = String(cliente.cod_pessoa);
     const resultados = await Promise.allSettled([
-        cadastroJaConsultado ? Promise.resolve([cliente]) : getClienteByFilter({ filtro: codigo }).then(lerItens),
-        getClienteDetalhado({ codPessoa: codigo }).then(lerItens),
-        getRepresentantesByCliente({ filtro: codigo }).then(lerItens)
+        cadastroJaConsultado ? Promise.resolve([cliente]) : getClienteDaCarteira(codigo).then(lerItens),
+        getDetalhesDaCarteira(codigo).then(lerItens),
+        getRepresentantesDaCarteira(codigo).then(lerItens)
     ]);
     const [cadastro, detalhes, representantes] = resultados;
     const cadastroCliente = cadastro.status === 'fulfilled'

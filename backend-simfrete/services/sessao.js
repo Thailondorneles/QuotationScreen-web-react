@@ -2,16 +2,12 @@ const axios = require('axios');
 const { randomBytes, createHash } = require('node:crypto');
 const express = require('express');
 
-function criarSessao({ baseURL, appOrigin, allowHttp, authorization, inatividade, limite }) {
+function criarSessao({ baseURL, appOrigin, authorization, carregarPrazos, consultarPerfil }) {
   const origem = new URL(appOrigin);
   const local = ['localhost', '127.0.0.1'].includes(origem.hostname);
-  if (origem.origin !== appOrigin ||
-      (origem.protocol !== 'https:' && !(origem.protocol === 'http:' && (local || allowHttp)))) {
-    throw new Error('AUTH_APP_ORIGIN deve ser uma origem HTTPS, ou HTTP quando habilitado.');
-  }
-  if (!Number.isSafeInteger(inatividade) || inatividade < 1 ||
-      !Number.isSafeInteger(limite) || limite < inatividade || limite > 525600) {
-    throw new Error('Prazos de sessao invalidos.');
+  if (origem.origin !== appOrigin || !['http:', 'https:'].includes(origem.protocol) ||
+      !['http:', 'https:'].includes(new URL(baseURL).protocol)) {
+    throw new Error('Configure URLs HTTP ou HTTPS para a origem e o ORDS.');
   }
 
   const ords = axios.create({
@@ -20,14 +16,13 @@ function criarSessao({ baseURL, appOrigin, allowHttp, authorization, inatividade
     maxRedirects: 0,
     headers: { 'Content-Type': 'application/json', ...(authorization && { Authorization: authorization }) },
   });
-  const ordsUrl = new URL(baseURL);
-  const transportePermitido = ordsUrl.protocol === 'https:' ||
-    (ordsUrl.protocol === 'http:' && allowHttp);
   const cookie = origem.protocol === 'https:' ? '__Host-quotation-session' : 'quotation-session-local';
   const opcoesCookie = { httpOnly: true, secure: origem.protocol === 'https:', sameSite: 'lax', path: '/' };
-  const prazos = { inatividade_minutos: inatividade, limite_absoluto_minutos: limite };
   const router = express.Router();
   const tentativas = new Map();
+  const leiturasEmAndamento = new Map();
+  const perfis = new Map();
+  let proximaLimpezaTentativas = 0;
 
   function hash(token) {
     return createHash('sha256').update(token).digest('hex');
@@ -57,7 +52,6 @@ function criarSessao({ baseURL, appOrigin, allowHttp, authorization, inatividade
 
   async function post(rota, body) {
     try {
-      if (!transportePermitido) throw Object.assign(new Error(), { code: 'HTTPS_REQUIRED' });
       return await ords.post(rota, body);
     } catch (erro) {
       const codigo = typeof erro.response?.data === 'string'
@@ -70,52 +64,75 @@ function criarSessao({ baseURL, appOrigin, allowHttp, authorization, inatividade
   }
 
   function responderFalha(res, erro) {
-    if (erro.code === 'HTTPS_REQUIRED') {
-      return res.status(503).json({ codigo: 'AUTH_ORDS_HTTPS_REQUIRED' });
-    }
     if (erro.response?.status === 401 && erro.response.data?.codigo === 'SESSAO_INVALIDA') {
       return res.status(401).json({ codigo: 'SESSAO_INVALIDA' });
     }
     return res.status(503).json({ codigo: 'AUTH_ORDS_INDISPONIVEL' });
   }
 
-  async function validar(req, res, atividade) {
+  async function consultarNoOrds(tokenHash, atividade) {
+    const { data } = await post('auth/sessao/validar', {
+      token_hash: tokenHash,
+      registrar_atividade: atividade ? 1 : 0,
+      ...(atividade ? await carregarPrazos() : {}),
+    });
+    if (data?.codigo === 'SESSAO_INVALIDA') return null;
+    if (!Number.isSafeInteger(data?.cod_pessoa) || data.cod_pessoa <= 0 ||
+        !Number.isSafeInteger(data?.validade_ms) || data.validade_ms <= 0) {
+      const motivo = ['ERRO_INTERNO', 'ATIVIDADE_INVALIDA', 'PRAZO_INVALIDO'].includes(data?.codigo)
+        ? data.codigo : 'FORMATO_INVALIDO';
+      console.warn('[sessao] Validacao do ORDS sem sessao confirmada', motivo);
+      throw new Error('Resposta invalida do ORDS.');
+    }
+    const perfil = perfis.get(tokenHash);
+    const nome = data.nome || data.des_pessoa || perfil?.nome || data.username || perfil?.username;
+    const codigoPerfil = data.cod_perfil ?? perfil?.codigoPerfil;
+    return {
+      usuario: { codigoPessoa: data.cod_pessoa, ...(nome && { nome }), ...(codigoPerfil != null && { codigoPerfil }) },
+      validadeMs: data.validade_ms,
+    };
+  }
+
+  function consultarLeitura(tokenHash, atividade) {
+    const chave = `${tokenHash}:${atividade}`;
+    const atual = leiturasEmAndamento.get(chave);
+    if (atual) return atual;
+
+    const consulta = consultarNoOrds(tokenHash, atividade).then(sessao =>
+      leiturasEmAndamento.get(chave) === consulta ? sessao : null
+    ).finally(() => {
+      if (leiturasEmAndamento.get(chave) === consulta) leiturasEmAndamento.delete(chave);
+    });
+    leiturasEmAndamento.set(chave, consulta);
+    return consulta;
+  }
+
+  async function validar(req, res, atividade, compartilhar) {
     res.set('Cache-Control', 'no-store');
     const token = tokenDaRequisicao(req);
-    if (!token) {
-      res.status(401).json({ codigo: 'SESSAO_INVALIDA' });
-      return null;
-    }
     try {
-      const { data } = await post('auth/sessao/validar', {
-        token_hash: hash(token),
-        registrar_atividade: atividade ? 1 : 0,
-        ...prazos,
-      });
-      if (data?.codigo === 'SESSAO_INVALIDA') {
-        res.status(401).json({ codigo: 'SESSAO_INVALIDA' });
-        return null;
+      if (token) {
+        const tokenHash = hash(token);
+        const sessao = await (compartilhar
+          ? consultarLeitura(tokenHash, atividade) : consultarNoOrds(tokenHash, atividade));
+        if (sessao) return sessao;
       }
-      if (!Number.isSafeInteger(data?.cod_pessoa) || data.cod_pessoa <= 0 ||
-          !Number.isSafeInteger(data?.validade_ms) || data.validade_ms <= 0) {
-        const motivo = data?.codigo === 'ERRO_INTERNO' ? 'ERRO_INTERNO'
-          : ['ATIVIDADE_INVALIDA', 'PRAZO_INVALIDO'].includes(data?.codigo) ? data.codigo
-          : 'FORMATO_INVALIDO';
-        console.warn('[sessao] Validacao do ORDS sem sessao confirmada', motivo);
-        throw new Error('Resposta invalida do ORDS.');
-      }
-      return { usuario: { codigoPessoa: data.cod_pessoa }, validadeMs: data.validade_ms };
+      res.status(401).json({ codigo: 'SESSAO_INVALIDA' });
     } catch (erro) {
       responderFalha(res, erro);
-      return null;
     }
+    return null;
   }
 
   async function revogar(token) {
-    const resposta = await post('auth/sessao/revogar', { token_hash: hash(token) });
+    const tokenHash = hash(token);
+    const resposta = await post('auth/sessao/revogar', { token_hash: tokenHash });
     if (resposta.status !== 204 && !(resposta.status === 200 && resposta.data?.codigo === 'SESSAO_REVOGADA')) {
       throw new Error('Resposta invalida do ORDS.');
     }
+    leiturasEmAndamento.delete(`${tokenHash}:true`);
+    leiturasEmAndamento.delete(`${tokenHash}:false`);
+    perfis.delete(tokenHash);
   }
 
   router.use((_req, res, next) => {
@@ -131,11 +148,15 @@ function criarSessao({ baseURL, appOrigin, allowHttp, authorization, inatividade
     }
 
     const agora = Date.now();
-    for (const [chave, registro] of tentativas) {
-      if (registro.expiraEm <= agora) tentativas.delete(chave);
+    if (agora >= proximaLimpezaTentativas) {
+      for (const [chave, registro] of tentativas) {
+        if (registro.expiraEm <= agora) tentativas.delete(chave);
+      }
+      proximaLimpezaTentativas = agora + 15000;
     }
     const chave = `${req.ip}|${usuario.trim().toUpperCase()}`;
-    const registro = tentativas.get(chave) || { total: 0, expiraEm: agora + 60000 };
+    const atual = tentativas.get(chave);
+    const registro = atual?.expiraEm > agora ? atual : { total: 0, expiraEm: agora + 60000 };
     if (registro.total >= 8 || (!tentativas.has(chave) && tentativas.size >= 1000)) {
       return res.set('Retry-After', '60').sendStatus(429);
     }
@@ -143,9 +164,10 @@ function criarSessao({ baseURL, appOrigin, allowHttp, authorization, inatividade
     tentativas.set(chave, registro);
 
     const token = randomBytes(32).toString('hex');
+    const tokenHash = hash(token);
     try {
       const { data } = await post('auth/login', {
-        username: usuario.trim(), password: senha, token_hash: hash(token), ...prazos,
+        username: usuario.trim(), password: senha, token_hash: tokenHash, ...await carregarPrazos(),
       });
       if (data?.success === false) {
         if (data.status === 400 || data.message === 'Dados de login invalidos') {
@@ -168,6 +190,12 @@ function criarSessao({ baseURL, appOrigin, allowHttp, authorization, inatividade
         }
       }
       tentativas.delete(chave);
+      if (perfis.size >= 2000) perfis.delete(perfis.keys().next().value);
+      perfis.set(tokenHash, {
+        nome: data.nome || data.des_pessoa,
+        username: data.username || usuario.trim(),
+        codigoPerfil: data.cod_perfil,
+      });
       return res.cookie(cookie, token, opcoesCookie).status(204).end();
     } catch (erro) {
       if ([401, 403].includes(erro.response?.status) && erro.response.data?.success === false) {
@@ -178,8 +206,28 @@ function criarSessao({ baseURL, appOrigin, allowHttp, authorization, inatividade
   });
 
   router.get('/sessao', async (req, res) => {
-    const sessao = await validar(req, res, false);
-    if (sessao) res.json(sessao);
+    const sessao = await validar(req, res, false, true);
+    if (!sessao) return;
+    const { usuario } = sessao;
+    if (consultarPerfil) {
+      const chave = hash(tokenDaRequisicao(req));
+      const anterior = perfis.get(chave) || {};
+      if (!anterior.consulta) {
+        anterior.consulta = Promise.resolve().then(() => consultarPerfil(usuario.codigoPessoa)).catch(() => null);
+        if (perfis.size >= 2000 && !perfis.has(chave)) perfis.delete(perfis.keys().next().value);
+        perfis.set(chave, anterior);
+      }
+      const perfil = await anterior.consulta;
+      if (String(perfil?.cod_pessoa) === String(usuario.codigoPessoa)) {
+        return res.json({ ...sessao, usuario: {
+          ...usuario, nome: perfil.des_pessoa || usuario.nome,
+          codigoPerfil: perfil.cod_perfil ?? usuario.codigoPerfil,
+          descricaoPerfil: perfil.des_perfil,
+        } });
+      }
+      delete anterior.consulta;
+    }
+    res.json(sessao);
   });
 
   router.post('/logout', verificarOrigem, async (req, res) => {
@@ -193,13 +241,21 @@ function criarSessao({ baseURL, appOrigin, allowHttp, authorization, inatividade
   });
 
   async function exigirSessao(req, res, next) {
-    if (req.method !== 'GET' && req.method !== 'HEAD' && !origemPermitida(req)) {
+    const leitura = req.method === 'GET' || req.method === 'HEAD';
+    if (!leitura && !origemPermitida(req)) {
       return res.sendStatus(403);
     }
     const bootstrap = req.method === 'GET' && /^\/unimed\/parsConf\/?$/i.test(req.path);
-    const sessao = await validar(req, res, !bootstrap);
+    // Este GET reserva um número no ERP e deve ter sua própria validação.
+    const reservaSequencia = /^\/+unimed\/+EsPeSequencia\/*$/i.test(req.path);
+    const sessao = await validar(req, res, !bootstrap, leitura && !reservaSequencia);
     if (sessao) {
       res.locals.usuario = sessao.usuario;
+      const validadaEm = Date.now();
+      res.set({
+        'X-Sessao-Expira-Em': String(validadaEm + sessao.validadeMs),
+        'X-Sessao-Validada-Em': String(validadaEm),
+      });
       next();
     }
   }

@@ -16,19 +16,21 @@ export function useInformacoesCliente() {
         if (!/^\d+$/.test(codigoBusca)) { setErro('Informe o código do cliente ou use a lupa para buscar pelo nome.'); return; }
         const id = ++requisicao.current;
         setCodigo(codigoBusca);
-        setCliente(clienteSelecionado || null);
+        setCliente(null);
         setInformacoes(null);
         setErro('');
         setCarregando(true);
         try {
-            const encontrado = clienteSelecionado || await buscarClienteDemanda(codigoBusca);
+            const encontrado = await buscarClienteDemanda(codigoBusca);
             if (id !== requisicao.current) return;
             if (!encontrado) { setErro('Cliente não encontrado. Confira o código ou utilize a lupa.'); return; }
             setCliente(encontrado);
-            const dados = await carregarInformacoesCliente(encontrado, { cadastroJaConsultado: !clienteSelecionado });
+            const dados = await carregarInformacoesCliente(encontrado, { cadastroJaConsultado: true });
             if (id === requisicao.current) setInformacoes(dados);
-        } catch {
-            if (id === requisicao.current) setErro('Não foi possível consultar o cliente. Tente novamente.');
+        } catch (error) {
+            if (id === requisicao.current) setErro(error.response?.status === 404
+                ? 'Cliente não encontrado na sua carteira.'
+                : 'Não foi possível consultar o cliente. Tente novamente.');
         } finally {
             if (id === requisicao.current) setCarregando(false);
         }

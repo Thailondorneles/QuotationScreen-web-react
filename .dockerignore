@@ -4,5 +4,11 @@ build
 .gitignore
 npm-debug.log
 yarn-error.log
-backend-simfrete/node_modules
-backend-simfrete/.env
+backend-simfrete
+docs
+scripts
+.codesight
+**/*.test.js
+**/.env
+**/.env.*
+!.env.production

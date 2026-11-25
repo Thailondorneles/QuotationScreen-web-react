@@ -1,9 +1,15 @@
 import { buscarClienteDemanda, carregarInformacoesCliente } from './clientes';
-import { getClienteByFilter, getClienteDetalhado } from '../clientes';
-import { getRepresentantesByCliente } from '../representantes';
+import {
+    getClienteDaCarteira as getClienteByFilter,
+    getDetalhesDaCarteira as getClienteDetalhado,
+    getRepresentantesDaCarteira as getRepresentantesByCliente,
+} from './carteira';
 
-jest.mock('../clientes', () => ({ getClienteByFilter: jest.fn(), getClienteDetalhado: jest.fn() }));
-jest.mock('../representantes', () => ({ getRepresentantesByCliente: jest.fn() }));
+jest.mock('./carteira', () => ({
+    getClienteDaCarteira: jest.fn(),
+    getDetalhesDaCarteira: jest.fn(),
+    getRepresentantesDaCarteira: jest.fn(),
+}));
 const resposta = items => Promise.resolve({ data: { items } });
 beforeEach(() => jest.resetAllMocks());
 

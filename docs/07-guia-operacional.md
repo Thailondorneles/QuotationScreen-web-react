@@ -2,7 +2,7 @@
 
 ## 1. Objetivo
 
-Este guia orienta o uso diário da tela **Pedido de Venda**, desde a escolha do cliente até a emissão de uma proposta ou o envio ao ERP. Ele descreve o comportamento implementado em **18/08/2026**.
+Este guia orienta o uso diário da tela **Pedido de Venda**, desde a escolha do cliente até a emissão de uma proposta ou o envio ao ERP.
 
 > **Importante:** proposta e pedido ERP são saídas diferentes. Emitir uma proposta apenas baixa arquivos no navegador; não cria pedido no ERP. O pedido só é integrado pelo botão **Enviar pedido ao ERP**.
 
@@ -28,6 +28,8 @@ flowchart TD
 ```
 
 ## 3. Antes de começar
+
+Entre com o usuário NL e escolha **Pedidos** no menu lateral. Na listagem, abra uma cotação salva ou inicie um pedido novo. O logo da Unimed volta ao menu principal.
 
 Tenha disponíveis, conforme o objetivo:
 
@@ -292,7 +294,7 @@ Os símbolos podem continuar aparecendo juntos.
 | I ou T | MMT | 6% |
 | Outra/não retornada | Sem regra individual | Não aplicada |
 
-O mínimo do total de cada unidade é sempre **6%**.
+Os valores da tabela são os padrões. O mínimo total padrão é **4%** para uma unidade com somente itens AC e **6%** nos demais casos. [Parâmetros da aplicação](12-parametros-aplicacao.md)
 
 ### 8.2. Ícone “Info” da linha
 
@@ -341,7 +343,7 @@ No cartão **Frete**, abra o ícone `i` e clique na alternativa desejada. A troc
 
 > **Limitação conhecida:** a cotação usa a cidade do cadastro do cliente, não a cidade digitada na seção de endereço de entrega.
 
-> **Limitação conhecida:** preço digitado com vírgula pode não ser convertido corretamente no payload atual do SimFrete. Se a cotação falhar após alteração manual de preço, registre o caso com o suporte.
+O serviço normaliza valores monetários com vírgula antes de montar o payload do SimFrete.
 
 ## 10. Incluir observações
 
@@ -438,7 +440,7 @@ O sistema consulta novamente o contato do cliente e gera **um arquivo separado p
 A proposta inclui, conforme disponibilidade:
 
 - logotipo e dados da empresa/unidade;
-- emissão e validade de 15 dias;
+- emissão e validade conforme a configuração, com padrão de 15 dias;
 - código, nome, CNPJ, telefone e e-mail do cliente;
 - representante;
 - condição de pagamento;
@@ -514,7 +516,7 @@ Quando o total está abaixo de 6%, a mensagem atual prioriza o total e pode não
 
 ### 15.5. Resultado
 
-No sucesso, a tela apresenta um número de pedido para cada unidade integrada. Ao fechar a mensagem com **OK**, todos os campos são limpos e a modalidade volta para 2.
+No sucesso, a tela apresenta número e complemento de cada unidade integrada. Ao fechar a mensagem com **OK**, a cotação continua aberta com os dados salvos.
 
 Em erro, anote:
 
@@ -532,7 +534,7 @@ Em erro, anote:
 - Mensagem apenas com **OK** fecha com Enter.
 - Mensagem de aprovação usa botões vermelho **Não** e verde **Sim, enviar**.
 - Fechar uma mensagem de validação normalmente devolve o foco ao campo relacionado.
-- Fechar a mensagem de sucesso do ERP limpa a tela; não a feche antes de registrar os números dos pedidos.
+- Os números confirmados no NL ficam registrados na versão atual da cotação.
 
 ## 17. Checklist resumido de uso seguro
 

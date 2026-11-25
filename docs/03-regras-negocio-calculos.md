@@ -222,7 +222,7 @@ Mapeamento do retorno `des_geral`:
 | `I`, `T` | MMT | 6% |
 | outros/nulo | Sem regra individual | Não aplicada |
 
-Margem mínima total de toda unidade: **6%**.
+O mínimo total usa `SOBRA_MINIMA_TOTAL_AC` quando todos os itens selecionados da unidade são AC. Nos demais casos, usa `SOBRA_MINIMA_TOTAL_GERAL`. A tabela e a matriz abaixo usam os valores padrão. [Parâmetros da aplicação](12-parametros-aplicacao.md)
 
 Comparações usam percentuais arredondados para duas casas na avaliação final.
 

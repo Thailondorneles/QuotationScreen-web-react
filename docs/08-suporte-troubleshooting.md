@@ -32,7 +32,7 @@ Antes de atualizar a página ou repetir uma operação, registre:
 | Resultado visual | texto integral do modal ou alerta |
 | Número gerado | `numSeq`, identificador da integração |
 | Requisição HTTP | URL, status, duração e resposta, sem credenciais |
-| Estado Oracle | `ENVIANDO`, `INTEGRADO`, `ERRO` ou ausência de registro |
+| Auditoria da integração | INTEGRADO, ERRO ou ausência de registro |
 
 Não compartilhe tokens, senhas, string de conexão Oracle, payload integral com dados pessoais ou conteúdo completo de CLOB em chamados sem controle de acesso.
 
@@ -114,6 +114,10 @@ O health check atual comprova apenas que o processo HTTP está respondendo. Ele 
 - corrigir variáveis e reconstruir o frontend;
 - restaurar a última imagem ou revisão aprovada se o build atual estiver inválido;
 - não inserir tokens ou credenciais do backend em variáveis `REACT_APP_*`, pois elas ficam incorporadas ao bundle público.
+
+### Login, tema e sessão
+
+No Network do navegador, confira POST /api/auth/login e GET /api/auth/sessao. O login bem-sucedido retorna 204 e a verificação retorna 200. Uma sessão inválida retorna 401; um 503 indica falha na integração. Confira AUTH_APP_ORIGIN e o log do ORDS se houver erro de origem ou JDBCException. A rota pública GET /api/unimed/ambiente permite verificar a cor antes do login.
 
 ### 4.2 LOV permanece em loading, abre vazia ou traz dados antigos
 
@@ -350,62 +354,22 @@ Registre:
 
 Depois consulte o controle Oracle e o ERP. Timeout significa resultado desconhecido: o ERP pode ter processado a solicitação antes da conexão expirar.
 
-## 5. Interpretação das etapas do backend ERP
+## 5. Etapas atuais do envio
 
-As etapas abaixo aparecem internamente nos logs. O JSON devolvido ao navegador nem sempre preserva a etapa original da falha.
-
-| Etapa | Interpretação provável | Verificação |
-|---|---|---|
-| `conectar_oracle` | pool, rede, credencial ou Instant Client | logs Oracle e variáveis |
-| `gerar_numero_sequencia` | sequence ausente ou sem permissão | `SEQ_PEDIDO_ERP_INTEGRACAO` |
-| `montar_payload_erp` | corpo inválido ou erro de aplicação | request recebido e stack |
-| `inserir_controle_integracao` | tabela, CLOB ou permissão | tabela e grants |
-| `post_erp` | rede, timeout, token, aplicação ou rejeição do ERP | retorno externo e ERP |
-| `atualizar_integracao_sucesso` | falha ao marcar `INTEGRADO` | linha pode continuar `ENVIANDO` |
-| `atualizar_integracao_erro` | falha secundária de auditoria | logs e linha Oracle |
-
-> Como INSERT e POST são iniciados em paralelo, a etapa registrada é uma pista, não uma prova isolada. Uma falha do INSERT pode ser registrada no log quando a variável já está em `post_erp`. Além disso, quando já existem conexão e número, o tratamento muda a etapa para `atualizar_integracao_erro` antes de responder ao frontend. Consulte o primeiro log do erro para recuperar a etapa original. Falhas de `atualizar_integracao_sucesso` ocorrem após a resposta de sucesso e aparecem somente nos logs.
-
-## 6. Consulta de evidências no Oracle
-
-Use acesso somente leitura e parâmetros vinculados. Exemplos conceituais:
-
-```sql
-SELECT NUM_SEQ,
-       STATUS,
-       USUARIO,
-       DATA_ENVIO,
-       DBMS_LOB.SUBSTR(ERRO, 2000, 1) AS ERRO_RESUMIDO
-  FROM ES_PEDIDO_ERP_INTEGRACAO
- WHERE NUM_SEQ = :num_seq;
-```
-
-Para uma janela recente, quando autorizado:
-
-```sql
-SELECT NUM_SEQ, STATUS, USUARIO, DATA_ENVIO
-  FROM ES_PEDIDO_ERP_INTEGRACAO
- ORDER BY NUM_SEQ DESC
- FETCH FIRST 50 ROWS ONLY;
-```
-
-Campos úteis:
-
-| Campo | Uso no diagnóstico |
+| Etapa | O que conferir |
 |---|---|
-| `NUM_SEQ` | correlação com o ERP |
-| `STATUS` | `ENVIANDO`, `INTEGRADO` ou `ERRO` |
-| `PAYLOAD` | unidade, cliente, OC e dados enviados |
-| `RESPOSTA_ERP` | confirmação ou retorno funcional |
-| `ERRO` | detalhe técnico |
-| `USUARIO` | origem informada pelo frontend |
-| `DATA_ENVIO` | conclusão/erro; pode ser nula em `ENVIANDO` |
+| inicio | Corpo, unidade e sequencial da cotação |
+| consultar_cotacao | Resposta de EsPePedidos/:id e versão atual |
+| montar_payload_erp | Dados da unidade e formatação do payload |
+| post_erp | Status e retorno do NL, seguido do registro de auditoria via ORDS |
 
-O payload contém dados comerciais e pessoais. Restrinja a consulta e mascare evidências.
+## 6. Evidências da integração
+
+Use o sequencial da cotação e a unidade para localizar pedidos no NL via ConsultaPedidosSeq/:id. A observação 99 contém o sequencial da cotação. O Express tenta registrar o resultado via EsPePedidosIntegracaoLog. Na resposta de sucesso, logRegistrado: false indica que o ORDS não confirmou a auditoria. Consulte os dados persistidos com acesso autorizado e evite compartilhar payloads completos. [Persistência via ORDS](16-acesso-dados-apis.md)
 
 ## 7. Integração parcial entre unidades
 
-O frontend envia os payloads das unidades em paralelo. `Promise.all` encerra com erro quando uma chamada falha, mesmo que a outra já tenha sido integrada.
+O frontend envia os payloads em paralelo e usa Promise.allSettled para apresentar os resultados por unidade. Uma unidade pode ser integrada enquanto a outra fica pendente.
 
 ### Procedimento obrigatório
 
@@ -423,20 +387,9 @@ O frontend envia os payloads das unidades em paralelo. `Promise.all` encerra com
 
 Na seleção de unidades, escolha apenas a unidade falha. Revise também os itens marcados para evitar incluir conteúdo diferente da tentativa original.
 
-## 8. Status `ENVIANDO` persistente
+## 8. ERP confirmou o pedido e a auditoria falhou
 
-`ENVIANDO` não significa necessariamente que o ERP não recebeu o pedido.
-
-O comportamento atual responde sucesso ao frontend antes de concluir o `UPDATE INTEGRADO`. Se esse update falhar, a linha pode permanecer `ENVIANDO` apesar de o ERP possuir o pedido.
-
-Recuperação segura:
-
-1. consultar `PAYLOAD` para identificar unidade, cliente e OC;
-2. localizar o número no ERP;
-3. consultar logs da etapa `atualizar_integracao_sucesso`;
-4. registrar a conclusão da reconciliação;
-5. corrigir status somente por procedimento autorizado e auditável;
-6. nunca apagar a linha nem reenviar apenas por estar `ENVIANDO`.
+Confira os números no NL e na versão atual da cotação. Use o sequencial e a unidade para reconciliar o resultado antes de qualquer reenvio. Uma falha de auditoria não desfaz um pedido aceito pelo ERP.
 
 ## 9. Suspeita de duplicidade
 
@@ -493,9 +446,8 @@ Ao anexar logs:
 
 1. Adotar `requestId` de ponta a ponta e retorná-lo ao modal.
 2. Usar logs estruturados com duração, unidade, etapa e número, sem payload integral.
-3. Criar health checks de prontidão para ORDS e Oracle.
-4. Criar painel para registros `ERRO` e `ENVIANDO` antigos.
-5. Trocar o envio multiunidade por resultado explícito com `Promise.allSettled`.
+3. Criar health checks de prontidão para as APIs externas.
+4. Criar painel de erros e de pedidos pendentes de reconciliação.
 6. Implementar idempotência por tentativa/unidade.
 7. Padronizar tratamento de erros em modal, eliminando falhas silenciosas e `alert()`.
 8. Registrar versão do frontend/backend em logs e no health check.

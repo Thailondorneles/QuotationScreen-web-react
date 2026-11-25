@@ -46,7 +46,7 @@ Os módulos de ações estão separados em `clientes`, `operacoes`, `precificaca
 - Salvar ou integrar grava primeiro o cabeçalho (`EsPePedidosIns`, status 0) e sincroniza todos os itens (`EsPeItensIns`). Uma falha nessa etapa impede o envio ao NL.
 - Após o envio, `ConsultaPedidosSeq` recupera número e complemento das unidades. A consulta aguarda as unidades esperadas e preserva os retornos parciais.
 - `POST EsPePedidos/integracao` recebe somente `numSeqPedido`, `numPedidoMatriz` e `numPedidoFilial`. Os números completos são strings como `"85432/1"`; unidade sem pedido recebe `null`. A API deve gravar esses valores e definir status 1. O cabeçalho não é reenviado após o NL.
-- Falhas parciais registram os números disponíveis e mostram a pendência. Sem número/complemento confirmado, a tela não anuncia conclusão da integração. O proxy do backend precisa ser reiniciado após a liberação desse novo POST.
+- Falhas parciais registram os números disponíveis e mostram a pendência. A tela só anuncia conclusão depois de confirmar número e complemento. O Express já encaminha `POST EsPePedidos/integracao`.
 
 Foram comparados com uma cópia anterior à refatoração:
 

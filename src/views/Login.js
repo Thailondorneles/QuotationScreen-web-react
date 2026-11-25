@@ -22,7 +22,6 @@ export function Login({ carregando, erroSessao, onLoginConfirmado, onVerificarSe
         setErro('');
         try {
             await entrar(usuario, dados.get('senha'));
-            formulario.elements.senha.value = '';
             await onLoginConfirmado();
         } catch (error) {
             const status = error.response?.status;
@@ -31,12 +30,9 @@ export function Login({ carregando, erroSessao, onLoginConfirmado, onVerificarSe
             else if (error.response?.data?.codigo === 'AUTH_REVOGACAO_INDISPONIVEL') {
                 setErro('O NL não conseguiu encerrar a sessão anterior. Fale com o suporte.');
             }
-            else if (error.response?.data?.codigo === 'AUTH_ORDS_HTTPS_REQUIRED') {
-                setErro('O serviço de login precisa de um endereço HTTPS. Fale com o suporte.');
-            }
             else setErro('Não foi possível acessar o NL agora. Tente novamente.');
-            formulario.elements.senha.value = '';
         } finally {
+            formulario.elements.senha.value = '';
             setEnviando(false);
         }
     }

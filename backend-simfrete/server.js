@@ -6,6 +6,8 @@ const https = require('https');
 const { registrarIntegracaoLog } = require('./services/integracaoLog');
 const { mensagemErroUnimed } = require('./services/erroUnimed');
 const { criarSessao } = require('./services/sessao');
+const { criarPrazosSessao } = require('./services/prazosSessao');
+const { criarConsultaCarteira } = require('./services/carteira');
 
 dotenv.config({ quiet: true });
 
@@ -45,6 +47,7 @@ const unimedApi = axios.create({
   }
 });
 
+const consultarUnimed = criarConsultaCarteira(unimedApi);
 const erpHttpAgent = new http.Agent({ keepAlive: true });
 const erpHttpsAgent = new https.Agent({ keepAlive: true });
 
@@ -59,13 +62,19 @@ const erpApi = axios.create({
   }
 });
 
+async function consultarPerfil(codigoPessoa) {
+  const { data } = await unimedApi.get('usuario', { params: { usuario: codigoPessoa }, timeout: 3000 });
+  const items = Array.isArray(data?.items) ? data.items : [data];
+  return items.find(item => String(item?.cod_pessoa) === String(codigoPessoa));
+}
+
+const prazosSessao = criarPrazosSessao(unimedApi);
 const sessao = criarSessao({
+  consultarPerfil,
+  carregarPrazos: prazosSessao.carregar,
   baseURL: process.env.AUTH_ORDS_BASE_URL || unimedApiBaseUrl,
   appOrigin: process.env.AUTH_APP_ORIGIN || 'http://localhost:3000',
-  allowHttp: process.env.AUTH_ORDS_ALLOW_HTTP === 'true',
   authorization: process.env.AUTH_ORDS_AUTHORIZATION,
-  inatividade: Number(process.env.SESSAO_INATIVIDADE_MINUTOS || 30),
-  limite: Number(process.env.SESSAO_LIMITE_ABSOLUTO_MINUTOS || 480),
 });
 
 app.use(express.json({ limit: '1mb' }));
@@ -74,8 +83,30 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true });
 });
 
+app.get('/api/unimed/ambiente', async (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    const { data } = await unimedApi.get('parsConf', { timeout: 2500 });
+    const cor = data.items?.find(item => item.des_conf === 'AMBIENTE_COR_PRINCIPAL')?.parametro;
+    return res.json({ cor: /^#[0-9a-f]{6}$/i.test(cor) ? cor : null });
+  } catch {
+    return res.status(503).json({ erro: 'Tema do ambiente indisponível.' });
+  }
+});
+
 app.use('/api/auth', sessao.router);
 app.use('/api', sessao.exigirSessao);
+
+app.get(/^\/api\/unimed\/carteira\/(.+)$/, async (req, res) => {
+  try {
+    const resposta = await consultarUnimed(req.params[0], req.query, res.locals.usuario.codigoPessoa, true);
+    if (!resposta) return res.sendStatus(404);
+    return res.status(resposta.status).json(resposta.data);
+  } catch (erro) {
+    if (erro.response?.status === 404) return res.sendStatus(404);
+    return res.status(502).json({ erro: 'Não foi possível consultar a carteira.' });
+  }
+});
 
 app.use('/api/unimed', async (req, res) => {
   const encodedPath = req.originalUrl
@@ -102,12 +133,23 @@ app.use('/api/unimed', async (req, res) => {
   }
 
   try {
+    const idParametro = atualizarParametro ? Number(targetPath.split('/')[1]) : null;
+    if (idParametro === 50 || idParametro === 51) {
+      const perfil = await consultarPerfil(res.locals.usuario.codigoPessoa);
+      if (Number(perfil?.cod_perfil) !== 9000) return res.sendStatus(403);
+      const resposta = await prazosSessao.atualizar(idParametro, req.body.parametro);
+      if (!resposta) return res.status(400).json({ erro: 'Informe minutos inteiros e um limite absoluto maior ou igual à inatividade.' });
+      return res.status(resposta.status).json(resposta.data);
+    }
     const response = atualizarParametro
       ? await unimedApi.put(targetPath, { parametro: req.body.parametro })
       : excluirPedido ? await unimedApi.delete(targetPath, { data: {} })
       : salvarPedido ? await unimedApi.post(targetPath, req.body)
-      : await unimedApi.get(targetPath, { params: req.query });
+      : /^\/?(?:demandaContratos|notasSaida)\/*$/i.test(targetPath)
+        ? await consultarUnimed(targetPath, req.query, res.locals.usuario.codigoPessoa)
+        : await unimedApi.get(targetPath, { params: req.query });
 
+    if (!response) return res.sendStatus(404);
     return res.status(response.status).json(response.data);
   } catch (err) {
 

@@ -20,3 +20,5 @@ O log é uma inclusão por envio, com status INTEGRADO ou ERRO, payload serializ
 Foram retirados o pacote oracledb, as variáveis ORACLE dos arquivos de ambiente, o volume e LD_LIBRARY_PATH do Compose e as bibliotecas libaio1/libnsl2 do Dockerfile. O Instant Client instalado fora do projeto não foi removido. Os documentos anteriores mantêm contexto histórico explicitamente sinalizado.
 
 O bloqueio de envios simultâneos é local ao processo do backend, não um bloqueio transacional distribuído. `/health` verifica somente o processo HTTP.
+
+A autenticação e a renovação da sessão também usam handlers HTTP do ORDS, e o cadastro de sessão é guardado em `ES_WEB_SESSAO`. [Login e sessão](17-login-e-sessao.md)

@@ -72,7 +72,7 @@ Convenções de nomes:
 | Cubagem | `300 kg/m³` | rateio do frete | `PedidoVenda.js` |
 | Página padrão | `25` | maioria das LOVs/APIs | serviços/componentes |
 | Cache padrão | `5 min` | clientes, itens, lotes e impostos | serviços/componentes |
-| Validade da proposta | `15 dias` | a partir da emissão | `propostaConfig.js` |
+| Validade da proposta | `15 dias` por padrão | a partir da emissão | `PROPOSTA_VALIDADE_DIAS` |
 | Filtro inicial de itens | `POLIMAX` | primeira visão da LOV | `LovItens.js` |
 | Concorrência de enriquecimento | `3` | itens na tela | `PedidoVenda.js` |
 | Concorrência fiscal da LOV | `4` | itens visíveis | `LovItens.js` |
@@ -351,30 +351,14 @@ Antes da emissão, a tela tenta enriquecer `cliente` com `GET clientes/{codigo}`
 | 32 | fluxo normal da modalidade 7 |
 | 70 | aprovação por margem |
 
-### Status técnico Oracle
+### Status da auditoria enviada pelo Express
 
 | Status | Significado |
 |---|---|
-| `ENVIANDO` | payload registrado e/ou envio em andamento; resultado ainda não conciliado |
-| `INTEGRADO` | backend registrou sucesso do ERP |
-| `ERRO` | backend registrou falha |
+| INTEGRADO | Envio ao ERP concluído com sucesso |
+| ERRO | Falha no envio ao ERP |
 
-`ENVIANDO` não prova ausência no ERP, porque POST e auditoria não constituem uma transação única.
-
-### Etapas técnicas
-
-```text
-inicio
-conectar_oracle
-gerar_numero_sequencia
-montar_payload_erp
-inserir_controle_integracao
-post_erp
-atualizar_integracao_sucesso
-atualizar_integracao_erro
-```
-
-Esses nomes representam etapas internas. Depois que conexão e número existem, o tratamento de falha normalmente altera `etapa` para `atualizar_integracao_erro` antes de responder ao navegador; o log emitido antes dessa alteração preserva a origem mais precisa. Uma falha de `atualizar_integracao_sucesso` acontece após a resposta HTTP de sucesso e não é devolvida ao frontend.
+O Express registra o resultado via EsPePedidosIntegracaoLog. Se a API falhar, o registro pode estar ausente. A etapa da falha pode ser inicio, consultar_cotacao, montar_payload_erp ou post_erp. [Integração ERP](04-integracoes-apis.md#8-integração-erp)
 
 ## 12. Estados visuais
 

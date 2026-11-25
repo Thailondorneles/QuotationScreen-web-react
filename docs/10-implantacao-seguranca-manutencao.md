@@ -40,7 +40,8 @@ backend-simfrete/server.js
 - porta 80 disponível ou mapeamento ajustado;
 - acesso DNS/rede do backend para ORDS, SimFrete e ERP;
 - credenciais armazenadas fora do repositório;
-- tabela e sequence de integração existentes no Oracle.
+- handlers de sessão, perfil, parâmetros, carteira e persistência disponíveis no ORDS;
+- parâmetros 50 e 51 cadastrados conforme o [SQL da sessão](sql/es_pars_conf_prazos_sessao.sql).
 
 O backend exige todas as configurações de SimFrete, ORDS e ERP na inicialização, mesmo que uma sessão use apenas consultas cadastrais.
 
@@ -52,7 +53,7 @@ O backend exige todas as configurações de SimFrete, ORDS e ERP na inicializaç
 |---|---|---|:---:|
 | `REACT_APP_SIMFRETE_API_BASE_URL` | `/` | Base do backend para cotação e pedido ERP | Não |
 | `REACT_APP_UNIMED_API_BASE_URL` | `/api/unimed/` | Base das consultas ORDS pelo proxy | Não |
-| `GENERATE_SOURCEMAP` | Não configurado atualmente | Opção do build para controlar source maps; definir `false` é uma recomendação de endurecimento | Não |
+| `GENERATE_SOURCEMAP` | `false` em `.env.production` | Controla a geração de source maps | Não |
 
 Variáveis `REACT_APP_*` são públicas: o React as grava nos arquivos estáticos. Nunca coloque token, usuário, senha ou string de conexão nessas variáveis.
 
@@ -65,6 +66,9 @@ Alterá-las requer novo `npm run build` ou rebuild da imagem do frontend.
 | `PORT` | Não | Porta HTTP; padrão 3001 | baixa |
 | `HOST` | Não | Bind; padrão `0.0.0.0` | baixa |
 | `UNIMED_API_BASE_URL` | Sim | ORDS upstream | interna |
+| `AUTH_APP_ORIGIN` | Em produção | Origem pública do frontend, sem barra final. Em desenvolvimento, padrão `http://localhost:3000` | interna |
+| `AUTH_ORDS_BASE_URL` | Quando diferente | Base dos handlers de autenticação. Por padrão usa `UNIMED_API_BASE_URL` | interna |
+| `AUTH_ORDS_AUTHORIZATION` | Se exigida pelo ORDS | Cabeçalho de autorização do serviço de autenticação | secreta |
 | `SIMFRETE_USER` | Sim | Usuário SimFrete | secreta |
 | `SIMFRETE_PASS` | Sim | Senha SimFrete | secreta |
 | `ERP_PEDIDOS_URL` | Sim | Endpoint do ERP/NL | interna |
@@ -79,7 +83,7 @@ Arquivos `.env` reais estão ignorados pelo Git. Mantenha apenas `.env.example` 
 - armazenamento em secret manager quando disponível;
 - rotação periódica e imediata em caso de exposição;
 - credenciais distintas por ambiente;
-- usuário Oracle com privilégios apenas sobre a sequence e tabela necessárias;
+- conceder ao serviço ORDS apenas os privilégios necessários às rotas que ele executa;
 - não imprimir `podman compose config` em chamados, pois a saída pode expandir segredos.
 
 ## 4. Execução local
@@ -134,7 +138,7 @@ Antes de publicar, o build deve finalizar sem erro. Warnings devem ser avaliados
 O `Dockerfile.frontend`:
 
 1. usa Node 20 Alpine para build;
-2. instala dependências;
+2. instala dependências com `npm ci`;
 3. injeta as duas URLs como argumentos de build;
 4. executa `npm run build`;
 5. copia o resultado para Nginx 1.27 Alpine.
@@ -144,8 +148,8 @@ O `Dockerfile.frontend`:
 O `backend-simfrete/Dockerfile`:
 
 1. usa Node 20 Bookworm Slim;
-2. instala `libaio1` e `libnsl2`;
-3. instala dependências de produção;
+2. instala dependências de produção com `npm ci --omit=dev`;
+3. copia `server.js` e os serviços de runtime. Os testes e o `.env` local ficam fora da imagem;
 4. inicia `node server.js`.
 
 ### Compose atual
@@ -180,8 +184,8 @@ O Nginx atual escuta HTTP na porta 80 e não configura TLS, HSTS, CSP ou outros 
 
 1. Identifique e registre a revisão atualmente publicada.
 2. Confirme backup seguro das configurações, sem copiá-las para o repositório.
-4. Confirme conectividade com dependências.
-5. Planeje uma janela compatível com o risco da alteração.
+3. Confirme conectividade com dependências e compatibilidade dos handlers ORDS.
+4. Planeje uma janela compatível com o risco da alteração.
 
 ### 7.2 Construção e subida
 
@@ -203,13 +207,13 @@ podman compose exec backend node -e "fetch('http://127.0.0.1:3001/health').then(
 Smoke test mínimo:
 
 1. frontend abre sem erro de console;
-2. uma consulta ORDS simples funciona;
+2. a cor aparece antes do login, a sessão abre em duas abas e o logout bloqueia as rotas protegidas;
 3. cliente carrega dados complementares;
 4. item carrega preço e tributação nas duas unidades;
 5. proposta PDF e Excel são geradas;
 6. cotação é testada somente quando autorizado e com dados controlados;
 7. integração ERP deve usar ambiente/cliente de teste e autorização explícita;
-8. registro Oracle deve evoluir para o status esperado.
+8. o resultado deve ser conciliado no NL e registrado via ORDS.
 
 ## 8. Health, prontidão e capacidade
 
@@ -224,7 +228,7 @@ O corpo JSON é limitado a 1 MB.
 Separar:
 
 - **liveness:** processo Express responde;
-- **readiness:** configuração válida, Oracle acessível e pool disponível;
+- **readiness:** configuração válida e serviços HTTP necessários acessíveis;
 - **diagnóstico externo:** ORDS/ERP/SimFrete, preferencialmente sem produzir operações reais.
 
 Não use uma cotação ou envio de pedido como health check automático.
@@ -236,7 +240,7 @@ Não use uma cotação ou envio de pedido como health check automático.
 - logs em `console`;
 - mensagens de inicialização e erros;
 - etapa e número do pedido no erro ERP;
-- payload, resposta e erro persistidos como CLOB no Oracle;
+- payload, resposta e erro enviados por HTTP para a auditoria do ORDS;
 - sem `requestId` comum ao navegador, backend, Oracle e ERP;
 - sem métricas, tracing ou endpoint de versão;
 - sem política de retenção definida no repositório.
@@ -256,7 +260,7 @@ podman stats
 - versão/commit no startup e no health;
 - duração e status de cada dependência;
 - métricas de cotação, integração, timeout e erro por etapa;
-- alerta para `ENVIANDO` antigo e crescimento de `ERRO`;
+- alerta para pedidos sem reconciliação e crescimento de `ERRO`;
 - centralização e retenção de logs;
 - mascaramento de CNPJ, cliente e conteúdo comercial;
 - nunca registrar senha, token ou string de conexão.
@@ -268,15 +272,15 @@ podman stats
 | Área | Comportamento atual | Recomendação |
 |---|---|---|
 | Transporte | Nginx do projeto apenas HTTP | TLS e HSTS no ponto de entrada |
-| CORS | `cors()` aberto no backend | limitar às origens necessárias |
-| Autenticação interna | endpoint ERP não autentica o usuário final | autenticação e autorização por perfil |
+| Origem | O Express valida a origem nas operações mutáveis e o navegador usa o mesmo host do frontend | configurar `AUTH_APP_ORIGIN` com o endereço real |
+| Autenticação interna | rotas de dados e ERP exigem sessão; as configurações de sessão exigem perfil 9000 | estender a autorização por perfil às demais operações que precisarem dessa distinção |
 | Usuário de auditoria | aceito da query string | obter de identidade validada no backend |
 | Validação | corpo ERP repassado por spread | schema estrito, limites e campos permitidos |
 | Proxy ORDS | aceita qualquer GET sob a base | allowlist de recursos necessários |
 | Segredos | `.env` ignorado pelo Git | secret manager, rotação e auditoria |
 | Headers web | configuração mínima | CSP, `nosniff`, política de frame e referrer |
-| Rate limit | inexistente | limitar endpoints sensíveis |
-| Dependências | instalação direta no build | `npm ci`, auditoria e atualização controlada |
+| Rate limit | limite de tentativas de login por combinação de IP e conta, em memória por processo | considerar coordenação entre réplicas |
+| Dependências | `npm ci` no build | auditoria e atualização controlada |
 | Auditoria | payload/resposta completos em CLOB | retenção, acesso mínimo e mascaramento |
 
 ### 10.2 Dados sensíveis
@@ -297,25 +301,22 @@ Defina base legal, perfis de acesso, prazo de retenção e procedimento de atend
 O endpoint atual:
 
 - aceita payload do navegador sem schema;
-- gera número Oracle;
+- exige o sequencial de uma cotação salva e valida a versão atual via ORDS;
 - envia ao ERP com credenciais privilegiadas do servidor;
-- não implementa chave de idempotência;
+- bloqueia envio simultâneo do mesmo sequencial e unidade no processo atual e evita reenvio quando a versão já tem número confirmado;
 - permite risco de duplicidade em retry.
 
 Prioridades recomendadas:
 
-1. autenticar o chamador;
-2. autorizar a operação;
-3. validar e reconstruir o payload no backend;
-4. implementar idempotência por tentativa/unidade;
-5. registrar auditoria antes do POST;
-6. concluir o status antes de responder sucesso.
+1. autorizar a operação por perfil, conforme a regra de negócio;
+2. validar e reconstruir o payload no backend;
+3. coordenar a idempotência entre instâncias e reconciliar resultados ambíguos no ERP.
 
 ## 11. Manutenção preventiva
 
 | Frequência | Atividade |
 |---|---|
-| Diária | monitorar erros, `ENVIANDO` antigos e disponibilidade |
+| Diária | monitorar erros, pendências de reconciliação e disponibilidade |
 | Mensal | revisar dependências npm, imagens base e vulnerabilidades |
 | Trimestral | testar restore/rollback, rotacionar segredos conforme política e revisar acessos |
 | Por release | build, testes, smoke, contrato ORDS/ERP e plano de reversão |
@@ -405,7 +406,7 @@ Qualquer correção de pedido integrado deve seguir o processo funcional do ERP.
 3. Secrets gerenciados fora de `.env`.
 4. Health checks no Compose e readiness real.
 5. TLS e headers de segurança.
-6. Autenticação, autorização e rate limiting.
+6. Autorização por operação e coordenação de limites entre réplicas.
 7. Idempotência e máquina de estados da integração.
 8. Migrações/versionamento do schema Oracle.
 9. Logs estruturados, métricas e alertas.

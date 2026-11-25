@@ -15,7 +15,7 @@ function LocalAtual() {
     return <output>{pathname}{search}</output>;
 }
 
-test('sai de pedidos para o menu principal e fecha o menu lateral preservando os parâmetros', async () => {
+test.each(['logo', 'menu lateral'])('volta de Pedidos ao menu principal pelo %s preservando os parâmetros', async (origem) => {
     global.IS_REACT_ACT_ENVIRONMENT = true;
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -27,8 +27,11 @@ test('sai de pedidos para o menu principal e fecha o menu lateral preservando os
                 <Route path="pedidos" element={<h1>Listagem de pedidos</h1>} />
             </Route></Routes>
         </MemoryRouter>));
-        await act(async () => container.querySelector('[aria-label="Abrir menu"]').click());
-        await act(async () => container.querySelector('nav a').click());
+        if (origem === 'menu lateral') {
+            await act(async () => container.querySelector('[aria-label="Abrir menu"]').click());
+        }
+        const link = origem === 'logo' ? '[aria-label="Voltar ao menu principal"]' : 'nav a';
+        await act(async () => container.querySelector(link).click());
         expect(container.querySelector('output').textContent).toBe('/?usuario=1');
         expect(container.querySelector('h1').textContent).toBe('Bem-vindo!');
         expect(container.querySelector('[role="dialog"]')).toBeNull();

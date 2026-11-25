@@ -1,5 +1,7 @@
 # Revisão do ambiente — 23/09/2026
 
+> Registro histórico da revisão de setembro. Para configuração, autenticação e implantação atuais, consulte os [guias operacionais](README.md#mapa-da-documentação).
+
 > **07/10/2026:** referencias a conexao direta, pool, SQL e log Oracle neste documento descrevem a implementacao anterior. O backend atual usa HTTP para dados e auditoria: consulte [Acesso a dados por APIs](16-acesso-dados-apis.md). Nao configure credenciais ou bibliotecas Oracle neste projeto.
 
 

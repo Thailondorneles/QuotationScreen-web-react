@@ -53,7 +53,12 @@ export function validarParametros(items) {
 
 export function aplicarParametros(items) {
     Object.assign(parametros, validarParametros(items));
-    const cor = parametros.AMBIENTE_COR_PRINCIPAL;
+    aplicarCorAmbiente(parametros.AMBIENTE_COR_PRINCIPAL);
+}
+
+export function aplicarCorAmbiente(cor) {
+    if (!/^#[0-9a-f]{6}$/i.test(cor)) return;
+    parametros.AMBIENTE_COR_PRINCIPAL = cor;
     const rgb = [1, 3, 5].map(inicio => parseInt(cor.slice(inicio, inicio + 2), 16));
     const misturar = (alvo, peso) => `rgb(${rgb.map(canal => Math.round(canal * (1 - peso) + alvo * peso)).join(',')})`;
     const tema = {

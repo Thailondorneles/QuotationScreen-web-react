@@ -16,7 +16,7 @@ flowchart LR
     P203 --> API
 ```
 
-Os envios são disparados em paralelo com `Promise.all`.
+O frontend envia as unidades em paralelo e consolida as respostas por unidade com `Promise.allSettled`.
 
 ## 2. Exemplo completo
 
@@ -224,10 +224,10 @@ O backend garante os valores fixos e acrescenta a observação de controle:
 pePedidos.numPedido = "-1"
 pePedidos.codCompl = 0
 pePedidos.peEndEntrega.codCompl = 0 (quando houver endereço)
-pePedidos.peObservacoes += { txtObs: String(sequence Oracle), indPedido: 0, indNf: 0, indRegistro: 0, indCr: 0, numSeq: 99, tipTransacao: 1 }
+pePedidos.peObservacoes += { txtObs: String(numSeqPedido), indPedido: 0, indNf: 0, indRegistro: 0, indCr: 0, numSeq: 99, tipTransacao: 1 }
 ```
 
-As observações da tela são preservadas; a posição 99 fica reservada ao controle. A sequence SEQ_PEDIDO_ERP_INTEGRACAO é gravada em ES_PEDIDO_ERP_INTEGRACAO.NUM_SEQ.
+As observações da tela são preservadas; a posição 99 fica reservada ao controle. O valor é o sequencial da cotação salva via ORDS. O Express o retira do envelope antes do POST ao ERP.
 
 ## 11. Resposta de sucesso
 
@@ -235,11 +235,13 @@ As observações da tela são preservadas; a posição 99 fica reservada ao cont
 {
   "sucesso": true,
   "numSeq": 123456,
-  "retornoErp": {}
+  "retornoErp": {},
+  "unidadesIntegradas": [201],
+  "logRegistrado": true
 }
 ```
 
-Após os envios, o frontend consulta `ConsultaPedidosSeq/{numSeq}` para cada sequence retornada pelo backend. A mensagem de sucesso apresenta `cod_unidade`, `num_pedido` e `cod_compl` dos registros encontrados em `items`, correlacionados pelo `txt_obs`. A consulta usa a API Unimed configurada e tenta até três vezes, com intervalo de 700 ms e timeout de 5 segundos por tentativa. Se os dados estiverem indisponíveis, a mensagem confirma a geração e informa a indisponibilidade da consulta para a unidade, sem reenviar o pedido.
+O React consulta `ConsultaPedidosSeq/{numSeq}` antes e depois do envio. Usa `txt_obs` para correlacionar a cotação e descarta os números que já existiam antes da tentativa. A consulta posterior tenta até três vezes, com intervalo de 700 ms e timeout de 5 segundos por requisição. Os números confirmados são registrados por unidade. Se faltar número ou complemento, a tela sinaliza a pendência e orienta a conferir o NL antes de tentar novamente.
 
 ## 12. Checklist de alteração do contrato
 

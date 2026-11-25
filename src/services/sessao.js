@@ -22,9 +22,8 @@ function avisarOutrasAbas() {
 }
 
 export async function entrar(usuario, senha) {
-    const { status } = await apiSessao.post('login', { usuario, senha }, { timeout: 16000 });
+    const { status } = await apiSessao.post('login', { usuario, senha }, { timeout: 18000 });
     if (status !== 204) throw new Error('Resposta inválida no login.');
-    avisarOutrasAbas();
 }
 
 export async function sair() {

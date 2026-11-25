@@ -44,7 +44,7 @@ function normalizarCnpjBusca(valor) {
     return String(valor ?? '').replace(/\D/g, '');
 }
 
-export function LovClientes({ isOpen, setLovOpen, onSelect }) {
+export function LovClientes({ isOpen, setLovOpen, onSelect, carregarClientes = getAllClientesCached }) {
     const [filtro, setFiltro] = useState('');
     const [todosClientes, setTodosClientes] = useState([]);
     const [filtroAplicado, setFiltroAplicado] = useState('');
@@ -53,17 +53,13 @@ export function LovClientes({ isOpen, setLovOpen, onSelect }) {
     const [atualizadoEm, setAtualizadoEm] = useState(0);
     const ultimaRequisicao = useRef(0);
 
-    async function carregarTodosClientes() {
-        return getAllClientesCached();
-    }
-
     async function buscar({ filtro: valorFiltro, novoOffset = 0 }) {
         const idRequisicao = ultimaRequisicao.current + 1;
         ultimaRequisicao.current = idRequisicao;
         setLoading(true);
 
         try {
-            const clientes = await carregarTodosClientes();
+            const clientes = await carregarClientes();
             if (idRequisicao === ultimaRequisicao.current) {
                 setTodosClientes(clientes);
                 setFiltroAplicado(String(valorFiltro ?? '').trim());

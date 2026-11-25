@@ -1,15 +1,31 @@
-import logo from '../imagens/nl-logo.png';
-import { parametros } from '../config/parametrosAplicacao';
+import logo from '../imagens/nlprod2023.png';
 import { useContext, useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { FaBars, FaTimes, FaHome, FaSignOutAlt } from 'react-icons/fa';
 import { atalhosMenu } from '../views/MenuPrincipal';
-import { ParametrosContext } from '../config/ParametrosContext';
+import { SessaoContext } from '../config/SessaoContext';
 import { sair } from '../services/sessao';
 import '../style/menuStyle.css';
 
+function IdentificacaoSessao({ usuario, expiraEm }) {
+  const [agora, setAgora] = useState(Date.now);
+  useEffect(() => {
+    const timer = setInterval(() => setAgora(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const segundos = Math.max(0, Math.ceil((expiraEm - agora) / 1000));
+  const tempo = `${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, '0')}`;
+  return (
+    <div className="header-sessao">
+      <strong>{usuario.nome || 'Usuário NL'}</strong>
+      <span>Código {usuario.codigoPessoa} · Perfil {usuario.codigoPerfil ?? 'não informado'}{usuario.descricaoPerfil && ` — ${usuario.descricaoPerfil}`}</span>
+      <span>Sessão expira em {tempo}</span>
+    </div>
+  );
+}
+
 export function Header() {
-  useContext(ParametrosContext);
+  const sessao = useContext(SessaoContext);
   const [aberto, setAberto] = useState(false);
   const [saindo, setSaindo] = useState(false);
   const [erroSaida, setErroSaida] = useState('');
@@ -51,7 +67,10 @@ export function Header() {
     <>
     <header className={"header"}>
       <button ref={botaoRef} type="button" className="menu-abrir" aria-label="Abrir menu" aria-expanded={aberto} aria-controls="menu-lateral" onClick={() => setAberto(true)}><FaBars /></button>
-      <img src={parametros.AMBIENTE_LOGO || logo} onError={event => { if (event.currentTarget.getAttribute('src') !== logo) event.currentTarget.src = logo; }} alt="logo" className={"logo"} onClick={() => { window.open("http://nl.unimedcentralrs.com.br:8585/NLWeb/site/9000/1", "_blank"); }} />
+      <NavLink className="header-logo" to={{ pathname: '/', search: location.search }} aria-label="Voltar ao menu principal">
+        <img src={logo} alt="Unimed Central de Serviços - RS" />
+      </NavLink>
+      {sessao && <IdentificacaoSessao {...sessao} />}
     </header>
     {aberto && <div className="menu-camada" onClick={() => { setAberto(false); botaoRef.current?.focus(); }}>
       <aside id="menu-lateral" ref={painelRef} className="menu-lateral" role="dialog" aria-modal="true" aria-label="Menu de navegação" onClick={event => event.stopPropagation()}>
@@ -59,7 +78,9 @@ export function Header() {
         <nav aria-label="Acesso rápido">
           <NavLink to={{ pathname: '/', search: location.search }} end onClick={() => setAberto(false)}><FaHome />Menu principal</NavLink>
           {atalhosMenu.map(({ caminho, titulo, Icone }) => <NavLink key={caminho} to={{ pathname: caminho, search: location.search }} end onClick={() => setAberto(false)}><Icone />{titulo}</NavLink>)}
-          <a href="http://nl.unimedcentralrs.com.br:8585/NLWeb/invoker" target="_blank" rel="noopener noreferrer"><FaSignOutAlt />Retornar ao NL</a>
+          <a href="http://nl.unimedcentralrs.com.br:8585/NLWeb/invoker" target="_blank" rel="noopener noreferrer">
+            <span className="menu-icone-nl" aria-hidden="true" />Retornar ao NL
+          </a>
           <button type="button" onClick={encerrarSessao} disabled={saindo}>
             <FaSignOutAlt />{saindo ? 'Saindo…' : 'Sair do sistema'}
           </button>

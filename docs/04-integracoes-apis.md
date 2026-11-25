@@ -196,105 +196,25 @@ Cada transportadora é convertida para:
 }
 ```
 
-## 7. Proxy ORDS
+## 7. Proxy ORDS e autenticação
 
-O backend atende `GET /api/unimed/*`.
+O Express exige sessão em /api/unimed, /api/cotacao e /api/pedidos/enviar-erp. A rota GET /api/unimed/ambiente é pública e retorna apenas a cor do ambiente. O frontend confirma o cookie com GET /api/auth/sessao. Consulte [Login e sessão](17-login-e-sessao.md) para os contratos de login, validação e saída.
 
-Regras:
-
-- somente GET é permitido;
-- path e query string são encaminhados;
-- timeout do cliente ORDS: 20 segundos;
-- erro externo retorna status original quando disponível e mensagem genérica.
+O proxy encaminha GETs e aceita operações de gravação explícitas para parâmetros, cotação, itens, observações, endereço e integração. A exclusão usa DELETE EsPePedidos/:id. As rotas de carteira validam o representante da sessão. O cliente HTTP de dados do ORDS tem timeout de 20 segundos.
 
 ## 8. Integração ERP
 
-### Endpoint interno
+1. O React envia um POST /api/pedidos/enviar-erp por unidade com o sequencial da cotação salva em numSeqPedido.
+2. O Express consulta EsPePedidos/:id para verificar a versão atual e se a unidade já tem número de pedido confirmado.
+3. Para uma unidade ainda não integrada, o Express fixa numPedido como "-1" e codCompl como 0. A observação 99 recebe o sequencial da cotação.
+4. O Express envia o pedido a ERP_PEDIDOS_URL com x-nl-token e x-nl-aplicacao. Para cada envio ao ERP, tenta registrar INTEGRADO ou ERRO via EsPePedidosIntegracaoLog. A confirmação do registro de auditoria em caso de sucesso vem em logRegistrado.
+5. O React concilia o número e complemento via ConsultaPedidosSeq/:id e registra a integração da cotação via EsPePedidos/integracao. Resultados parciais são apresentados por unidade.
 
-```http
-POST /api/pedidos/enviar-erp
-```
+A auditoria guarda payload, retorno e erro serializados. O campo usuario desse registro é enviado como nulo. Uma falha no registro da auditoria não repete um envio que o Express já fez. [Acesso a dados por APIs](16-acesso-dados-apis.md)
 
-### Sequência técnica
+## 9. Erros da integração
 
-```mermaid
-sequenceDiagram
-    participant UI as React
-    participant BE as Express
-    participant DB as Oracle
-    participant ERP as ERP/NL
-
-    UI->>BE: payload com numPedido "-1" e codCompl 0
-    BE->>DB: SEQ_PEDIDO_ERP_INTEGRACAO.NEXTVAL
-    DB-->>BE: numSeq
-    BE->>BE: fixa pedido -1 e complemento 0; adiciona observação 99 com numSeq
-    par Registro inicial
-        BE->>DB: INSERT status ENVIANDO + payload
-    and Envio
-        BE->>ERP: POST ERP_PEDIDOS_URL
-    end
-    ERP-->>BE: resposta
-    BE-->>UI: sucesso + numSeq
-    BE->>DB: UPDATE INTEGRADO + resposta
-```
-
-### Headers externos
-
-```text
-Content-Type: application/json
-x-nl-token: ERP_NL_TOKEN
-x-nl-aplicacao: ERP_NL_APLICACAO
-```
-
-### Registro Oracle
-
-Tabela: `ES_PEDIDO_ERP_INTEGRACAO`.
-
-| Campo | Uso |
-|---|---|
-| `NUM_SEQ` | Sequência gerada |
-| `STATUS` | `ENVIANDO`, `INTEGRADO` ou `ERRO` |
-| `PAYLOAD` | JSON efetivamente enviado em CLOB |
-| `USUARIO` | Usuário vindo da URL, se disponível |
-| `RESPOSTA_ERP` | Resposta do ERP em CLOB |
-| `ERRO` | Detalhe da falha em CLOB |
-| `DATA_ENVIO` | Momento da conclusão ou erro |
-
-### Observação transacional
-
-O `INSERT` inicial usa `autoCommit` e ocorre em paralelo ao POST. O frontend pode receber sucesso antes de o `UPDATE INTEGRADO` terminar, pois a resposta HTTP é enviada antes desse update no fluxo atual.
-
-## 9. Contrato de erros do ERP
-
-Exemplo:
-
-```json
-{
-  "sucesso": false,
-  "numSeq": 123456,
-  "erro": "Erro ao integrar pedido com o ERP",
-  "etapa": "atualizar_integracao_erro",
-  "detalhe": {}
-}
-```
-
-Etapas internas registradas nos logs:
-
-- `inicio`;
-- `conectar_oracle`;
-- `gerar_numero_sequencia`;
-- `montar_payload_erp`;
-- `inserir_controle_integracao`;
-- `post_erp`;
-- `atualizar_integracao_sucesso`;
-- `atualizar_integracao_erro`.
-
-O campo `etapa` retornado ao frontend exige interpretação cuidadosa:
-
-- falhas antes de gerar um número podem retornar a etapa original, como `conectar_oracle` ou `gerar_numero_sequencia`;
-- depois que existem conexão e número, o `catch` muda a etapa para `atualizar_integracao_erro` antes de responder, podendo ocultar no JSON a etapa original do POST ou INSERT;
-- uma falha em `atualizar_integracao_sucesso` acontece depois de a resposta de sucesso já ter sido enviada e, portanto, aparece apenas nos logs;
-- os logs emitidos antes da tentativa de atualização de erro preservam a etapa original e são a evidência mais confiável para diagnóstico.
+A resposta de erro pode incluir sucesso: false, numSeq, erro, etapa e detalhe. As etapas atuais são inicio, consultar_cotacao, montar_payload_erp e post_erp. O status 409 pode indicar cotação ainda não salva, envio em andamento ou número registrado em formato inválido. Reconcilie o pedido no ERP antes de reenviar uma tentativa cujo resultado não foi confirmado.
 
 ## 10. Health check
 
@@ -321,13 +241,13 @@ O health check confirma apenas que o processo HTTP responde; não valida ORDS, O
 
 ## 12. Pontos de atenção
 
-1. O proxy ORDS não faz cache no backend; cache existe no navegador.
+1. O proxy não guarda respostas das consultas comerciais. O navegador mantém caches de consulta e o Express compartilha validações de sessão simultâneas e mantém um cache curto dos prazos de sessão.
 2. Falhas de algumas consultas auxiliares retornam valores vazios para não bloquear a experiência.
 3. O health check não mede dependências.
 4. O backend exige todas as credenciais e Oracle já na inicialização, mesmo que o usuário queira apenas consultar dados.
-5. CORS está aberto no backend; em produção o acesso esperado é pelo Nginx.
+5. O frontend usa a mesma origem para suas chamadas ao backend.
 6. Logs podem conter detalhes do retorno externo; revisar política de dados sensíveis.
-7. O `INSERT` de controle e o POST ao ERP são iniciados em paralelo; o ERP pode aceitar o pedido mesmo se o registro inicial falhar.
+7. O POST ao ERP e o registro de auditoria via ORDS são operações independentes. A resposta logRegistrado acompanha o resultado do envio.
 8. O frontend envia as unidades em paralelo. Uma falha geral não significa necessariamente que nenhuma unidade foi integrada; antes de repetir, consultar a tabela de controle e o ERP.
 9. Não existe atualmente chave de idempotência ou reconciliação automática. Uma repetição sem conferência pode duplicar o pedido.
 10. O endpoint de pedido aceita o corpo montado pelo navegador sem validação formal de schema e o usuário de auditoria vem da URL; autenticação, autorização e validação devem ser tratadas como melhorias prioritárias.

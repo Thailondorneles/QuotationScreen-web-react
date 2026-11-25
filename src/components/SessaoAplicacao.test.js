@@ -27,18 +27,22 @@ afterEach(async () => {
     delete global.IS_REACT_ACT_ENVIRONMENT;
 });
 
-async function abrirAplicacao() {
+async function abrirAplicacao(prepararAplicacao, abrirMenuPrincipal) {
     await act(async () => root.render(
-        <SessaoAplicacao><div data-testid="conteudo">Demandas</div></SessaoAplicacao>
+        <SessaoAplicacao prepararAplicacao={prepararAplicacao} abrirMenuPrincipal={abrirMenuPrincipal}>
+            <div data-testid="conteudo">Demandas</div>
+        </SessaoAplicacao>
     ));
 }
 
-test('mantém o formulário em Entrando até confirmar o cookie do login', async () => {
+test('mantém o formulário em Entrando até confirmar a sessão e abrir o menu', async () => {
     let confirmar;
+    let liberarParametros;
     consultarSessao.mockRejectedValueOnce({ response: { status: 401 } })
         .mockImplementationOnce(() => new Promise(resolve => { confirmar = resolve; }));
     entrar.mockResolvedValueOnce();
-    await abrirAplicacao();
+    const abrirMenu = jest.fn();
+    await abrirAplicacao(() => new Promise(resolve => { liberarParametros = resolve; }), abrirMenu);
 
     const formulario = container.querySelector('form');
     formulario.elements.usuario.value = 'teste';
@@ -51,6 +55,13 @@ test('mantém o formulário em Entrando até confirmar o cookie do login', async
     expect(container.querySelector('[data-testid="conteudo"]')).toBeNull();
 
     await act(async () => confirmar({ usuario: { codigoPessoa: 123 }, validadeMs: 2000 }));
+    expect(formulario.querySelector('button').textContent).toBe('Entrando…');
+    expect(formulario.elements.usuario.value).toBe('teste');
+    expect(formulario.elements.senha.value).toBe('senha-ficticia');
+    expect(abrirMenu).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-testid="conteudo"]')).toBeNull();
+    await act(async () => liberarParametros());
+    expect(abrirMenu).toHaveBeenCalledTimes(1);
     expect(container.querySelector('[data-testid="conteudo"]')).not.toBeNull();
 });
 

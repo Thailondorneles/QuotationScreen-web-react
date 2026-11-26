@@ -1,0 +1,140 @@
+.login {
+    position: relative;
+    box-sizing: border-box;
+    min-height: 100vh;
+    min-height: 100svh;
+    padding: 160px 24px;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(108deg, var(--ambiente-cor, #2e8b1c), var(--ambiente-escura, #236815));
+}
+
+.login::before {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    content: '';
+    background:
+        radial-gradient(circle at 22% 33%, #fff8 1px, transparent 1.7px) 23px 12px / 269px 211px,
+        radial-gradient(circle at 76% 63%, #fff7 1px, transparent 1.8px) 90px 67px / 373px 283px,
+        radial-gradient(circle at 70% 17%, #fff6 0.7px, transparent 1.4px) 10px 74px / 231px 359px;
+}
+
+.login-logo {
+    position: absolute;
+    top: 28px;
+    left: 28px;
+    width: clamp(142px, 15vw, 218px);
+    border-radius: 18px 18px 0 18px;
+}
+
+.login-painel {
+    position: relative;
+    box-sizing: border-box;
+    width: min(100%, 360px);
+    padding: 48px 40px 44px;
+    border-radius: 22px;
+    background: #fff;
+    color: #243127;
+    box-shadow: 0 16px 48px #13350e2c;
+}
+
+.login-painel h1 {
+    margin: 0;
+    color: var(--ambiente-escura, #236815);
+    font-size: 25px;
+    line-height: 1.2;
+}
+
+.login-introducao {
+    margin: 10px 0 30px;
+    color: #526057;
+    font-size: 14px;
+}
+
+.login-painel fieldset {
+    min-width: 0;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    display: grid;
+}
+
+.login-painel label {
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.login-painel input {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 42px;
+    padding: 8px 12px;
+    margin-bottom: 20px;
+    border: 1px solid #ccd5cc;
+    border-radius: 8px;
+    background: #fbfcfa;
+    color: inherit;
+    font: inherit;
+}
+
+.login-entrar {
+    min-height: 43px;
+    margin-top: 8px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--ambiente-escura, #236815);
+    color: #fff;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.login-entrar:hover:not(:disabled) { filter: brightness(.9); }
+.login-entrar:disabled { opacity: .72; cursor: wait; }
+
+.login-painel :focus-visible {
+    outline: 2px solid var(--ambiente-escura, #236815);
+    outline-offset: 3px;
+}
+
+.login-erro {
+    margin: 12px 0 0;
+    color: #9d2525;
+    font-size: 13px;
+}
+
+.login-verificar {
+    margin-top: 10px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--ambiente-escura, #236815);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.login-ajuda {
+    margin-top: 20px;
+    text-align: center;
+    font-size: 13px;
+}
+
+.login-ajuda summary {
+    color: var(--ambiente-escura, #236815);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.login-ajuda p {
+    margin: 10px 0 0;
+    line-height: 1.5;
+}
+
+@media (max-width: 520px) {
+    .login { padding: 132px 20px 48px; }
+    .login-logo { top: 20px; left: 20px; }
+    .login-painel { padding: 34px 26px; }
+}

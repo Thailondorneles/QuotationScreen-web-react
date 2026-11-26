@@ -22,12 +22,26 @@ export function Configuracoes() {
     async function salvar(event) {
         event.preventDefault();
         if (salvando || !alteradas.length) return;
+        const alterouPrazos = alteradas.some(config => [50, 51].includes(Number(config.seq_conf)));
+        const prazo = id => Number(configuracoes.find(config => Number(config.seq_conf) === id)?.parametro);
+        if (alterouPrazos && (!Number.isInteger(prazo(50)) || !Number.isInteger(prazo(51)) ||
+            prazo(50) < 1 || prazo(51) < prazo(50) || prazo(51) > 525600)) {
+            setFalhaSalvar(true);
+            setMensagem('Informe prazos em minutos inteiros. O limite absoluto deve ser maior ou igual à inatividade.');
+            return;
+        }
+        const ordem = [...alteradas];
+        const limite = ordem.find(config => Number(config.seq_conf) === 51);
+        if (limite && prazo(50) > Number(originais[51])) {
+            ordem.splice(ordem.indexOf(limite), 1);
+            ordem.unshift(limite);
+        }
         setSalvando(true);
         setMensagem('');
         const falhas = [];
         let salvas = 0;
         try {
-            for (const config of alteradas) {
+            for (const config of ordem) {
                 try {
                     await atualizarParametro(config.seq_conf, String(config.parametro ?? ''));
                     setOriginais(atual => ({ ...atual, [config.seq_conf]: String(config.parametro ?? '') }));
@@ -87,7 +101,13 @@ export function Configuracoes() {
                                 <td>
                                     <div className={config.des_conf.endsWith('_COR_PRINCIPAL') ? 'configuracoes-cor' : undefined}>
                                         {config.des_conf.endsWith('_COR_PRINCIPAL') && <input type="color" className="configuracoes-seletor-cor" aria-label={`Escolher cor de ${config.des_conf}`} disabled={salvando} value={/^#[0-9a-f]{6}$/i.test(config.parametro) ? config.parametro : '#00844a'} onChange={event => editar(config.seq_conf, event.target.value.toUpperCase())} />}
-                                        <input className="configuracoes-valor" aria-label={`Valor de ${config.des_conf}`} disabled={salvando} required={config.des_conf.endsWith('_COR_PRINCIPAL')} pattern={config.des_conf.endsWith('_COR_PRINCIPAL') ? '#[0-9a-fA-F]{6}' : undefined} title={config.des_conf.endsWith('_COR_PRINCIPAL') ? 'Informe a cor no formato #RRGGBB' : undefined} value={config.parametro ?? ''} onChange={event => editar(config.seq_conf, event.target.value)} />
+                                        <input className="configuracoes-valor" aria-label={`Valor de ${config.des_conf}`} disabled={salvando}
+                                          type={[50, 51].includes(Number(config.seq_conf)) ? 'number' : 'text'}
+                                          min={1} max={525600} step={1}
+                                          required={config.des_conf.endsWith('_COR_PRINCIPAL') || [50, 51].includes(Number(config.seq_conf))}
+                                          pattern={config.des_conf.endsWith('_COR_PRINCIPAL') ? '#[0-9a-fA-F]{6}' : undefined}
+                                          title={config.des_conf.endsWith('_COR_PRINCIPAL') ? 'Informe a cor no formato #RRGGBB' : undefined}
+                                          value={config.parametro ?? ''} onChange={event => editar(config.seq_conf, event.target.value)} />
                                     </div>
                                 </td>
                                 <td className="configuracoes-info-col">

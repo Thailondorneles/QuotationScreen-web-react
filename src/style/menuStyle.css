@@ -4,11 +4,37 @@
     color: #fff;
     padding: 20px 25px;
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
 }
 
-.logo {
-    padding-left: 2%;
-    width: 10%;
+.header-logo {
+    display: inline-flex;
+    flex-shrink: 0;
 }
+
+.header-logo img {
+    width: auto;
+    height: clamp(42px, 7vw, 62px);
+    display: block;
+    border-radius: 8px;
+}
+
+.header-logo:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 3px;
+}
+.header-sessao {
+    margin-left: auto;
+    padding-left: 12px;
+    min-width: 0;
+    display: grid;
+    justify-items: end;
+    gap: 3px;
+    text-align: right;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+
+.header-sessao strong { font-size: 14px; }

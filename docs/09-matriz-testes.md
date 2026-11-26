@@ -2,7 +2,7 @@
 
 ## 1. Objetivo
 
-Esta matriz cobre o comportamento funcional e de regressão do simulador de Pedido de Venda vigente em **18/08/2026**. O objetivo é validar a jornada completa, os cálculos, as saídas por unidade e os contratos de integração sem confundir limitações conhecidas com funcionalidades pretendidas.
+Esta matriz reúne cenários de regressão de Pedido de Venda, login e carteira. Os exemplos de valores usam os padrões de configuração; verifique os parâmetros ativos do ambiente antes de comparar.
 
 Documentos de apoio:
 
@@ -79,12 +79,24 @@ Para testes numéricos, registrar no relatório os valores brutos retornados pel
 
 | ID | Pri. | Tipo | Pré-condição | Ação | Resultado esperado |
 |---|:---:|:---:|---|---|---|
-| PV-INI-001 | P0 | F | Nova sessão | Abrir a rota da tela | Tela abre sem cliente e itens; modalidade mostra `2 — Orçamento` |
+| PV-INI-001 | P0 | F | Sessão válida | Criar pedido em `/pedido` | Tela abre sem cliente e itens; modalidade mostra `2 — Orçamento` |
 | PV-INI-002 | P1 | I | API de tipos disponível com mais de 25 registros | Abrir a tela | Todas as páginas de tipos de logradouro são carregadas; tipos vazios não aparecem |
 | PV-INI-003 | P1 | I | API de lotes disponível | Abrir a tela | Mapa de lotes é carregado e pode destacar ITEM-LOTE |
 | PV-INI-004 | P2 | I | API de tipos indisponível | Abrir a tela | Tela permanece utilizável; seletor de tipo fica sem opções retornadas e não há mensagem específica |
-| PV-INI-005 | P1 | F | Pedido concluído com sucesso | Fechar o modal de sucesso | Campos e itens são limpos, contadores reiniciam e modalidade volta a 2 |
+| PV-INI-005 | P1 | F | Pedido concluído com sucesso | Fechar o modal de sucesso | Cotação segue aberta e o número confirmado fica registrado |
 | PV-INI-006 | P1 | UI | Operação assíncrona ativa | Observar a interface | Loading de tela inteira bloqueia interação até a operação finalizar |
+
+### Login, sessão e carteira
+
+| Cenário | Resultado esperado |
+|---|---|
+| Abrir o sistema sem sessão | O login aparece com a cor do ambiente; chamadas privadas retornam 401. |
+| Entrar com usuário válido | O formulário mantém “Entrando…” até confirmar o cookie e carregar os parâmetros. O menu abre na mesma aba. |
+| Abrir outra aba e depois sair | A segunda aba usa a sessão existente. Depois do logout, nenhuma aba consegue consultar a API privada. |
+| Comparar dois representantes | A lupa de Demandas mostra apenas a carteira da sessão. A busca direta de cliente fora da carteira retorna 404. |
+| Alterar os prazos 50 e 51 | O perfil 9000 pode salvar valores válidos. Os novos prazos valem na próxima criação ou renovação de sessão. |
+
+As suítes versionadas ficam fora das imagens de produção. Rode `npm test -- --watchAll=false` no frontend e `npm test` no backend. Os testes com ORDS simulado não substituem o teste autenticado e o teste de carga em homologação.
 
 ## 6. Cliente e contexto comercial
 
@@ -427,11 +439,11 @@ Para testes numéricos, registrar no relatório os valores brutos retornados pel
 |---|:---:|:---:|---|---|---|
 | PV-ENV-001 | P0 | I | Uma unidade válida; backend sucesso | Enviar | POST em `/api/pedidos/enviar-erp`; modal mostra unidade e número |
 | PV-ENV-002 | P0 | I | Duas unidades válidas | Enviar | Requisições são paralelas; sucesso é ordenado por unidade no modal |
-| PV-ENV-003 | P0 | F | Sucesso exibido | Pressionar Enter/OK | Modal fecha e tela é limpa |
+| PV-ENV-003 | P0 | F | Sucesso exibido | Pressionar Enter/OK | Modal fecha e a cotação continua aberta |
 | PV-ENV-004 | P0 | I | Backend retorna erro estruturado | Enviar | Modal combina erro, etapa, pedido e detalhe disponíveis |
 | PV-ENV-005 | P1 | I | Erro sem estrutura do backend | Enviar | Modal usa `mensagem`, `message` ou texto padrão |
 | PV-ENV-006 | P1 | I | Timeout >30 s | Enviar | Loading termina e erro de integração é mostrado |
-| PV-ENV-007 | P0 | CH | 201 sucesso, 203 falha | Enviar ambas | Promise geral falha; pode existir pedido 201 sem mensagem de sucesso consolidada ⚠ |
+| PV-ENV-007 | P0 | CH | 201 sucesso, 203 falha | Enviar ambas | O sistema concilia o 201 e sinaliza o envio que falhou. Conferir os números no NL antes de repetir ⚠ |
 | PV-ENV-008 | P0 | CH | Caso anterior | Repetir sem consultar ERP | Há risco de duplicar a unidade já criada ⚠ |
 | PV-ENV-009 | P1 | F | Erro de integração | Fechar modal | Tela permanece preenchida para correção/reenvio |
 | PV-ENV-010 | P1 | I | Classificação indisponível | Confirmar unidades | Avaliação falha e pedido não é enviado; erro é apresentado |

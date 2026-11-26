@@ -3,9 +3,10 @@ FROM docker.io/library/node:20-bookworm-slim
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN npm ci --omit=dev
 
-COPY . .
+COPY server.js ./
+COPY services ./services
 
 EXPOSE 3001
 

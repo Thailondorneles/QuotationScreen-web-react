@@ -1,6 +1,13 @@
 import { unimedApi } from '../config/apis';
-import { aplicarParametros } from '../config/parametrosAplicacao';
+import { aplicarCorAmbiente, aplicarParametros } from '../config/parametrosAplicacao';
 import { consultarComCache, invalidarConsultas } from './consultaCache';
+
+export function carregarTemaAmbiente() {
+    return consultarComCache('tema-ambiente', async () => {
+        const { data } = await unimedApi.get('ambiente', { timeout: 3200 });
+        aplicarCorAmbiente(data?.cor);
+    });
+}
 
 export function getParametros() {
     return consultarComCache('parametros', () =>
@@ -21,10 +28,7 @@ export function carregarParametrosAplicacao() {
     if (!carregamento) {
         carregamento = getParametros()
             .then(response => aplicarParametros(response.data?.items))
-            .catch(() => {
-                aplicarParametros([]);
-
-            });
+            .catch(() => {});
     }
     return carregamento;
 }

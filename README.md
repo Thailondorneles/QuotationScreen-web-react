@@ -75,11 +75,17 @@ HOST=0.0.0.0
 SIMFRETE_USER=seu_usuario
 SIMFRETE_PASS=sua_senha
 UNIMED_API_BASE_URL=https://nl-homolog.unimedcentralrs.com.br/ords/nl/unimed/
+AUTH_APP_ORIGIN=http://localhost:3000
+ERP_PEDIDOS_URL=https://<host-do-erp>/<rota-de-integracao>
+ERP_NL_TOKEN=<token-do-erp>
+ERP_NL_APLICACAO=99
 ```
+
+Em produção, configure `AUTH_APP_ORIGIN` com a origem que o usuário abre no navegador, sem a barra final. Se a autenticação usar outra base ORDS, configure `AUTH_ORDS_BASE_URL`. Consulte o [guia de implantação](docs/10-implantacao-seguranca-manutencao.md) e o [contrato de login](docs/17-login-e-sessao.md).
 
 ## Como subir no Linux
 
-### 1. Instalar Docker
+### 1. Instalar Podman
 
 ```bash
 sudo dnf module install -y container-tools:ol8
@@ -115,6 +121,8 @@ cp backend-simfrete/.env.example backend-simfrete/.env
 ```
 
 Edite `backend-simfrete/.env` com suas credenciais reais.
+
+Confirme os handlers ORDS e cadastre as sequências 50 e 51 com o [script de prazos de sessão](docs/sql/es_pars_conf_prazos_sessao.sql), caso ainda não existam.
 
 ### 4. Construir e subir
 
@@ -193,7 +201,7 @@ podman compose ps
 - exposto apenas dentro da rede do `podman compose`
 
 ### Proxy
-- requisicoes `/api/cotacao` e `/api/unimed/*` passam pelo `nginx`
+- as requisições em `/api/` passam pelo `nginx`
 - o navegador fala so com a porta `80`
 
 ## Observacoes importantes
@@ -201,6 +209,8 @@ podman compose ps
 - `npm start` e so para desenvolvimento
 - em producao, o React deve usar `npm run build`
 - o arquivo `backend-simfrete/.env` nao deve ir para o Git
+- os testes ficam no repositório para validação antes do deploy e são excluídos das imagens. Rode `npm test -- --watchAll=false` no frontend e `npm test` em `backend-simfrete`.
+- o Compose injeta o `.env` do backend ao iniciar o contêiner. Os arquivos de ambiente locais ficam fora do build.
 - a porta publicada hoje e a `80`; se ja existir outro servico nela, troque no `docker-compose.yml`
 
 ## Primeira publicacao resumida

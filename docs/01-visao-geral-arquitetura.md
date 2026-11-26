@@ -25,18 +25,17 @@ O sistema não é apenas um formulário. Ele orquestra dados cadastrais, tribut�
 - Endereço de entrega.
 - Modalidade de integração.
 - Emissão de PDF e Excel.
+- Login NL com sessão compartilhada entre abas.
+- Demanda de contratos e consulta da carteira do representante.
 - Envio de um pedido por unidade ao ERP.
-- Registro técnico da integração em Oracle.
+- Registro técnico da integração via ORDS.
 
 ### Fora do escopo atual
 
-- Persistência de rascunhos da tela.
-- Recuperação de uma simulação após recarregar o navegador.
+- Recuperação de alterações locais feitas após o último salvamento da cotação.
 - Armazenamento das propostas emitidas.
-- Autenticação própria do frontend.
 - Tela de acompanhamento do registro `ES_PEDIDO_ERP_INTEGRACAO`.
 - Reprocessamento de integração pela interface.
-- Testes automatizados configurados no projeto.
 
 ## 3. Atores e sistemas
 
@@ -69,9 +68,9 @@ flowchart TB
     S -->|GET /api/unimed/*| B[Backend Express]
     S -->|POST /api/cotacao| B
     S -->|POST /api/pedidos/enviar-erp| B
-    B -->|Proxy GET| O[API ORDS Unimed]
+    B -->|Sessão, consultas e persistência HTTP| O[API ORDS Unimed]
     B -->|Credenciais no servidor| F[SimFrete]
-    B -->|Sequência e controle| DB[(Oracle)]
+    O -->|Dados e sessões| DB[(Oracle)]
     B -->|Token e aplicação| E[ERP/NL]
     R --> P[Serviços de proposta]
     P --> PDF[jsPDF + AutoTable]
@@ -85,8 +84,8 @@ flowchart TB
 ### Entrada e roteamento
 
 - `src/index.js`: inicialização do React.
-- `src/App.js`: entrega o `RouterProvider`.
-- `src/routes.js`: define a rota `/`.
+- `src/App.js`: carrega o tema e confirma a sessão antes de liberar as rotas internas.
+- `src/routes.js`: define o menu em `/`, a listagem em `/pedidos`, a cotação em `/pedido` ou `/pedido/:numSeqPedido`, Demandas em `/demanda-contratos` e Configurações em `/conf`.
 - `src/views/RootLayout.js`: renderiza cabeçalho e conteúdo.
 - `src/views/PedidoVenda.js`: concentra o fluxo principal.
 
@@ -157,10 +156,9 @@ Na topologia padrão de produção com Docker/Podman e Nginx, o frontend usa cam
 
 1. protege credenciais;
 2. aplica timeouts;
-3. gera o número do pedido em Oracle;
-4. grava payload e status;
-5. envia ao ERP com headers técnicos;
-6. registra resposta ou erro.
+3. confirma a versão da cotação salva pelo sequencial via ORDS;
+4. envia ao ERP com o token do serviço e a observação 99 para correlação;
+5. tenta registrar o resultado e a auditoria pela API ORDS.
 
 ## 9. Concorrência e cache
 
@@ -188,9 +186,9 @@ Sobra, impostos estimados e rateio de frete são calculados no navegador. Mudan�
 ## 11. Pontos de atenção arquiteturais
 
 1. `PedidoVenda.js` concentra muitas responsabilidades e é um ponto natural de refatoração futura.
-2. O backend está concentrado em `server.js`; separar rotas, serviços e repositório Oracle reduziria risco.
+2. O backend reúne rotas em `server.js` e mantém serviços separados para sessão, carteira, prazos e auditoria.
 3. Alguns erros de consultas auxiliares são silenciados ou exibidos com `alert`, enquanto outros usam modal.
-4. Não há suíte de testes automatizados no estado atual.
+4. As suítes automatizadas do frontend e backend cobrem regressões e cenários simulados. A integração com o NL e a capacidade do ORDS precisam ser verificadas no ambiente de teste.
 5. Cálculos dependem de campos e semânticas de APIs legadas; alterações de contrato devem ser tratadas como mudanças críticas.
 6. Trocas de contexto comercial precisam invalidar preço, tributação e frete de forma coordenada; hoje essa invalidação não é uniforme para todos os campos.
 7. O envio simultâneo de 201 e 203 pode terminar parcialmente: uma unidade pode ser criada mesmo que a outra apresente erro.

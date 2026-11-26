@@ -23,7 +23,7 @@ As regras gerais são:
 1. somente itens marcados na tela entram na proposta;
 2. cada unidade gera um arquivo independente;
 3. o frete só aparece se houver uma cotação selecionada para a unidade;
-4. a validade é de 15 dias a partir da emissão;
+4. a validade usa `PROPOSTA_VALIDADE_DIAS`, com padrão de 15 dias a partir da emissão;
 5. a proposta é baixada, sem armazenamento no backend;
 6. sobra, modalidade de integração e operação não são apresentadas ao cliente.
 
@@ -239,7 +239,7 @@ Consequências:
 A função `criarPropostasPorUnidade` executa as seguintes etapas:
 
 1. registra a data e hora atuais como emissão;
-2. soma 15 dias para obter a validade;
+2. soma os dias configurados em `PROPOSTA_VALIDADE_DIAS`;
 3. filtra `itensPedido` por `selecionado`;
 4. extrai as unidades dos itens filtrados;
 5. ordena os códigos das unidades;
@@ -392,7 +392,7 @@ totalProposta = totalProdutos + valorFrete
 
 | Informação | PDF | Excel | Observação |
 |---|:---:|:---:|---|
-| Logotipo | Sim | Sim | `src/imagens/nlprod2023.png` |
+| Logotipo | Sim | Sim | `PROPOSTA_LOGO` com fallback em `src/imagens/nlprod2023.png` |
 | Nome da empresa | Sim | Sim | Configuração estática |
 | Unidade e nome da unidade | Sim | Sim | 201/Matriz ou 203/Filial |
 | CNPJ da unidade | Sim | Sim | Configuração por unidade |
@@ -401,7 +401,7 @@ totalProposta = totalProdutos + valorFrete
 | CNPJ, telefone e e-mail do cliente | Sim | Sim | Com fallback para `-` |
 | Condição de pagamento | Sim | Sim | Código e descrição |
 | Representante | Sim | Sim | Atualmente apenas o nome é exibido |
-| Emissão e validade | Sim | Sim | Validade de 15 dias |
+| Emissão e validade | Sim | Sim | Validade configurável, padrão 15 dias |
 | Ordem de compra | Sim | Não | Existe no modelo, mas não é renderizada no Excel |
 | Endereço de entrega | Sim | Sim | Apenas campos preenchidos são concatenados |
 | Referência do endereço | Sim | Não | Existe no modelo, mas não é renderizada no Excel |
@@ -604,7 +604,7 @@ Validade: 15 dias
 
 Quando uma unidade não está configurada, o serviço usa o nome genérico `Unidade {codigo}` e CNPJ vazio.
 
-> **Manutenção:** mudanças de telefone, e-mail, CNPJ, nome da empresa ou validade devem ser feitas nesse arquivo. Atualmente esses dados não vêm de API nem de variável de ambiente.
+Altere telefone, e-mail, nome e validade em `/conf`. O CNPJ por unidade é definido em `src/config/propostaConfig.js`. [Parâmetros da aplicação](12-parametros-aplicacao.md)
 
 ## 13. Logotipo
 
@@ -786,7 +786,7 @@ A célula de observações usa quebra de texto e mesclagem, mas sua altura não 
 
 ### 19.7 Cache do logotipo
 
-Se a primeira tentativa de carregar o logotipo falhar, a Promise rejeitada permanece memorizada durante a sessão. Uma nova tentativa pode continuar falhando até a página ser recarregada.
+Se o logotipo configurado falhar, o serviço tenta a imagem padrão. Se ambas falharem, o serviço limpa a Promise para permitir uma nova tentativa.
 
 ### 19.8 Acessibilidade do modal
 
@@ -817,7 +817,7 @@ Alterar somente um gerador pode criar divergência entre os formatos.
 
 ### 20.2 Alterar validade
 
-Modificar `DIAS_VALIDADE_PROPOSTA` em `src/config/propostaConfig.js` e validar:
+Alterar `PROPOSTA_VALIDADE_DIAS` em `/conf`, recarregar a página e validar:
 
 - virada de mês;
 - fevereiro e ano bissexto;
@@ -827,11 +827,11 @@ Modificar `DIAS_VALIDADE_PROPOSTA` em `src/config/propostaConfig.js` e validar:
 
 ### 20.3 Alterar dados da empresa
 
-Modificar `EMPRESA_PROPOSTA` em `src/config/propostaConfig.js`. Conferir as duas unidades e gerar ambos os formatos.
+Atualizar nome, telefone ou e-mail em `/conf`. Para alterar o CNPJ das unidades, editar `EMPRESA_PROPOSTA` em `src/config/propostaConfig.js`. Conferir as duas unidades e gerar ambos os formatos.
 
 ### 20.4 Alterar o logotipo
 
-Substituir ou redirecionar o import em `propostaAssetsService.js`. Confirmar:
+Publicar um PNG em `public/imagens`, e definir seu caminho em `PROPOSTA_LOGO`. Conferir:
 
 - tipo de imagem compatível;
 - proporção no PDF;
@@ -881,9 +881,7 @@ Os itens abaixo não estão implementados e devem ser tratados como evolução, 
 4. Ajustar automaticamente a altura das observações no Excel.
 5. Informar sucesso ou falha por unidade.
 6. Tratar explicitamente formatos inválidos em `propostaService`.
-7. Recuperar o cache do logotipo após uma falha.
-8. Externalizar os dados institucionais.
-9. Usar data local também no nome do arquivo.
+7. Usar data local também no nome do arquivo.
 
 ### Evoluções opcionais
 
@@ -894,7 +892,6 @@ Os itens abaixo não estão implementados e devem ser tratados como evolução, 
 - envio por e-mail mediante autorização;
 - template institucional versionado;
 - assinatura ou aprovação comercial;
-- campo configurável de validade;
 - visualização prévia antes do download.
 
 ## 22. Cenários mínimos de regressão
@@ -914,7 +911,7 @@ Os itens abaixo não estão implementados e devem ser tratados como evolução, 
 - [ ] Falha da API mantém a geração possível.
 - [ ] Endereço completo é formatado corretamente.
 - [ ] Endereço parcial não gera separadores indevidos.
-- [ ] Validade é exatamente 15 dias após a emissão.
+- [ ] Validade corresponde ao número de dias configurado, inclusive quando o padrão de 15 dias é alterado.
 - [ ] Apenas observações de pedido aparecem.
 
 ### Valores e frete

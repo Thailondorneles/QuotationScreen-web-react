@@ -7,13 +7,12 @@
 
 Este conjunto de documentos descreve o funcionamento atual do simulador de pedido de venda, desde a seleção do cliente até a emissão de proposta e a integração com o ERP.
 
-A documentação foi produzida a partir do código-fonte vigente em **18/08/2026**. O código continua sendo a fonte definitiva quando houver divergência.
+A primeira versão partiu do código de **18/08/2026**. Os guias operacionais foram revistos em **25/11/2026**.
 
 | Propriedade | Valor |
 |---|---|
 | Baseline | Comportamento implementado (*as is*) |
-| Versão documental | 1.0 |
-| Data de referência | 18/08/2026 |
+| Revisão dos guias | 25/11/2026 |
 | Sistema | Simulador de Pedido de Venda |
 | Unidades cobertas | 201 — Matriz; 203 — Filial |
 
@@ -27,7 +26,7 @@ A documentação foi produzida a partir do código-fonte vigente em **18/08/2026
 
 ## Mapa da documentação
 
-Revisão atual: [Auditoria do ambiente e melhorias recomendadas — 23/09/2026](13-revisao-ambiente-2026-09-23.md).
+Registro histórico de setembro de 2026 em [Auditoria do ambiente](13-revisao-ambiente-2026-09-23.md).
 
 | Documento | Conteúdo |
 |---|---|
@@ -42,9 +41,12 @@ Revisão atual: [Auditoria do ambiente e melhorias recomendadas — 23/09/2026](
 | [09 — Estratégia e matriz de testes](09-matriz-testes.md) | Casos de teste funcionais, técnicos e de regressão |
 | [10 — Implantação, segurança e manutenção](10-implantacao-seguranca-manutencao.md) | Ambientes, variáveis, containers e cuidados operacionais |
 | [11 — Glossário e dicionário de dados](11-glossario-dados.md) | Termos de negócio, estados e principais objetos |
-| [12 — Registro de riscos e roadmap técnico](12-registro-riscos-roadmap.md) | Riscos priorizados, critérios de aceite e evolução recomendada |
-| [14 — Otimização de consultas](14-otimizacao-consultas-frontend.md) | Melhorias aplicadas no frontend e contratos propostos para consultas em lote no ORDS |
+| [12 — Parâmetros da aplicação](12-parametros-aplicacao.md) | Configurações, identidade visual e prazos de sessão |
 | [15 — Organização da tela de pedido](15-organizacao-pedido-venda.md) | Componentes, hooks, regras de negócio e dependências preservadas na refatoração |
+| [16 — Acesso a dados por APIs](16-acesso-dados-apis.md) | Persistência e auditoria via ORDS |
+| [Demanda de contratos](17-demanda-contratos.md) | Carteira do representante, contratos, histórico e acordos |
+| [Login e sessão](17-login-e-sessao.md) | Autenticação NL, sessão entre abas e autorização |
+| [SQL dos prazos de sessão](sql/es_pars_conf_prazos_sessao.sql) | Cadastro dos parâmetros 50 e 51 no Oracle |
 
 ## Fluxo executivo
 
@@ -62,8 +64,8 @@ flowchart LR
     I -- Proposta --> J[PDF ou Excel por unidade]
     I -- Pedido --> K[Validar margens e situação]
     K --> L[Gerar payload por unidade]
-    L --> M[Backend gera número e registra controle Oracle]
-    M --> N[ERP]
+    L --> M[Express usa o sequencial da cotação e envia ao ERP]
+    M --> N[Registra o resultado via ORDS]
 ```
 
 ## Princípios do funcionamento atual
@@ -95,4 +97,4 @@ Atualizar os documentos no mesmo conjunto de alterações sempre que houver muda
 - configuração de ambiente, container, proxy ou credencial;
 - procedimento de suporte e recuperação.
 
-Alterações de regra devem atualizar também a [matriz de testes](09-matriz-testes.md). Riscos eliminados ou introduzidos devem ser refletidos no [registro de riscos](12-registro-riscos-roadmap.md).
+Atualize também a [matriz de testes](09-matriz-testes.md) e documente as limitações no guia da funcionalidade afetada.

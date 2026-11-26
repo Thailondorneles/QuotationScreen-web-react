@@ -40,7 +40,7 @@ test('excluir exige confirmação e só navega após sucesso', async () => {
     await excluirCotacao();
     expect(excluirPedido).toHaveBeenLastCalledWith(753);
     expect(assinaturaSalva.current).toBe('atual');
-    expect(navigate).toHaveBeenCalledWith('/?usuario=1');
+    expect(navigate).toHaveBeenCalledWith('/pedidos?usuario=1');
     confirmar.mockRestore();
 });
 

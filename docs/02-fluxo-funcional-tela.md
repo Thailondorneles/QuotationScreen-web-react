@@ -24,9 +24,9 @@ flowchart TD
 
 ## 2. Abertura da tela
 
-Ao carregar a rota `/`, o sistema:
+Após entrar, o sistema abre o menu principal em `/`. No menu lateral, **Pedidos** abre a listagem. Ao criar um pedido em `/pedido`, a tela:
 
-1. renderiza o cabeçalho e a tela `PedidoVenda`;
+1. renderiza o formulário `PedidoVenda`;
 2. inicia o carregamento dos tipos de logradouro, percorrendo todas as páginas da API;
 3. inicializa a modalidade de integração em **2 — Orçamento**;
 4. mantém cliente, itens e demais campos vazios;
@@ -360,7 +360,7 @@ O payload ERP atual envia endereço combinado, logradouro, código do tipo, bair
 - somente itens selecionados são considerados;
 - cada unidade produz um arquivo independente;
 - frete entra apenas quando cotado;
-- validade é emissão + 15 dias;
+- a validade usa `PROPOSTA_VALIDADE_DIAS`, com padrão de 15 dias após a emissão;
 - download ocorre no navegador;
 - nada é salvo no backend.
 
@@ -399,6 +399,6 @@ Se a unidade exigir situação 70, um modal identifica a unidade e o motivo. Qua
 
 ### 11.5 Envio e retorno
 
-Os payloads são enviados em paralelo. No sucesso, o modal lista o número retornado para cada unidade. Ao fechar a mensagem de sucesso, a tela inteira é limpa.
+Os payloads são enviados em paralelo. O sistema registra os números e complementos confirmados por unidade. O modal lista os pedidos em caso de sucesso, e a cotação continua aberta depois que o usuário fecha a mensagem.
 
 Em erro, a mensagem pode exibir etapa, número já gerado e detalhe retornado pelo backend.
